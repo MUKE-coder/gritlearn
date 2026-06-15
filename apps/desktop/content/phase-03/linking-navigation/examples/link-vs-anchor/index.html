@@ -1,0 +1,150 @@
+<!--
+  A side-by-side feel-the-difference demo: one column uses <Link>
+  (simulated client-side nav: state preserved); the other uses <a>
+  (simulated full reload: state resets). A counter in each column
+  proves whether state survived.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Link vs. anchor — feel the difference</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col {
+        border: 2px solid; border-radius: 10px; padding: 1rem; background: #fff;
+      }
+      .col.bad  { border-color: #fda4af; background: #fef2f2; }
+      .col.good { border-color: #86efac; background: #ecfdf5; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .nav { display: flex; gap: 0.6rem; padding: 0.4rem 0; }
+      .nav a, .nav button {
+        padding: 0.35rem 0.7rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        text-decoration: none; cursor: pointer; border: 1px solid #d4d4d8; background: #fff; color: #18181b;
+      }
+      .nav a:hover, .nav button:hover { background: #f4f4f5; }
+      .nav .active { font-weight: 700; }
+      .col.bad  .nav .active { background: #dc2626; color: #fff; border-color: #dc2626; }
+      .col.good .nav .active { background: #15803d; color: #fff; border-color: #15803d; }
+      .page {
+        background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
+        padding: 0.8rem 1rem; margin-top: 0.5rem; min-height: 7rem;
+      }
+      .counter {
+        margin-top: 0.6rem; padding: 0.55rem 0.8rem; background: #fef3c7;
+        border: 1px solid #fde68a; border-radius: 6px; font-size: 0.9rem; color: #92400e;
+      }
+      .counter button {
+        margin-left: 0.5rem; padding: 3px 9px; border: 1px solid #fbbf24;
+        background: #fbbf24; color: #18181b; border-radius: 4px; font-weight: 600; cursor: pointer;
+      }
+      .flash {
+        position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none;
+        transition: opacity 0.18s; border-radius: 10px;
+      }
+      .col { position: relative; overflow: hidden; }
+      .flash.show { opacity: 1; transition: opacity 0s; }
+      .verdict {
+        margin-top: 1rem; font-size: 0.92rem; padding: 0.7rem 0.95rem; border-radius: 6px;
+      }
+      .verdict.bad  { background: #fef2f2; border-left: 3px solid #dc2626; color: #991b1b; }
+      .verdict.good { background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534; }
+    </style>
+  </head>
+  <body>
+    <h1>Same nav. One uses <code>&lt;a&gt;</code>; one uses <code>&lt;Link&gt;</code>.</h1>
+    <p>Bump the counter in each column. Then click between the routes. Watch what happens to the counter.</p>
+
+    <div class="grid">
+
+      <div class="col bad">
+        <div class="flash" id="flashA"></div>
+        <h2>❌ Plain <code>&lt;a href&gt;</code> — full reload</h2>
+        <div class="nav" id="navA"></div>
+        <div class="page" id="pageA"></div>
+        <div class="counter">Counter: <span id="counterA">0</span><button data-c="A">+1</button></div>
+        <div class="verdict bad">Each click causes a white flash and resets the counter. The whole page restarts.</div>
+      </div>
+
+      <div class="col good">
+        <h2>✓ <code>&lt;Link href&gt;</code> — client-side navigation</h2>
+        <div class="nav" id="navB"></div>
+        <div class="page" id="pageB"></div>
+        <div class="counter">Counter: <span id="counterB">0</span><button data-c="B">+1</button></div>
+        <div class="verdict good">No flash. The counter survives navigation — React state stays alive because layouts didn't unmount.</div>
+      </div>
+
+    </div>
+
+    <script>
+      const routes = [
+        { path: "/",      name: "Home",   body: "The home page." },
+        { path: "/about", name: "About",  body: "Some info about us." },
+        { path: "/blog",  name: "Blog",   body: "Articles and updates." },
+      ];
+
+      let activeA = "/", activeB = "/";
+      let counterA = 0,  counterB = 0;
+
+      function renderA() {
+        const r = routes.find(x => x.path === activeA);
+        document.getElementById("navA").innerHTML = routes.map(x =>
+          `<a href="#" data-go-a="${x.path}" class="${x.path === activeA ? "active" : ""}">${x.name}</a>`
+        ).join("");
+        document.getElementById("pageA").innerHTML = `<strong>${r.name}</strong><p>${r.body}</p>`;
+        document.getElementById("counterA").textContent = counterA;
+      }
+
+      function renderB() {
+        const r = routes.find(x => x.path === activeB);
+        document.getElementById("navB").innerHTML = routes.map(x =>
+          `<button data-go-b="${x.path}" class="${x.path === activeB ? "active" : ""}">${x.name}</button>`
+        ).join("");
+        document.getElementById("pageB").innerHTML = `<strong>${r.name}</strong><p>${r.body}</p>`;
+        document.getElementById("counterB").textContent = counterB;
+      }
+
+      function flashA() {
+        const f = document.getElementById("flashA");
+        f.classList.add("show");
+        setTimeout(() => f.classList.remove("show"), 200);
+      }
+
+      // Plain <a> click → simulate full reload (flash + counter reset)
+      document.getElementById("navA").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-go-a]");
+        if (!t) return;
+        e.preventDefault();
+        flashA();
+        setTimeout(() => {
+          activeA = t.dataset.goA;
+          counterA = 0;                // ← state RESET on "reload"
+          renderA();
+        }, 200);
+      });
+
+      // <Link> click → simulate client-side nav (instant, state survives)
+      document.getElementById("navB").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-go-b]");
+        if (!t) return;
+        activeB = t.dataset.goB;
+        // counterB unchanged — state survives
+        renderB();
+      });
+
+      // Counter buttons
+      document.querySelectorAll("button[data-c]").forEach((b) => {
+        b.addEventListener("click", () => {
+          if (b.dataset.c === "A") { counterA += 1; renderA(); }
+          else                      { counterB += 1; renderB(); }
+        });
+      });
+
+      renderA();
+      renderB();
+    </script>
+  </body>
+</html>

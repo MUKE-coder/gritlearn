@@ -1,0 +1,126 @@
+<!--
+  Side-by-side mockup of what a plain-React SPA delivers vs. what a
+  Next.js app delivers on the first response. The left tab shows a
+  sparse <body><div id="root"></div> with a 200KB JS bundle being
+  downloaded; the right tab shows the same UI already rendered in HTML.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA vs. Next.js — what the server sends</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin: 0; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .tab {
+        border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; background: #fff;
+      }
+      .tab-head {
+        display: flex; align-items: center; gap: 0.5rem; background: #f6f8fa;
+        padding: 0.5rem 0.8rem; border-bottom: 1px solid #d0d7de;
+      }
+      .dot { width: 10px; height: 10px; border-radius: 50%; }
+      .dot.red { background: #ef4444; } .dot.yellow { background: #f59e0b; } .dot.green { background: #10b981; }
+      .url {
+        flex: 1; background: #fff; border: 1px solid #d0d7de; padding: 3px 8px; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.8rem; color: #555;
+      }
+      .net {
+        background: #fafafa; padding: 0.55rem 0.8rem; border-bottom: 1px solid #eee; font-size: 0.8rem; color: #555;
+      }
+      .net.bad  { background: #fef2f2; color: #991b1b; }
+      .net.good { background: #ecfdf5; color: #166534; }
+      pre.html {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 0;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.55;
+        margin: 0; overflow-x: auto; min-height: 11rem;
+      }
+      .annot { background: #fef9c3; border-top: 1px solid #fde68a; padding: 0.55rem 0.8rem; font-size: 0.84rem; color: #92400e; }
+      .annot.bad  { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+      .annot.good { background: #ecfdf5; color: #166534; border-color: #bbf7d0; }
+      .label { color: #71717a; }
+      .accent-r { color: #f87171; }
+      .accent-g { color: #7fff5b; }
+      .accent-b { color: #38bdf8; }
+    </style>
+  </head>
+  <body>
+    <h1>The first response — same UI, very different HTML</h1>
+    <p>Your browser is opening <code>/</code> on each site. Same page in both cases. Here's what the server sends back as the first response.</p>
+
+    <div class="grid">
+
+      <!-- ── SPA ── -->
+      <div class="tab">
+        <div class="tab-head">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span class="url">spa-app.example.com/</span>
+        </div>
+        <div class="net bad">Network: 1 HTML (200 bytes) + bundle.js (210 KB) — 2.4s to first content</div>
+<pre class="html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;App&lt;/title&gt;
+    <span class="accent-r">&lt;script src="/bundle.js" defer&gt;&lt;/script&gt;</span>
+  &lt;/head&gt;
+  &lt;body&gt;
+    <span class="accent-r">&lt;div id="root"&gt;&lt;/div&gt;</span>
+    <span class="label">&lt;!-- nothing else.
+         the browser will:
+         1. parse this empty body
+         2. download bundle.js (210KB on 3G = 4 seconds)
+         3. run the JS
+         4. mount React, fetch the user's data
+         5. only NOW render the page --&gt;</span>
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+        <div class="annot bad">
+          <strong>What the user sees first:</strong> a blank white page for ~2-4 seconds (longer on mobile).
+          <br><strong>SEO:</strong> Google's crawler has to execute JS to see content — flaky, slow.
+        </div>
+      </div>
+
+      <!-- ── NEXT.JS ── -->
+      <div class="tab">
+        <div class="tab-head">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span class="url">next-app.example.com/</span>
+        </div>
+        <div class="net good">Network: 1 HTML (12 KB) + JS hydration (loads after first paint) — 180ms to first content</div>
+<pre class="html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;App&lt;/title&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    <span class="accent-g">&lt;nav&gt;
+      &lt;a href="/about"&gt;About&lt;/a&gt;
+      &lt;a href="/blog"&gt;Blog&lt;/a&gt;
+    &lt;/nav&gt;
+    &lt;main&gt;
+      &lt;h1&gt;Welcome, Ada Lovelace&lt;/h1&gt;
+      &lt;p&gt;You have 3 unread notifications.&lt;/p&gt;
+      &lt;ul&gt;
+        &lt;li&gt;Sam liked your post&lt;/li&gt;
+        &lt;li&gt;Lin commented...&lt;/li&gt;
+        &lt;li&gt;New release: v0.2.0&lt;/li&gt;
+      &lt;/ul&gt;
+    &lt;/main&gt;</span>
+    <span class="accent-b">&lt;script src="/_next/...js" defer&gt;&lt;/script&gt;</span>
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+        <div class="annot good">
+          <strong>What the user sees first:</strong> the actual page — title, nav, content — in milliseconds.
+          <br><strong>SEO:</strong> Google sees the HTML on the first request. No JS execution needed.
+          <br><strong>Hydration:</strong> the JS still loads after; it "attaches" interactive behavior on top of the HTML.
+        </div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-top: 2rem;">The difference is real, not marketing</h2>
+    <p style="font-size: 0.95rem;">Open <code>jbeditor.com</code> or any Next.js site in your devtools. Network tab. Reload. Click the first request (type "document"). Look at the response body. You'll see HTML with your content already in it — not an empty SPA shell.</p>
+  </body>
+</html>

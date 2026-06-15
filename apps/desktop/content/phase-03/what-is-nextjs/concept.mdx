@@ -1,0 +1,326 @@
+## What Next.js is
+
+You've spent two phases writing React. Until now, "running" a React app meant Vite or `create-react-app` — a development server that builds your code, serves it from a single `index.html`, and lets the browser fetch JavaScript modules. That's a **Single Page App** (SPA). Next.js is the answer to *"what if React were a full framework instead of just a library?"* It adds **file-based routing**, **server-side rendering**, **route handlers** (API endpoints), and a deploy story that makes shipping a full-stack app a one-command operation. By the end of this phase you'll build, with Next.js, what would have been three separate services a few years ago.
+
+<Analogy>
+Plain React is **a kit of high-quality kitchen knives**. Next.js is **the entire restaurant kitchen the knives belong in**.
+
+The knives are excellent on their own. You can chop, slice, and dice anything. But knives by themselves don't run a restaurant. To serve food, you also need: a stove, prep stations, a walk-in cooler, an order screen, a route from the kitchen to the dining room, a system for sending tickets to the line, a way to handle dietary restrictions, a payment terminal, a delivery driver. None of these are "knives," but you can't open a restaurant without them — and if you try, you'll spend three months wiring it all together yourself before you serve your first plate.
+
+That's the choice between plain React and Next.js. Plain React is sharp, focused, brilliantly designed — and assumes you'll bring everything else. With it, you spend the first month of any serious project on questions that have nothing to do with your *product*:
+
+- "How do I do routing?" Pick React Router, learn it, configure it.
+- "How do I render anything on the server for SEO?" Roll your own SSR, or pick one of five competing libraries.
+- "How do I make an API endpoint?" Spin up a separate Express server, deploy it separately, manage CORS.
+- "How do I deploy?" Pick a host, write a Dockerfile, set up a CI pipeline.
+
+Next.js is the restaurant kitchen. The questions above have one answer each, *built in*. Routing is the folder structure. SSR is a tag on your component (or just a server component). API endpoints are files in `app/api/`. Deploy is `git push` to Vercel and it's live in 90 seconds. You skip the three months of plumbing and start with a working kitchen — your job becomes *the menu*, not the wiring.
+
+Three concrete things you get that pure React doesn't ship:
+
+1. **File-based routing.** Make a file `app/about/page.tsx`; that's the `/about` route. No router config. Same for `app/blog/[slug]/page.tsx` — dynamic segments via the folder name.
+
+2. **Server components.** Some components run on the server, fetch data directly from the database, and ship pre-rendered HTML to the browser. The user sees the page faster; less JS runs in their browser; SEO works. Other components are still client components (the ones with `useState`, `onClick`, etc.). Both kinds compose naturally.
+
+3. **The same project is both frontend and backend.** A `app/page.tsx` and a `app/api/users/route.ts` live in the same repo, deploy together, share types. The "frontend calls a Go API" model you've been mentally building still works, but for small-to-medium apps, Next.js lets the same TypeScript codebase do both jobs.
+
+The framing for the rest of Phase 3: **stop thinking "React app + separate API." Start thinking "a unified full-stack project."** Next.js makes the project organize itself around routes; each route gets its UI, its data fetching, and its API endpoints, all co-located. Once you've built a few features that way, the old "frontend repo + backend repo + sync the types" pattern feels archaic.
+
+When *not* to use Next.js — worth saying so it's not a religion:
+- You only need a UI library with no backend (use plain Vite + React).
+- You need full control of the build (a library, an embedded widget — Vite again).
+- Your backend is genuinely better in another language (Go, Rust, Python for AI). In that case, frontend in Next.js + backend in the other language is a common, valid choice. This is exactly the shape of JEditor itself (Next.js admin + Go API).
+
+For everything else — startups, SaaS apps, internal tools, marketing sites with auth, dashboards — Next.js is the modern default.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the responsibilities a plain React app makes you wire up vs. what Next.js ships built-in"
+  caption="The same five problems. One project picks them off the shelf; the other you build yourself."
+>
+
+```
+   PLAIN REACT (Vite + your choices)              NEXT.JS (one project, batteries included)
+
+   Your code                                      Your code
+     ↓                                              ↓
+   ┌───────────────────────────────┐              ┌──────────────────────────────────────┐
+   │  React components             │              │  React components (server + client)   │
+   ├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│              │  File-based routing  (folders → URLs) │
+   │  Routing? React Router        │              │  Server-side rendering (default)      │
+   │  Data fetching? React Query   │              │  Data fetching   (fetch + cache)      │
+   │  Server rendering? Custom     │              │  API endpoints   (app/api/)           │
+   │  API? Express + CORS + deploy │              │  Auth helpers, image optimization,    │
+   │  Auth? Pick a library         │              │  font loading, middleware, edge       │
+   │  Deploy? Build pipeline       │              │  Deploy: git push to Vercel          │
+   └───────────────────────────────┘              └──────────────────────────────────────┘
+   (you wire each piece)                          (one config, one deploy, everything works)
+```
+
+</Illustration>
+
+### The Next.js feature surface
+
+To anchor what's actually included, here's the non-exhaustive list of "things that ship":
+
+- **App Router** — file-based routing. Folders are routes; `page.tsx` is the page; `layout.tsx` wraps it.
+- **Server Components** — default. Run on the server, can hit databases directly.
+- **Client Components** — opt-in with `"use client"`. The ones with state, effects, browser APIs.
+- **Route Handlers** — `app/api/users/route.ts` exports `GET`, `POST`, etc. functions. Your REST endpoints.
+- **Server Actions** — write a function with `"use server"`, call it directly from a form. The framework wires up the network call.
+- **Image and font optimization** — `<Image>` and `next/font` give you automatic resizing, format conversion, and zero-CLS font loading.
+- **Middleware** — code that runs on every request before the route handler. Auth checks, redirects, A/B tests.
+- **Static site generation (SSG)** — pre-render pages at build time for blogs, docs, marketing.
+- **Incremental Static Regeneration (ISR)** — pre-render, then re-render in the background every N seconds.
+- **Edge runtime** — run code at CDN edges, milliseconds from the user.
+- **TypeScript** — first-class. Default in modern Next projects.
+- **Tailwind, ESLint, environment variables, .env handling** — all wired up by `create-next-app`.
+
+Reading the bullet list, you can feel the *kitchen* — every utility you'd otherwise install separately is just there.
+
+### Why Vercel — and why it matters
+
+Next.js is open source. You can run it anywhere — your own server, Docker, AWS, anywhere that runs Node. But the company that maintains Next.js is **Vercel**, the same company that runs the deployment platform of the same name. The two are tightly integrated:
+
+- `git push` → Vercel detects the push, runs the build, deploys.
+- Every PR gets its own preview URL (`pr-42.your-app.vercel.app`).
+- Edge functions, image optimization, ISR — all "just work" on Vercel.
+
+You can ignore Vercel and self-host Next.js (we'll cover the export and Docker options in the deploy concept). But for most apps, Vercel is the path of least resistance — like AWS for Amazon's products, Vercel makes deploying Next.js trivially easy.
+
+That said: it's reasonable to be wary of vendor lock-in. The good news is Next.js's defaults work on any Node host. The Vercel-specific features (edge functions with their specific APIs, ISR-on-demand) are opt-in; the core "build a SSR React app" runs anywhere.
+
+### Versioning — what this curriculum assumes
+
+This curriculum covers **Next.js 14+** with the **App Router**. Every reference in this phase assumes:
+
+- App Router (`app/` directory).
+- React Server Components by default.
+- TypeScript.
+- Tailwind for styling.
+
+That's the surface of every modern Next.js app and the only thing you need to learn to ship.
+
+### What's in the next 20 concepts
+
+- **Project setup, file structure, scripts** — `pnpm create next-app`, the folders, the commands.
+- **App Router**, **layouts**, **dynamic routes**, **navigation** — the routing surface.
+- **Server vs client components**, **rendering strategies**, **data fetching** — the rendering model.
+- **Route handlers** (API endpoints) and **server actions** — the backend surface.
+- **What a database is**, **SQL basics**, **SQL queries** — the data layer fundamentals.
+- **Postgres + Prisma**, **schema + migrations**, **CRUD** — the database toolchain.
+- **Auth.js**, **protecting routes**, **environment variables** — the auth + secrets layer.
+- **Deploying to Vercel** — shipping.
+- **Milestone**: a full-stack task manager — auth, database, CRUD, deploy, the whole loop.
+
+You'll exit Phase 3 having built and deployed a real full-stack app. The same shape every SaaS startup builds. The skills are immediately marketable; the milestone repo goes on your portfolio.
+
+<ExampleProject
+  src="spa-vs-nextjs"
+  title="A plain-React SPA vs. a Next.js app — what the user actually receives"
+  description="Two browser tabs side-by-side. The SPA tab shows an empty HTML body and ~200KB of JS being downloaded before anything renders. The Next.js tab shows fully-rendered HTML on first response, then JS hydrates. The Network panel screenshot makes the difference visible."
+/>
+
+<ExampleProject
+  src="who-uses-it"
+  title="Real Next.js apps you've used today"
+  description="A grid of well-known sites built with Next.js: TikTok, Notion, Twitch, Stripe, OpenAI, Vercel itself, GitHub Copilot's web UI. Each card links to the public site so you can confirm the framework via View Source / response headers. Demystifies 'is Next.js production-ready?' — it runs on the biggest internet properties."
+/>
+
+<Exercise
+  title="Set up your first Next.js project — read the docs, install, run"
+  starter={`Open your terminal:
+
+  1. Make sure you have Node 18+ installed:
+       node --version
+
+  2. Create a new Next.js project (use the official scaffold):
+       pnpm create next-app@latest my-first-next-app
+     OR (if you use npm/yarn):
+       npx create-next-app@latest my-first-next-app
+
+  3. Answer the prompts (these answers match the rest of Phase 3):
+       TypeScript?           Yes
+       ESLint?               Yes
+       Tailwind?             Yes
+       \`src/\` directory?      No  (Phase 3 uses root \`app/\`)
+       App Router?           Yes
+       Customize import alias? No  (use the default \`@/*\`)
+
+  4. Run it:
+       cd my-first-next-app
+       pnpm dev
+     (or npm run dev / yarn dev)
+
+  5. Open http://localhost:3000 in your browser. See the
+     "Welcome to Next.js" page.
+
+  6. Find and open these files in your editor:
+       - app/page.tsx       — the homepage
+       - app/layout.tsx     — the wrapper
+       - tailwind.config.ts — Tailwind setup
+       - package.json       — the scripts
+
+  7. Modify app/page.tsx — change a piece of text. Save.
+     Notice the browser auto-reloads with the change.
+
+Bonus: Open the Network panel. Reload localhost:3000. Find the
+HTML response (the first row, type "document"). Look at the body
+of that response — what do you see? (Spoiler: actual HTML with your
+content already in it, not an empty <div id="root">.)
+
+Write down in a notes file:
+  - What was the first response's "Content-Type"?
+  - Did the page render before any JavaScript downloaded?
+  - How many files are in the app/ folder of the fresh project?`}
+>
+
+- Node 18+ is installed; `node --version` was run.
+- A new Next.js project was created via `pnpm create next-app@latest` (or npm/npx equivalent).
+- The scaffold prompts were answered consistently with what Phase 3 uses (TypeScript, App Router, Tailwind, no `src/`).
+- `pnpm dev` (or equivalent) was run and the localhost:3000 page renders in the browser.
+- The student opened and inspected at least `app/page.tsx`, `app/layout.tsx`, `package.json`.
+- An edit was made to `app/page.tsx`; hot reload showed the change in the browser.
+- Bonus: the Network panel was inspected; the student noted that the first response is HTML with the content already rendered (not an empty SPA shell).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between React and Next.js?
+
+**A:** **React is a UI library; Next.js is a full-stack framework built on React.** React gives you components and state; Next.js gives you components, state, routing, server-side rendering, API endpoints, data fetching primitives, image optimization, font handling, and a deploy story — all integrated.
+
+```text
+React alone                      Next.js
+───────────                      ───────
+✓ Components                     ✓ Components
+✓ Props & state                  ✓ Props & state
+✗ Routing                        ✓ File-based routing
+✗ Server-side rendering          ✓ SSR by default (server components)
+✗ API endpoints                  ✓ Route handlers (app/api/)
+✗ Data fetching primitives       ✓ fetch with caching, revalidation
+✗ Build / deploy                  ✓ next build, Vercel integration
+✗ Image / font optimization       ✓ <Image>, next/font
+```
+
+When you'd reach for plain React (with Vite, say) instead of Next.js:
+
+- **Pure UI library**: building a component library to publish on npm.
+- **Embedded widget**: a chat bubble or analytics widget that ships into someone else's HTML.
+- **Static site, no auth**: a marketing page where SSR + routing is overkill.
+- **You're using a different backend**: building a React frontend that talks to Django, Rails, Go, etc. You can still use Next.js here, but plain React + Vite is simpler when the backend is elsewhere.
+
+When you'd reach for Next.js:
+
+- **Anything SEO-sensitive**: marketing pages, blogs, e-commerce. Server-rendered HTML is the bar.
+- **Apps with a backend you're also writing**: dashboards, SaaS, internal tools. One project, one repo, one deploy.
+- **Apps with auth**: Next.js's middleware + cookie handling makes session-based auth straightforward.
+- **Most things, basically.** Next.js is the modern default for greenfield React projects.
+
+Same framework family — Next.js IS React. Next.js doesn't replace React; it's React plus the production infrastructure most apps need.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the App Router?
+
+**A:** **The folder-based routing system introduced in Next.js 13 (2022). Folders inside `app/` become URL routes; `page.tsx` files become pages.**
+
+```text
+app/
+├─ page.tsx                  → /
+├─ about/page.tsx            → /about
+├─ blog/page.tsx             → /blog
+├─ blog/[slug]/page.tsx      → /blog/:slug   (dynamic)
+└─ dashboard/
+   ├─ layout.tsx             → wraps /dashboard/*
+   ├─ page.tsx               → /dashboard
+   └─ settings/page.tsx      → /dashboard/settings
+```
+
+Three properties of the App Router that matter:
+
+1. **Folders are routes.** Make a folder; you've made a route. No `<Route>` config. No router setup.
+
+2. **Server Components by default.** Every component in `app/` is a server component unless you mark it `"use client"`. Server components can `await fetch(...)` directly in their body, hit databases, run on the server, ship pre-rendered HTML.
+
+3. **Layouts nest.** A `layout.tsx` at any level wraps every route below it. The outermost layout (often `app/layout.tsx`) provides the HTML shell; nested layouts provide section-specific UI (dashboard sidebar, e-commerce cart) that stays mounted as the user navigates within the section.
+
+The mental model is small: folders are routes; files inside are the route's pieces (`page.tsx`, `layout.tsx`, `route.ts`, etc.). One pattern; you'll know the whole routing surface by the end of this batch.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does Next.js render on the server by default? What's the trade-off?
+
+**A:** **Server rendering ships pre-rendered HTML on the first response, so users (and search engines) see content immediately. The trade-off is the server has to do work per request instead of just shipping static files.**
+
+The contrast:
+
+```text
+PLAIN REACT SPA                    NEXT.JS (SSR)
+───────────────                    ─────────────
+1. Browser requests /              1. Browser requests /
+2. Server returns                  2. Server runs the React component,
+   <body><div id="root"></div>        renders HTML on the server,
+   <script src="app.js">              returns the rendered HTML.
+3. Browser parses, downloads       3. Browser parses, shows content
+   200KB of JS.                       immediately.
+4. JS executes, fetches data       4. (Hydration happens in the background:
+   from the API.                       the JS still loads and "attaches"
+5. JS renders the page.                interactive behavior on top of the
+6. User sees content.                  HTML.)
+   (3-5 seconds total)             5. User sees content.
+                                       (200ms total)
+```
+
+The wins of server rendering:
+
+- **Time to First Contentful Paint** is dramatically faster. Users see content before JS runs.
+- **SEO works.** Google sees the rendered HTML. SPAs require Google to execute your JS (slow, sometimes flaky) before it can index content.
+- **Lower client CPU.** Rendering happens on the server (once); the browser just parses HTML.
+- **Slower networks benefit more.** A 3G phone takes 5 seconds to download 200KB of JS; meanwhile, SSR HTML downloads in milliseconds.
+
+The trade-offs:
+
+- **Server cost.** Every page view does some work on the server (running the component, fetching data, rendering). SPAs serve static files, which is essentially free.
+- **Higher complexity.** Some code runs on the server, some on the client. "Why is `window` undefined here?" — because that code's running on the server.
+- **Caching is harder.** A pure SPA is trivially CDN-cacheable (the HTML never changes). SSR pages are personalized per user; you have to think about cache invalidation, ISR, edge caching.
+- **Deploy needs a Node runtime.** SPAs deploy as static files to any CDN. SSR needs a server that runs Next.js (Vercel, Node hosting, Docker).
+
+For most apps, the wins easily outweigh the costs. The reason Next.js made SSR the default is exactly this calculation: SSR is what 95% of modern apps want. Pure SPAs are still appropriate for embedded widgets, dashboards behind a login (no SEO needed), and small internal tools — but they're no longer the default for new projects.
+
+There are also hybrid modes Next.js supports — static generation (build once, serve forever), ISR (build, then re-build in the background), and edge rendering (run at CDN edges). Covered in the rendering-strategies concept; the point for now is **SSR is the safe default**, and Next.js makes it cheap.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Is Next.js production-ready for big apps?
+
+**A:** **Yes — it runs some of the largest properties on the internet. TikTok's web UI, Notion, Twitch, Stripe's dashboard, OpenAI's chat product, GitHub Copilot's web surface — all Next.js.**
+
+Specific concerns and answers:
+
+**"Can it handle high traffic?"** Yes. Render scales horizontally — add more server instances. Vercel's infrastructure handles billions of requests; self-hosted Next.js (Docker + Node) runs the same way. The framework itself doesn't bottleneck.
+
+**"Won't I be locked into Vercel?"** Less than you'd think. Next.js's "output: standalone" mode produces a self-contained Node app you can run anywhere — Docker, AWS, your own server. The Vercel-specific features (Vercel Edge Functions, KV, Image CDN) are opt-in; if you use them, you're more locked in, but most apps don't need them.
+
+**"What about backend complexity?"** Next.js handles the front end *and* lightweight backend (route handlers, server actions). For deeper backend needs (heavy data processing, microservices, ML), you'd run a separate backend in Go or Python and have Next.js call it. Same as you would with any frontend framework.
+
+**"Won't React Server Components break things?"** RSCs were new in 2023 and the ecosystem had a rough year adapting (some libraries needed updates). By 2025-2026 the ecosystem has caught up — Auth.js, every major UI library, every common npm package now declare `"use client"` correctly. The wobble is over.
+
+**"What about testing?"** Standard React Testing Library + Vitest works for components. Playwright for end-to-end. Next.js doesn't add testing weirdness.
+
+The real considerations for big apps:
+
+- **Build times.** A massive Next.js app can take 5-10 minutes to build. Mitigations: incremental builds, Turbopack (the new bundler), splitting into multiple Next.js apps if needed.
+- **Bundle size.** Server components help (they don't ship JS to the client), but client components still need to be careful. Audit with `@next/bundle-analyzer`.
+- **Type checking at the boundary.** Server components can pass complex data to client components; types help but you need to be explicit.
+
+None of these are deal-breakers. The framework is mature, the community is huge (the largest in the React ecosystem), and the production track record is excellent. For a new full-stack app in 2026, "use Next.js" is a defensible default decision.
+
+</InterviewQuestion>

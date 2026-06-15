@@ -1,0 +1,161 @@
+<!--
+  Click a URL; see which layouts wrap it and which parts persist
+  when you navigate to a sibling URL.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Layout tree visualizer</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 900px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .urls { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 1rem; }
+      .urls button {
+        padding: 0.4rem 0.8rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.82rem;
+      }
+      .urls button:hover { background: #f4f4f5; }
+      .urls button.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
+      .layer {
+        padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        background: #fff; border: 1px solid #d4d4d8;
+        position: relative; padding-left: 2rem;
+      }
+      .layer::before {
+        content: "✓"; position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%);
+        font-size: 1rem; color: #15803d;
+      }
+      .layer.swap { background: #fef3c7; border-color: #fde68a; }
+      .layer.swap::before { content: "↻"; color: #b45309; }
+      .layer .role {
+        display: block; font-size: 0.7rem; color: #71717a;
+        text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem;
+      }
+      .key { display: flex; gap: 1rem; font-size: 0.82rem; margin-top: 0.5rem; color: #555; }
+      .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <h1>Pick a URL — see which layouts wrap it</h1>
+    <p>Click a URL below. The left panel shows the layout chain. The right panel shows what happens when you navigate to the indicated sibling URL.</p>
+
+    <div class="urls" id="urls"></div>
+
+    <div class="grid">
+      <div class="col">
+        <h3>For this URL → layouts that wrap it</h3>
+        <div id="wraps"></div>
+      </div>
+      <div class="col">
+        <h3>Sibling navigation → what swaps</h3>
+        <p style="margin: 0 0 0.5rem; font-size: 0.84rem; color: #555;">Navigating to <code id="sibling"></code>:</p>
+        <div id="navigate"></div>
+        <div class="key">
+          <span><span class="swatch" style="background:#fff;border:1px solid #d4d4d8;"></span> stays mounted (persistent)</span>
+          <span><span class="swatch" style="background:#fef3c7;border:1px solid #fde68a;"></span> unmounts + re-mounts</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const routes = {
+        "/": {
+          layers: [
+            { file: "app/layout.tsx", role: "root layout" },
+            { file: "app/page.tsx",   role: "page" },
+          ],
+          sibling: "/about",
+          siblingLayers: [
+            { file: "app/layout.tsx",   role: "root layout", change: false },
+            { file: "app/about/page.tsx", role: "page",       change: true  },
+          ],
+        },
+        "/about": {
+          layers: [
+            { file: "app/layout.tsx",     role: "root layout" },
+            { file: "app/about/page.tsx", role: "page" },
+          ],
+          sibling: "/pricing",
+          siblingLayers: [
+            { file: "app/layout.tsx",                       role: "root layout", change: false },
+            { file: "app/(marketing)/pricing/page.tsx",     role: "page",         change: true  },
+          ],
+        },
+        "/pricing": {
+          layers: [
+            { file: "app/layout.tsx",                     role: "root layout" },
+            { file: "app/(marketing)/layout.tsx",         role: "marketing layout" },
+            { file: "app/(marketing)/pricing/page.tsx",   role: "page" },
+          ],
+          sibling: "/careers",
+          siblingLayers: [
+            { file: "app/layout.tsx",                     role: "root layout",      change: false },
+            { file: "app/(marketing)/layout.tsx",         role: "marketing layout", change: false },
+            { file: "app/(marketing)/careers/page.tsx",   role: "page",              change: true  },
+          ],
+        },
+        "/dashboard/settings": {
+          layers: [
+            { file: "app/layout.tsx",                          role: "root layout" },
+            { file: "app/dashboard/layout.tsx",                role: "dashboard layout (sidebar)" },
+            { file: "app/dashboard/settings/page.tsx",         role: "page" },
+          ],
+          sibling: "/dashboard/billing",
+          siblingLayers: [
+            { file: "app/layout.tsx",                          role: "root layout",      change: false },
+            { file: "app/dashboard/layout.tsx",                role: "dashboard layout", change: false },
+            { file: "app/dashboard/billing/page.tsx",          role: "page",              change: true  },
+          ],
+        },
+        "/dashboard/billing": {
+          layers: [
+            { file: "app/layout.tsx",                          role: "root layout" },
+            { file: "app/dashboard/layout.tsx",                role: "dashboard layout (sidebar)" },
+            { file: "app/dashboard/billing/page.tsx",          role: "page" },
+          ],
+          sibling: "/about",
+          siblingLayers: [
+            { file: "app/layout.tsx",                          role: "root layout", change: false },
+            { file: "app/about/page.tsx",                      role: "page",         change: true  },
+          ],
+        },
+      };
+
+      const urlsEl   = document.getElementById("urls");
+      const wrapsEl  = document.getElementById("wraps");
+      const navEl    = document.getElementById("navigate");
+      const sibEl    = document.getElementById("sibling");
+
+      Object.keys(routes).forEach((url) => {
+        const b = document.createElement("button");
+        b.textContent = url;
+        b.dataset.u = url;
+        b.addEventListener("click", () => render(url));
+        urlsEl.appendChild(b);
+      });
+
+      function render(url) {
+        const r = routes[url];
+        wrapsEl.innerHTML = r.layers.map((l) =>
+          `<div class="layer"><span class="role">${l.role}</span>${l.file}</div>`
+        ).join("");
+
+        sibEl.textContent = r.sibling;
+        navEl.innerHTML = r.siblingLayers.map((l) =>
+          `<div class="layer ${l.change ? "swap" : ""}"><span class="role">${l.role}</span>${l.file}</div>`
+        ).join("");
+
+        document.querySelectorAll(".urls button").forEach((b) =>
+          b.classList.toggle("active", b.dataset.u === url)
+        );
+      }
+      render("/dashboard/settings");
+    </script>
+  </body>
+</html>

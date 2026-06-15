@@ -1,0 +1,162 @@
+<!--
+  Live demo of three layouts stacked. Click between three "pages" in
+  the dashboard subtree; outer layouts stay; only the inner page
+  swaps. A counter in the dashboard sidebar proves state persists.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nested layouts demo</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .frame {
+        border: 2px solid #1e40af; border-radius: 10px; padding: 0.6rem; background: #eff6ff;
+        margin-top: 1.5rem;
+      }
+      .frame > .lbl { color: #1e40af; font-family: ui-monospace, monospace; font-size: 0.8rem; margin-bottom: 0.4rem; }
+      .frame.dash { border-color: #15803d; background: #ecfdf5; }
+      .frame.dash > .lbl { color: #15803d; }
+      .frame.page { border-color: #b45309; background: #fef3c7; }
+      .frame.page > .lbl { color: #b45309; }
+      .nav, .sidebar { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .nav { display: flex; gap: 0.5rem; padding: 0.5rem; background: #fff; border-radius: 6px; }
+      .nav button {
+        padding: 0.35rem 0.7rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-family: inherit; font-size: 0.85rem;
+      }
+      .nav button:hover { background: #f4f4f5; }
+      .nav button.active { background: #1e40af; color: #fff; border-color: #1e40af; }
+      .dash-flex { display: grid; grid-template-columns: 200px 1fr; gap: 0.5rem; padding: 0.5rem; }
+      .sidebar {
+        background: #fff; border-radius: 6px; padding: 0.6rem 0.7rem; min-height: 9rem;
+      }
+      .sidebar h3 { margin: 0 0 0.4rem; font-size: 0.85rem; }
+      .sidebar button {
+        display: block; width: 100%; padding: 0.35rem 0.6rem; margin-bottom: 4px;
+        border: 1px solid #d4d4d8; border-radius: 4px; background: #fff; cursor: pointer;
+        font-family: inherit; font-size: 0.82rem; text-align: left;
+      }
+      .sidebar button:hover { background: #f4f4f5; }
+      .sidebar button.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .counter { margin-top: 0.7rem; font-size: 0.8rem; color: #555; }
+      .counter button {
+        margin-top: 4px; width: auto; padding: 3px 9px; background: #fbbf24;
+        border-color: #fbbf24; color: #18181b; font-weight: 600;
+      }
+      .page-area {
+        background: #fff; border-radius: 6px; padding: 0.85rem 1.1rem; min-height: 9rem;
+      }
+      .page-area h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+      .stage {
+        margin-top: 1.5rem; padding: 0.7rem 0.95rem;
+        background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.88rem; color: #92400e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Three layouts stacked — watch state persist</h1>
+    <p>The outer two frames are layouts. The innermost is the page. Click between the dashboard buttons; the page swaps but the layouts (and the sidebar counter) stay.</p>
+
+    <!-- Root layout -->
+    <div class="frame">
+      <div class="lbl">app/layout.tsx — Root layout (top nav + footer)</div>
+      <div class="nav" id="rootNav">
+        <button data-route="home"      class="active">Home</button>
+        <button data-route="overview">Dashboard</button>
+        <button data-route="settings">Settings</button>
+        <button data-route="billing">Billing</button>
+      </div>
+
+      <!-- Dashboard layout (only shown for dashboard routes) -->
+      <div class="frame dash" id="dashFrame" style="display: none;">
+        <div class="lbl">app/dashboard/layout.tsx — Dashboard layout (sidebar)</div>
+        <div class="dash-flex">
+          <div class="sidebar">
+            <h3>📊 Dashboard</h3>
+            <button data-route="overview">Overview</button>
+            <button data-route="settings">Settings</button>
+            <button data-route="billing">Billing</button>
+            <div class="counter">
+              Sidebar clicks: <span id="counter">0</span>
+              <br><button id="bumpCounter">+1 me</button>
+            </div>
+          </div>
+
+          <!-- Page area -->
+          <div class="frame page">
+            <div class="lbl">app/dashboard/&lt;page&gt;/page.tsx — Page</div>
+            <div class="page-area" id="pageArea"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Home page (only shown for / route) -->
+      <div class="frame page" id="homeFrame" style="display: none;">
+        <div class="lbl">app/page.tsx — Home page</div>
+        <div class="page-area">
+          <h2>Welcome</h2>
+          <p>Click "Dashboard", "Settings", or "Billing" above. Notice the dashboard layout (sidebar + counter) appears and persists as you click between the three.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage" id="stage"></div>
+
+    <script>
+      const dashFrame = document.getElementById("dashFrame");
+      const homeFrame = document.getElementById("homeFrame");
+      const pageArea  = document.getElementById("pageArea");
+      const counterEl = document.getElementById("counter");
+      const stage     = document.getElementById("stage");
+
+      let counter = 0;
+      let active  = "home";
+
+      const pageContents = {
+        overview: { title: "Overview", body: "High-level stats: 47 users, 12 active, 3 pending." },
+        settings: { title: "Settings", body: "Account preferences and personal info." },
+        billing:  { title: "Billing",  body: "Invoices, payment methods, plan." },
+      };
+
+      function render() {
+        // Show/hide frames
+        if (active === "home") {
+          dashFrame.style.display = "none";
+          homeFrame.style.display = "";
+          stage.textContent = "✓ Root layout mounted. Home page in the page area.";
+        } else {
+          homeFrame.style.display = "none";
+          dashFrame.style.display = "";
+          const c = pageContents[active];
+          pageArea.innerHTML = `<h2>${c.title}</h2><p>${c.body}</p>`;
+          stage.textContent = "✓ Root layout + dashboard layout both mounted. Only the inner page (the " + c.title + " card) changed. The counter still says " + counter + " — state survived.";
+        }
+        counterEl.textContent = counter;
+
+        // Toggle button active states
+        document.querySelectorAll("#rootNav button").forEach((b) => {
+          b.classList.toggle("active", b.dataset.route === active);
+        });
+        document.querySelectorAll(".sidebar button").forEach((b) => {
+          b.classList.toggle("active", b.dataset.route === active);
+        });
+      }
+
+      document.querySelectorAll("[data-route]").forEach((b) => {
+        b.addEventListener("click", () => {
+          active = b.dataset.route;
+          render();
+        });
+      });
+
+      document.getElementById("bumpCounter").addEventListener("click", () => {
+        counter += 1;
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

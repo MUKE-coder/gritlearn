@@ -1,0 +1,180 @@
+<!--
+  Clickable tour of the fresh Next.js project structure.
+  Click any file/folder → right pane shows what it's for + a snippet.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tour the fresh Next.js project</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1000px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; margin-top: 1rem; }
+      .tree { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.7; }
+      .tree button {
+        background: none; border: none; cursor: pointer; padding: 0; text-align: left;
+        font-family: inherit; font-size: inherit; color: #18181b; display: block; width: 100%;
+      }
+      .tree button:hover { color: #15803d; text-decoration: underline; }
+      .tree button.active { color: #15803d; font-weight: 700; }
+      .tree .star { color: #fbbf24; }
+      .tree .child { padding-left: 1.2rem; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fff; }
+      .panel h2 { margin: 0 0 0.4rem; font-size: 1rem; font-family: ui-monospace, monospace; }
+      .panel .role {
+        display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 999px;
+        font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .role.daily { background: #ecfdf5; color: #166534; }
+      .role.rare  { background: #fef3c7; color: #92400e; }
+      .role.never { background: #fef2f2; color: #991b1b; }
+      .panel p { margin: 0.4rem 0; font-size: 0.92rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.5;
+        margin-top: 0.5rem; white-space: pre; overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>A guided tour — click any file or folder</h1>
+    <p>This is the structure <code>pnpm create next-app</code> produces. Click any entry; the right panel explains it.</p>
+
+    <div class="grid">
+
+      <div class="tree" id="tree">
+my-app/
+<button data-k="app" class="active">├── <span class="star">★</span> app/</button>
+<button data-k="layout" class="child">│   ├── layout.tsx</button>
+<button data-k="page" class="child">│   ├── page.tsx</button>
+<button data-k="css" class="child">│   ├── globals.css</button>
+<button data-k="favicon" class="child">│   └── favicon.ico</button>
+<button data-k="public">├── <span class="star">★</span> public/</button>
+<button data-k="nodemod">├── node_modules/</button>
+<button data-k="next">├── .next/</button>
+<button data-k="pkg">├── <span class="star">★</span> package.json</button>
+<button data-k="tsconfig">├── tsconfig.json</button>
+<button data-k="nextcfg">├── next.config.ts</button>
+<button data-k="tw">├── tailwind.config.ts</button>
+<button data-k="gitignore">├── .gitignore</button>
+<button data-k="readme">└── README.md</button>
+      </div>
+
+      <div class="panel" id="panel"></div>
+
+    </div>
+
+    <script>
+      const data = {
+        app: {
+          name: "app/",
+          role: "daily",
+          desc: "Where every page, layout, and route handler lives. The framework's routing reads this folder; folders become URLs, page.tsx files become pages. You'll spend 95% of your time here.",
+          snippet: null,
+        },
+        layout: {
+          name: "app/layout.tsx",
+          role: "daily",
+          desc: "The root layout — the HTML shell every page is wrapped in. Imports globals.css; sets default metadata; renders <html><body>{children}</body></html>.",
+          snippet: `import "./globals.css";\nexport default function RootLayout({ children }) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  );\n}`,
+        },
+        page: {
+          name: "app/page.tsx",
+          role: "daily",
+          desc: "The homepage — what users see at /. Edit this first; it's where you start building.",
+          snippet: `export default function Home() {\n  return (\n    <main className="p-8">\n      <h1 className="text-4xl font-bold">Hello!</h1>\n    </main>\n  );\n}`,
+        },
+        css: {
+          name: "app/globals.css",
+          role: "rare",
+          desc: "Your global stylesheet. Imported by layout.tsx so it loads on every page. Contains Tailwind's @tailwind base/components/utilities imports.",
+          snippet: `@tailwind base;\n@tailwind components;\n@tailwind utilities;`,
+        },
+        favicon: {
+          name: "app/favicon.ico",
+          role: "rare",
+          desc: "The site's favicon. Next.js auto-serves it at /favicon.ico. Replace with your own icon when you have one.",
+          snippet: null,
+        },
+        public: {
+          name: "public/",
+          role: "daily",
+          desc: "Static files served at the URL root. public/logo.png → /logo.png. Use for images, OG previews, robots.txt, fonts (when not using next/font).",
+          snippet: `public/logo.png  →  <img src="/logo.png" />`,
+        },
+        nodemod: {
+          name: "node_modules/",
+          role: "never",
+          desc: "Installed dependencies. Created by pnpm install; gitignored. Never open. Never edit. If broken: rm -rf node_modules && pnpm install.",
+          snippet: null,
+        },
+        next: {
+          name: ".next/",
+          role: "never",
+          desc: "Build cache. Created automatically by next dev and next build. Gitignored. Delete if dev server gets confused.",
+          snippet: null,
+        },
+        pkg: {
+          name: "package.json",
+          role: "daily",
+          desc: "Project manifest. Scripts (dev/build/start/lint), dependencies, devDependencies. You'll edit this whenever you add a new package or script.",
+          snippet: `{\n  "scripts": {\n    "dev":   "next dev",\n    "build": "next build",\n    "start": "next start",\n    "lint":  "next lint"\n  },\n  "dependencies": { "next": "^14", "react": "^18" }\n}`,
+        },
+        tsconfig: {
+          name: "tsconfig.json",
+          role: "rare",
+          desc: "TypeScript settings. The Next.js defaults are sensible. You'll touch this rarely — usually only to adjust the @/ import alias.",
+          snippet: `{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }`,
+        },
+        nextcfg: {
+          name: "next.config.ts",
+          role: "rare",
+          desc: "Next.js's own config. Empty at first. Add to it when you need custom redirects, allowed image domains, environment variable overrides, etc.",
+          snippet: `import type { NextConfig } from "next";\nconst nextConfig: NextConfig = {\n  // images: { remotePatterns: [...] },\n};\nexport default nextConfig;`,
+        },
+        tw: {
+          name: "tailwind.config.ts",
+          role: "rare",
+          desc: "Tailwind config. content array tells Tailwind which files to scan for classes. theme.extend is where you add your custom colors, fonts, spacing.",
+          snippet: `export default {\n  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],\n  theme: { extend: { colors: { accent: "#7fff5b" } } },\n};`,
+        },
+        gitignore: {
+          name: ".gitignore",
+          role: "never",
+          desc: "Git ignore list. node_modules/, .next/, .env*.local. Don't remove these entries — they're there for a reason (don't commit secrets or large folders).",
+          snippet: null,
+        },
+        readme: {
+          name: "README.md",
+          role: "never",
+          desc: "Default Next.js boilerplate notes. Replace with your project's actual README — what it is, how to run it, how to deploy.",
+          snippet: null,
+        },
+      };
+
+      const panel = document.getElementById("panel");
+      function show(key) {
+        const d = data[key];
+        if (!d) return;
+        panel.innerHTML = `
+          <h2>${d.name}</h2>
+          <div class="role ${d.role}">${
+            d.role === "daily" ? "daily — you'll work here" :
+            d.role === "rare"  ? "occasional — touched a few times per project" :
+                                  "rarely or never — set-and-forget"
+          }</div>
+          <p>${d.desc}</p>
+          ${d.snippet ? `<pre>${d.snippet}</pre>` : ""}
+        `;
+        document.querySelectorAll(".tree button").forEach((b) =>
+          b.classList.toggle("active", b.dataset.k === key)
+        );
+      }
+      document.querySelectorAll(".tree button").forEach((b) => {
+        b.addEventListener("click", () => show(b.dataset.k));
+      });
+      show("app");
+    </script>
+  </body>
+</html>

@@ -1,0 +1,566 @@
+## Linking and navigation
+
+Once you have routes, the next question is how to move between them. Next.js gives you two ways: the **`<Link>`** component for declarative links (the same shape as `<a href="...">`, but smarter), and the **`useRouter`** hook for programmatic navigation (after a form submit, an API response, etc.). Both keep the user inside your app's already-loaded layout — no full-page reload, no flash of white, no lost React state. The framework handles the prefetching, the cache, and the URL bar updates for you.
+
+<Analogy>
+Navigation in Next.js is **the difference between teleporting across a city and driving across it**.
+
+A plain `<a href="/dashboard">` is "driving across the city" — the browser unloads the current page, downloads the new one's HTML, downloads its CSS, downloads its JS, and renders it from scratch. The whole tab essentially restarts. Any open menu, any half-typed text, any in-memory React state — gone. The user sees a brief flash of white as the new page takes over. Total time on a fast network: 400-1500ms.
+
+A `<Link href="/dashboard">` is teleporting — the framework knows the destination is *part of this same app*, so it doesn't restart anything. It fetches just the new route's data and component code (often already prefetched as soon as the link came into view), swaps the new page into the existing layout, and updates the URL bar. Layouts that wrap both URLs stay mounted. React state in those layouts survives. The user sees the page change in tens of milliseconds with no white flash.
+
+```tsx
+import Link from "next/link";
+
+<Link href="/dashboard">Dashboard</Link>     // teleport — fast
+<a    href="/dashboard">Dashboard</a>          // drive — slow + state loss
+```
+
+The `<Link>` does three things `<a>` doesn't:
+
+1. **Prefetches the destination.** When the link enters the viewport (or on hover, depending on Next.js version), the framework fetches the target route's JS bundle in the background. By the time the user clicks, the bundle is already cached. Click → instant.
+
+2. **Uses client-side navigation.** Rather than reloading the whole page, the framework requests just the new route's payload and patches it into the existing tree. The browser never reloads. The URL changes via `history.pushState`.
+
+3. **Keeps the layout cache warm.** Layouts wrapping both URLs stay mounted; the rendered tree is preserved. State, scroll position, modals — all survive.
+
+For *programmatic* navigation — after a form submit, after a login response, after a setTimeout — there's `useRouter`:
+
+```tsx
+"use client";
+import { useRouter } from "next/navigation";
+
+export function LoginForm() {
+  const router = useRouter();
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await login(...);
+    router.push("/dashboard");   // same fast teleport, triggered from code
+  }
+}
+```
+
+Same fast navigation, triggered from your code instead of from a click on a `<Link>`.
+
+The framing for the next twenty concepts: **`<Link>` for declarative navigation, `useRouter` for programmatic, never a plain `<a href>` to a route inside your app.** Plain `<a>` is still right for *external* links (`<a href="https://github.com/...">`) — those genuinely should leave your app. But for in-app routes, always `<Link>`.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing a full page reload vs. a Next.js client-side navigation"
+  caption="Full reload: white flash + lost state. Link navigation: page swap inside the same app shell."
+>
+
+```
+   PLAIN <a href="/about">                NEXT.JS <Link href="/about">
+   ──────────────────────                 ─────────────────────────
+
+   click                                  click
+     ↓                                      ↓
+   browser unloads current page            framework fetches /about's
+     ↓                                      payload (often already prefetched)
+   downloads /about HTML                    ↓
+     ↓                                     swaps content into existing tree
+   downloads CSS                            ↓
+     ↓                                     updates URL bar
+   downloads JS                             ↓
+     ↓                                     done
+   white flash → render
+     ↓
+   done
+
+   ⏱  500-1500ms                          ⏱  20-80ms
+   💥 React state lost                    ✓ React state preserved
+   💥 Scroll resets                       ✓ Scroll managed by router
+   💥 Open modals close                    ✓ Layout modals stay open
+```
+
+</Illustration>
+
+### `<Link>` — the standard way
+
+```tsx
+import Link from "next/link";
+
+export default function Nav() {
+  return (
+    <nav className="flex gap-4">
+      <Link href="/">Home</Link>
+      <Link href="/about">About</Link>
+      <Link href="/blog">Blog</Link>
+    </nav>
+  );
+}
+```
+
+`<Link>` renders an `<a>` tag under the hood — so it's still keyboard-accessible, right-click works, "open in new tab" works. The interactivity is enhanced; the semantics are preserved.
+
+For dynamic destinations, build the href with template strings:
+
+```tsx
+posts.map(post => (
+  <Link key={post.id} href={`/blog/${post.slug}`}>
+    {post.title}
+  </Link>
+))
+```
+
+For URLs with query parameters:
+
+```tsx
+<Link href={{ pathname: "/search", query: { q: "next.js" } }}>
+  Search
+</Link>
+```
+
+(The object form is equivalent to `href="/search?q=next.js"` — use whichever reads better.)
+
+### `useRouter` — programmatic navigation
+
+For navigation triggered by *code* (after a form submit, login, save):
+
+```tsx
+"use client";
+import { useRouter } from "next/navigation";
+
+export function LoginForm() {
+  const router = useRouter();
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await login(formData);
+    if (res.ok) router.push("/dashboard");
+    else        setError(res.error);
+  }
+  return <form onSubmit={onSubmit}>{/* ... */}</form>;
+}
+```
+
+`router.push(url)` navigates to `url` (adds to history; user can hit back).
+
+Other methods:
+
+- **`router.replace(url)`** — navigate without adding to history. The current URL is replaced; "back" goes to wherever the user was before *the previous* URL. Used after login (user shouldn't be able to "back" to the login page) and similar one-way flows.
+- **`router.back()`** — go back, same as the browser back button.
+- **`router.forward()`** — go forward.
+- **`router.refresh()`** — re-fetch the current route's data without a full page reload. Use after a mutation to show fresh data.
+
+Important: `useRouter` is from `"next/navigation"` (App Router). There's an older `useRouter` from `"next/router"` for older Next.js projects — make sure your import is `"next/navigation"` for the current way.
+
+### Where you'd reach for which
+
+| Situation                              | Use         |
+| -------------------------------------- | ----------- |
+| Click a link in the UI                  | `<Link>`     |
+| Card / button that navigates            | `<Link>`     |
+| Logo in the nav                         | `<Link>`     |
+| After a form submit                     | `useRouter().push` |
+| After a successful login                | `useRouter().replace` (no back to login) |
+| Redirect from a guard                   | `useRouter().push` or server-side `redirect()` |
+| External link (different site)          | plain `<a>`  |
+
+The mental rule: **if the user is *clicking* something, use `<Link>`; if your *code* is triggering a navigation, use `useRouter`.**
+
+### Prefetching — Next.js's secret to feeling fast
+
+`<Link>` automatically prefetches the destination route when:
+
+- The `<Link>` enters the viewport (production builds, App Router).
+- The user hovers over the link (`prefetch` defaults vary by version).
+
+By the time the user clicks, the destination's JavaScript and (if applicable) the server-rendered HTML are already in the browser's cache. The click → render happens in milliseconds.
+
+You can opt out for pages you *don't* want prefetched (heavy pages with expensive data, rarely-visited admin routes):
+
+```tsx
+<Link href="/heavy-admin-page" prefetch={false}>Admin</Link>
+```
+
+Prefetching costs network bandwidth — it's a trade. For most apps, the default (prefetch everything visible) is correct. For low-bandwidth contexts (mobile-first apps, dev tools), some teams disable global prefetching for performance reasons.
+
+### Reading the current path with `usePathname`
+
+A common need: a nav that highlights the currently-active link. `usePathname` is the hook:
+
+```tsx
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+export function Nav() {
+  const pathname = usePathname();
+  return (
+    <nav className="flex gap-4">
+      <Link
+        href="/about"
+        className={pathname === "/about" ? "font-bold" : ""}
+      >
+        About
+      </Link>
+      <Link
+        href="/blog"
+        className={pathname.startsWith("/blog") ? "font-bold" : ""}
+      >
+        Blog
+      </Link>
+    </nav>
+  );
+}
+```
+
+`pathname` is the current URL without the search params. Use string compare for exact matches; `startsWith` for "any sub-route under this section."
+
+### Reading query parameters with `useSearchParams`
+
+For reading `?key=value` parts of the URL:
+
+```tsx
+"use client";
+import { useSearchParams } from "next/navigation";
+
+export function SearchResults() {
+  const params = useSearchParams();
+  const query = params.get("q") ?? "";
+  return <p>Searching for: {query}</p>;
+}
+```
+
+`useSearchParams` returns a read-only object with `.get(key)`. For mutations, build a new URL and `router.push(it)`.
+
+### `redirect()` — server-side navigation
+
+Inside a server component or route handler, you can redirect *before* rendering:
+
+```tsx
+// app/dashboard/page.tsx
+import { redirect } from "next/navigation";
+
+export default async function Dashboard() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return <div>Hi, {user.name}</div>;
+}
+```
+
+This is a *server-side* redirect — Next.js sends a `302` (or `307`) response, the browser navigates, no client-side code runs. Used for auth guards, regional redirects, anything decided on the server before the page renders.
+
+`redirect()` throws (it doesn't return), so any code after it in the same function never runs. Don't put it in a try/catch.
+
+### `notFound()` — show the 404 page
+
+Similar shape, for "this resource doesn't exist":
+
+```tsx
+// app/blog/[slug]/page.tsx
+import { notFound } from "next/navigation";
+
+export default async function BlogPost({ params }) {
+  const post = await getPost(params.slug);
+  if (!post) notFound();
+  return <article>{post.body}</article>;
+}
+```
+
+The closest `not-found.tsx` (in the same folder, parent folder, etc.) is rendered.
+
+### What plain `<a>` should still be used for
+
+A plain `<a href>` is correct when the destination is *not* part of your Next.js app:
+
+```tsx
+<a href="https://github.com/me/my-app" target="_blank" rel="noreferrer">
+  GitHub
+</a>
+```
+
+For external URLs, `<Link>` would still work (it falls back to a normal anchor for non-app URLs), but the convention is to use `<a>` so the reader knows at a glance "this goes elsewhere." Combine with `target="_blank"` and `rel="noreferrer"` for security and UX.
+
+For internal app URLs, always `<Link>`. The performance and UX wins are real.
+
+### Scroll behavior
+
+By default, Next.js's `<Link>` navigation scrolls to the top on each new route — same as a fresh page load. Sometimes you want to suppress this (e.g., a nav that doesn't scroll when toggled):
+
+```tsx
+<Link href="/dashboard/settings" scroll={false}>Settings</Link>
+```
+
+`scroll={false}` keeps the current scroll position. Use sparingly; the default is right most of the time.
+
+### Hash links — within the same page
+
+For `#section` links within the current page:
+
+```tsx
+<Link href="#features">Features</Link>
+```
+
+Next.js handles these specially — no navigation, just scrolls to the element with `id="features"`. Same as a plain `<a href="#features">` would.
+
+<ExampleProject
+  src="link-vs-anchor"
+  title="Link vs. a — feel the difference"
+  description="A page with two parallel nav bars, one using <Link> and one using plain <a>. Click between routes on each side; on the <a> side, the page reloads and a counter you set resets. On the <Link> side, the counter survives because React state didn't reset."
+/>
+
+<ExampleProject
+  src="router-hook"
+  title="useRouter + usePathname — a working highlighted nav"
+  description="A nav bar that auto-highlights the current page. Uses usePathname for the highlight; uses useRouter for a 'go to random page' button. All four router methods (push, replace, back, refresh) demonstrated in one place."
+/>
+
+<Exercise
+  title="Build a 4-page app with Link, useRouter, and usePathname"
+  starter={`In your Next.js project, build a small app with these routes:
+
+  /            → Home
+  /about       → About
+  /blog        → Blog list
+  /blog/[slug] → Blog post (e.g. /blog/hello)
+  /settings    → Settings (with a save button)
+
+  1. NAV BAR. Build a navbar in your root layout that:
+     - Links to /, /about, /blog, /settings using <Link>.
+     - Uses usePathname to highlight the current page (bold it, or
+       give it a different color).
+     - Lives in app/layout.tsx (so it appears on every page).
+
+  2. BLOG INDEX. /blog should render a list of 3 fake posts, each
+     <Link href={`/blog/${post.slug}`}>{post.title}</Link>.
+
+  3. SETTINGS WITH ROUTER.PUSH. /settings should have a fake
+     "Save" form (no real save). On submit:
+       e.preventDefault();
+       await new Promise(r => setTimeout(r, 500));   // fake delay
+       router.push("/dashboard?saved=1");
+     Then on /dashboard, use useSearchParams to detect ?saved=1
+     and show a "Saved!" banner.
+
+  4. EXTERNAL LINK. In /about, add a real external link:
+       <a href="https://nextjs.org" target="_blank" rel="noreferrer">
+         Next.js docs
+       </a>
+     — note this is a plain <a>, not a <Link>, because it leaves
+     your app.
+
+  5. Test:
+     - Navigate between /, /about, /blog with the navbar. Notice:
+       no full-page flash. The highlighted nav item updates.
+     - Click a /blog/* post link. Notice the URL changes, the page
+       renders, the navbar stays put.
+     - On /settings, click Save. Watch the URL change to
+       /dashboard?saved=1 and the banner appear.
+     - Click "Next.js docs" on /about. Notice this opens in a new
+       tab (target="_blank") instead of swapping the page.
+
+  Bonus: add a "Go back" button to /blog/[slug] using
+  router.back() — clicking it should take you to wherever you came
+  from (history-aware).`}
+>
+
+- A navbar in the root layout uses `<Link>` for `/`, `/about`, `/blog`, `/settings`.
+- `usePathname` is used to apply a different style to the currently-active link.
+- The blog index renders 3 posts; each links to `/blog/[slug]` using template strings.
+- The settings page uses `useRouter().push("/dashboard?saved=1")` after a fake save.
+- The dashboard page reads `?saved=1` via `useSearchParams` and shows a banner.
+- An external link uses plain `<a>` with `target="_blank"` and `rel="noreferrer"`.
+- All in-app navigation feels instant (no white flash, no scroll-to-top jank where unwanted).
+- Bonus: a "Go back" button uses `router.back()` and works as expected.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `<Link>` and `<a>` in a Next.js app?
+
+**A:** **`<Link>` does client-side navigation (no page reload, state preserved, prefetched). `<a>` does a full browser navigation (page reload, state lost). Inside your app, always use `<Link>`. For external sites, use `<a>`.**
+
+```tsx
+<Link href="/about">About</Link>          // ✓ fast, in-app
+<a    href="/about">About</a>              // ✗ full reload, slow
+
+<a href="https://github.com/...">GitHub</a>  // ✓ external — plain anchor is right
+```
+
+What `<Link>` adds over `<a>`:
+
+1. **Client-side navigation.** Clicking doesn't unload the page. The framework fetches the new route's payload and patches it into the existing React tree. Layouts that wrap both URLs stay mounted; their state survives.
+
+2. **Prefetching.** When the link enters the viewport (in production), Next.js fetches the destination's JS bundle in the background. By the time the user clicks, the bundle is already cached. The click → render is near-instant.
+
+3. **Cache-warm navigation.** Returning to a recently-visited URL is even faster because the route's React tree is in Next.js's in-memory cache.
+
+Everything else `<a>` does, `<Link>` does too:
+
+- Right-click → "open in new tab" works.
+- Cmd/Ctrl-click opens in a new tab.
+- Keyboard-accessible.
+- The rendered HTML is an `<a>` tag, so SEO and accessibility tools see a real link.
+
+What `<a>` is right for:
+
+- **External URLs** — `<a href="https://...">` leaves your app. `<Link>` would also work but signals "in-app" which is confusing.
+- **Hash links** to the same page (`<a href="#features">`) — both work; some prefer the anchor for clarity.
+- **Download links** — files served from `public/` (`<a href="/files/spec.pdf" download>`). `<Link>` would try to client-side-navigate to a non-existent route.
+
+For the 95% case — links between routes in your app — `<Link>` is always the right call.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How would you redirect a user to `/dashboard` after a successful login?
+
+**A:** **Use `useRouter().push("/dashboard")` from a client component, OR `redirect("/dashboard")` from a server component / route handler.**
+
+Client-side, after an API call:
+
+```tsx
+"use client";
+import { useRouter } from "next/navigation";
+
+export function LoginForm() {
+  const router = useRouter();
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/login", { method: "POST", body: new FormData(e.currentTarget) });
+    if (res.ok) {
+      router.push("/dashboard");
+    } else {
+      setError("Login failed");
+    }
+  }
+  return <form onSubmit={onSubmit}>{/* ... */}</form>;
+}
+```
+
+Or, even better for login flows — `router.replace`:
+
+```ts
+router.replace("/dashboard");
+```
+
+`replace` doesn't add to browser history. So the user can't hit "back" to return to the login page (which would be confusing now that they're logged in).
+
+Server-side, in a route handler or server action:
+
+```ts
+import { redirect } from "next/navigation";
+
+export async function login(formData: FormData) {
+  // ... validate, create session ...
+  redirect("/dashboard");   // throws — code after never runs
+}
+```
+
+`redirect` returns a `307` response that tells the browser to navigate. The browser does the navigation; no client-side code runs. Used in server actions, route handlers, and server components.
+
+Three choices, three different scenarios:
+
+- **`router.push`** — client-side, after-API-success, user can back to where they were.
+- **`router.replace`** — client-side, after-API-success, user *shouldn't* back to the previous URL (login, signup, multistep wizards).
+- **`redirect`** — server-side, before rendering, used in auth guards and server actions.
+
+Pick based on whether the navigation happens client-side or server-side, and whether the previous URL should remain in browser history.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does Next.js prefetch links that haven't been clicked yet?
+
+**A:** **To make navigation feel instant. When the user clicks, the destination is already cached — the click → render happens in tens of milliseconds instead of hundreds.**
+
+The mechanism:
+
+```text
+1. The user is on /home.
+2. /home renders normally.
+3. Next.js sees a <Link href="/about"> in the rendered tree.
+4. When that Link enters the viewport (in production), Next.js
+   fetches /about's JS bundle and (for server-rendered pages)
+   its RSC payload — silently, in the background.
+5. The user reads the page, scrolls.
+6. Eventually they click the About link.
+7. /about's payload is already in memory. The framework swaps the
+   page in the existing tree. The render happens in ~20-80ms.
+```
+
+Without prefetching:
+
+```text
+6. User clicks About.
+7. Browser must fetch the /about JS bundle and (if SSR'd) the HTML.
+   This is the cold path — fresh DNS, fresh TLS, fresh download.
+8. 500-1500ms later, the page renders.
+```
+
+The difference between "click → blank page → render" (slow) and "click → page is there" (instant) is one of the biggest UX wins of using a framework over plain SPA. Prefetching is *the* invisible feature that makes Next.js apps feel responsive.
+
+Trade-offs:
+
+- **Bandwidth.** Prefetched bundles cost bytes. For a page with 30 visible links, the prefetch traffic can rival the initial page load. On mobile / low-bandwidth networks, this matters.
+- **Privacy** in some contexts. Prefetching a URL effectively visits it (without the user knowing). For pages that log analytics on visit, this can pollute the data.
+- **Backend load.** Server components that get prefetched do work on the server — the React tree renders, the data fetches happen.
+
+You can disable prefetching per link (`<Link href="/x" prefetch={false}>`), or globally adjust prefetching behavior in `next.config.ts`. For most apps, the default — prefetch visible links — is the right balance. Mobile-heavy apps sometimes set `prefetch={false}` on rarely-clicked links to save bytes.
+
+The default behavior has evolved across Next.js versions; recent versions are more conservative (hover-triggered) than older ones (viewport-triggered). Either way, the feature is on and you should rely on it for the instant-feel.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How do you build a navbar that highlights the currently-active link?
+
+**A:** **Use `usePathname()` from `next/navigation` and compare it to each link's href to apply a different style.**
+
+```tsx
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const links = [
+  { href: "/",        label: "Home" },
+  { href: "/about",   label: "About" },
+  { href: "/blog",    label: "Blog" },
+];
+
+export function Nav() {
+  const pathname = usePathname();
+  return (
+    <nav className="flex gap-4">
+      {links.map((link) => {
+        const isActive =
+          link.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(link.href);
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={isActive ? "font-bold text-accent" : "text-gray-500"}
+          >
+            {link.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+```
+
+Three rules to get the "active" logic right:
+
+1. **The home link needs exact comparison.** `pathname === "/"`. Otherwise, every URL "starts with /" and home is always highlighted.
+
+2. **Section links use `startsWith`.** `pathname.startsWith("/blog")` matches `/blog`, `/blog/hello`, `/blog/[slug]/comments`. The user is "in the blog section" for any of these; highlight the Blog nav item.
+
+3. **The nav needs `"use client"`.** `usePathname` is a hook; hooks only run in client components. Mark the file's first line `"use client"`.
+
+A subtler pattern uses `pathname === link.href || pathname.startsWith(link.href + "/")` to avoid false matches (`/blog2` shouldn't highlight Blog). Pick whichever fits your URL structure.
+
+If you want the framework's full power (animated underlines, smooth transitions between active states), this is also where you'd add `framer-motion`'s `layoutId` — same `layoutId` on the active indicator across all links produces a sliding-underline animation. The JEditor marketing nav uses this pattern.
+
+The general principle: `usePathname` for "where am I?" reads; `useRouter` for "go somewhere" writes; `useSearchParams` for "what params do I have?" reads. Three hooks; one for each routing concern.
+
+</InterviewQuestion>

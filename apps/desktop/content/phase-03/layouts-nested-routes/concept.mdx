@@ -1,0 +1,543 @@
+## Layouts and nested routes
+
+A layout is a wrapper that stays mounted as the user navigates inside its subtree. The root `app/layout.tsx` wraps every page in the app; nested `layout.tsx` files wrap everything below them. A dashboard's sidebar, an authenticated-app's top nav, a section's breadcrumbs — these all become layouts, written once, applied automatically. Layouts make full-stack apps feel "app-shaped" instead of "page-shaped" without you wiring up persistence yourself.
+
+<Analogy>
+Layouts are **a building's permanent fixtures vs. the moveable furniture inside each room**.
+
+You walk into a building. The lobby has a concierge desk and an elevator bank. You ride to the 4th floor; the floor has a hallway with department signs and water fountains. You enter Room 412. Inside the room, the furniture is whatever Room 412 needs — a meeting table, chairs, a whiteboard.
+
+Now walk down the hall to Room 414. The lobby concierge is *still there* (you didn't go back through the lobby). The 4th-floor hallway is *still there* (you stayed on the same floor). The only thing that changed is what's *inside the new room*. The permanent fixtures stayed; the room's contents swapped.
+
+That's exactly how Next.js layouts work. The root layout (`app/layout.tsx`) is the lobby — the `<html>`, `<body>`, global CSS, root-level navbar. It's mounted once and stays. A section-level layout (`app/dashboard/layout.tsx`) is the floor's hallway — the dashboard sidebar, the breadcrumbs, the section nav. Mounted when the user enters the section, stays mounted as they move *within* the section. The `page.tsx` is the room's furniture — swapped out every time the URL changes.
+
+The mechanical version, written in code:
+
+```tsx
+// app/layout.tsx — the lobby
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <SiteNav />
+        {children}
+        <SiteFooter />
+      </body>
+    </html>
+  );
+}
+
+// app/dashboard/layout.tsx — the 4th floor
+export default function DashboardLayout({ children }) {
+  return (
+    <div className="flex">
+      <DashboardSidebar />
+      <main>{children}</main>
+    </div>
+  );
+}
+
+// app/dashboard/settings/page.tsx — Room 412
+export default function Settings() {
+  return <h1>Settings</h1>;
+}
+```
+
+When the user is at `/dashboard/settings`, what renders is the composition of all three: root layout WRAPS dashboard layout WRAPS the settings page. Visually:
+
+```text
+┌─ SiteNav ─────────────────┐    ← from app/layout.tsx
+│ ┌─ DashboardSidebar ─┬──┐ │    ← from app/dashboard/layout.tsx
+│ │                    │   │ │
+│ │  Settings          │   │ │    ← from app/dashboard/settings/page.tsx
+│ │                    │   │ │
+│ └────────────────────┴──┘ │
+└─ SiteFooter ──────────────┘
+```
+
+Three concrete wins this gives you that you'd otherwise build by hand:
+
+1. **State persists across navigation.** If the dashboard sidebar has an "open / closed" state (`useState(false)`), that state survives when the user navigates from `/dashboard/settings` to `/dashboard/billing`. The sidebar component never re-mounted; only the page area did. No prop-drilling, no global store needed.
+
+2. **Layouts naturally separate concerns.** "Where does the section's nav go?" gets answered once, in `layout.tsx`. You don't repeat it across every page. Adding a new page is just adding `page.tsx`; the layout comes along for free.
+
+3. **Nested layouts compose without ceremony.** A docs section with its own sidebar inside a marketing site with a public nav inside a global HTML shell? Three layouts, automatically composed. The user navigates between docs pages; the marketing layout stays, the docs sidebar stays, only the docs content swaps.
+
+Layouts are *the* feature that makes large apps stay coherent. Once you've internalized "what's persistent, what's per-page?", a Next.js app's structure becomes obvious to design and obvious to read.
+</Analogy>
+
+<Illustration
+  alt="Diagram of nested layouts wrapping a page, showing which parts persist when navigating within a section"
+  caption="Each layout wraps everything below. Inner navigation swaps only the page; outer layouts persist."
+>
+
+```
+   URL: /dashboard/settings
+   ─────────────────────────
+
+   app/
+   ├── layout.tsx                  ← root layout
+   │     │
+   │     │  renders { children } here ▼
+   │     │
+   │     └── app/dashboard/layout.tsx       ← dashboard layout
+   │           │
+   │           │  renders { children } here ▼
+   │           │
+   │           └── app/dashboard/settings/page.tsx     ← the page
+
+   USER NAVIGATES FROM /dashboard/settings TO /dashboard/billing:
+
+   ✓ root layout stays mounted
+   ✓ dashboard layout stays mounted   ← sidebar state persists!
+   ✗ settings page UNMOUNTS
+   ✓ billing page MOUNTS
+```
+
+</Illustration>
+
+### The root layout — required, only one
+
+`app/layout.tsx` is the only layout that *must* exist. It's the root of the layout tree; it owns `<html>` and `<body>`. Without it, the page can't render.
+
+```tsx
+// app/layout.tsx
+import "./globals.css";
+
+export const metadata = {
+  title: "My App",
+  description: "Built with Next.js",
+};
+
+export default function RootLayout({
+  children,
+}: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+Three things to note:
+
+1. **Only the root layout has `<html>` and `<body>`.** Nested layouts return whatever React JSX they want — a `<div>` wrapper, a `<section>`, anything. The `<html>` tag lives once, at the top.
+
+2. **Metadata is exported here.** The `metadata` export sets the default `<title>` and `<meta>` tags. Pages can override; this is the default. (Covered in detail in a later concept.)
+
+3. **`children` is required.** The page (or nested layout) renders inside `{children}`. Forgetting to render `{children}` means none of your pages display.
+
+### Nested layouts — wrap a section
+
+A layout in any folder wraps every route below it. For a `/dashboard` section with a persistent sidebar:
+
+```tsx
+// app/dashboard/layout.tsx
+import { DashboardSidebar } from "@/components/DashboardSidebar";
+
+export default function DashboardLayout({
+  children,
+}: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen">
+      <DashboardSidebar />
+      <main className="flex-1 p-8">{children}</main>
+    </div>
+  );
+}
+```
+
+Now every page under `/dashboard/...` is wrapped by this layout. `/dashboard/settings` shows the sidebar AND the settings page. `/dashboard/billing` shows the same sidebar AND the billing page. The sidebar component is mounted once when the user enters the dashboard; navigating between `/dashboard/*` URLs keeps the sidebar mounted (including any React state inside it).
+
+### Layouts compose
+
+A real app has nested layouts:
+
+```text
+app/
+├── layout.tsx                      ← root: <html>, site nav, footer
+├── page.tsx                          → /
+├── (marketing)/
+│   ├── layout.tsx                   ← marketing: public nav, footer
+│   ├── about/page.tsx                → /about
+│   └── pricing/page.tsx              → /pricing
+└── (app)/
+    ├── layout.tsx                   ← app: requires auth, top bar
+    ├── dashboard/
+    │   ├── layout.tsx               ← dashboard: sidebar
+    │   ├── page.tsx                  → /dashboard
+    │   └── settings/page.tsx         → /dashboard/settings  ← wrapped by ALL of these
+    └── billing/page.tsx              → /billing
+```
+
+For `/dashboard/settings`, the composition is:
+
+```text
+RootLayout
+  └── AppLayout (auth check + top bar)
+        └── DashboardLayout (sidebar)
+              └── SettingsPage
+```
+
+Each layer adds its piece; each piece survives navigation within its subtree.
+
+### Special case — route group layouts
+
+The `(marketing)/` and `(app)/` route groups in the example above each have their own `layout.tsx`. Even though `(marketing)` and `(app)` don't appear in the URL, their layouts apply.
+
+This is the workhorse pattern for SaaS apps:
+
+```text
+app/
+├── (marketing)/
+│   └── layout.tsx        ← public nav + footer
+└── (app)/
+    └── layout.tsx        ← auth-required wrapper + top bar
+```
+
+Pages in `(marketing)/` use the public layout; pages in `(app)/` get auth + the in-app top bar. URLs stay clean (`/about`, `/pricing`, `/dashboard`); the layouts diverge.
+
+### What goes in a layout vs. a page
+
+A useful mental check:
+
+- **Layout** = stuff that stays the same while the user moves within this subtree. Sidebars, headers, persistent forms, breadcrumbs that read from the URL.
+- **Page** = stuff that's specific to this exact route. The dashboard's stat cards, the user profile, the article body.
+
+If you find yourself wondering whether something is a layout or a page, ask: "When the user navigates to a sibling URL, should this stay mounted?" Yes → layout. No → page.
+
+### `loading.tsx` — Suspense for the layout
+
+While a page is fetching data, its layout still renders. A `loading.tsx` in the same folder shows automatically (as a React Suspense fallback) until the page is ready:
+
+```tsx
+// app/dashboard/loading.tsx
+export default function Loading() {
+  return <p>Loading dashboard…</p>;
+}
+```
+
+The framework wires this up. The layout (sidebar) renders; the page area shows the loading state; once the page's data is ready, the page replaces the loading state. No manual `useState(loading)` needed.
+
+### `error.tsx` — React error boundary
+
+Same pattern for errors. An `error.tsx` in any folder catches uncaught errors in pages or layouts below it:
+
+```tsx
+// app/dashboard/error.tsx
+"use client";
+
+export default function Error({
+  error,
+  reset,
+}: { error: Error; reset: () => void }) {
+  return (
+    <div>
+      <h1>Something broke</h1>
+      <p>{error.message}</p>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+Error boundaries must be client components (`"use client"`) because they catch errors. The layout above this error boundary still renders — so the user sees the sidebar with an error message inside the page area, not a totally broken page.
+
+### `not-found.tsx` — 404 for the section
+
+A `not-found.tsx` in any folder is shown when:
+- A dynamic segment doesn't match (`/blog/[slug]` with an unknown slug).
+- A page calls `notFound()` (the function from `next/navigation`).
+
+```tsx
+// app/dashboard/not-found.tsx
+export default function NotFound() {
+  return <p>That dashboard page doesn't exist.</p>;
+}
+```
+
+The closest `not-found.tsx` to where the 404 fired is the one that renders. So a not-found in the dashboard subtree gives a dashboard-shaped 404; the root one is the fallback.
+
+### Metadata in layouts
+
+Layouts can export `metadata` to set defaults for their subtree:
+
+```tsx
+// app/blog/layout.tsx
+export const metadata = {
+  title: { default: "Blog", template: "%s | Blog" },
+};
+```
+
+Now every page under `/blog/*` has `"Blog"` as the default title; a page that exports its own `metadata = { title: "Hello" }` overrides to `"Hello | Blog"`. The template stitches in the page-specific title.
+
+Useful for sections that should all have a consistent title format ("Docs · MyApp", "Settings · MyApp").
+
+### Layouts can be server or client
+
+By default, layouts are server components — they can fetch data, hit the DB, etc.:
+
+```tsx
+// app/dashboard/layout.tsx
+export default async function DashboardLayout({ children }) {
+  const user = await getCurrentUser();   // runs on the server
+  return (
+    <div>
+      <DashboardSidebar user={user} />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+If you need state in the layout itself (a "collapse sidebar" toggle), make the *interactive part* a client component, not the whole layout:
+
+```tsx
+// app/dashboard/layout.tsx (server)
+import { DashboardSidebarClient } from "./_components/DashboardSidebarClient";
+
+export default async function DashboardLayout({ children }) {
+  const user = await getCurrentUser();
+  return (
+    <div>
+      <DashboardSidebarClient initialUser={user} />   {/* "use client" inside */}
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+Keep the layout server-rendered (fast, no JS shipped); make only the interactive piece client. The server-vs-client concept covers the split in detail.
+
+<ExampleProject
+  src="layout-tree"
+  title="A layout tree visualizer — pick a URL, see the layouts that wrap it"
+  description="An interactive page where you click a URL and the right pane shows the layout composition for that route: which layouts wrap it, and what stays mounted vs. swaps when you navigate to a sibling URL. The mental model for 'why is the sidebar still here when I clicked away?'"
+/>
+
+<ExampleProject
+  src="nested-layouts"
+  title="Three layouts stacked — root + section + sub-section"
+  description="A working static demo that nests three layouts (site shell, dashboard, settings sub-section). Click between three pages within the dashboard; watch the outer two layouts stay put while only the innermost page swaps. The persistent-state benefit becomes obvious."
+/>
+
+<Exercise
+  title="Build a 3-layout dashboard"
+  starter={`In your Next.js project, build a small dashboard with nested layouts:
+
+  1. ROOT LAYOUT (app/layout.tsx):
+     - Already exists from the scaffold.
+     - Add a simple top nav bar with three Links:
+       <Link href="/">Home</Link>
+       <Link href="/about">About</Link>
+       <Link href="/dashboard">Dashboard</Link>
+
+  2. DASHBOARD LAYOUT (app/dashboard/layout.tsx):
+     - Create this file.
+     - Include a left sidebar (just a plain <aside> with three links):
+       <Link href="/dashboard">Overview</Link>
+       <Link href="/dashboard/settings">Settings</Link>
+       <Link href="/dashboard/billing">Billing</Link>
+     - Wrap {children} in a <main>.
+
+  3. THREE DASHBOARD PAGES:
+     - app/dashboard/page.tsx           — "Overview"
+     - app/dashboard/settings/page.tsx  — "Settings"
+     - app/dashboard/billing/page.tsx   — "Billing"
+
+  4. TEST:
+     - Run pnpm dev. Navigate to /dashboard.
+     - Click between "Settings" and "Billing" in the sidebar.
+     - Confirm: the sidebar stays put. Only the right pane content swaps.
+     - Open browser devtools → Network. Watch the requests; the layouts
+       don't re-download — only the page payload changes.
+
+  5. PERSISTENT STATE TEST:
+     - In your DashboardLayout, add a small client component with state:
+       "use client";
+       export function SidebarToggle() {
+         const [collapsed, setCollapsed] = useState(false);
+         return <button onClick={() => setCollapsed(!collapsed)}>
+           {collapsed ? "expand" : "collapse"}
+         </button>;
+       }
+     - Import it into your DashboardLayout.
+     - Click the button, then navigate between /dashboard/settings and
+       /dashboard/billing. Confirm: the button state ("collapse") survives.
+       That's the layout persistence in action.
+
+  Bonus: add a (marketing) route group with its own layout (a public
+  navbar with no auth). Pages inside it (/about, /pricing) get the
+  marketing layout; /dashboard pages get the dashboard layout. Both
+  share the root layout.`}
+>
+
+- Root `layout.tsx` exports a layout that includes a site-wide top nav.
+- `app/dashboard/layout.tsx` exists and renders a sidebar plus `{children}`.
+- Three dashboard pages exist: overview, settings, billing — each a `page.tsx` in the right folder.
+- Navigating between dashboard pages keeps the sidebar visible without re-rendering it from scratch.
+- A small client component with `useState` lives inside the dashboard layout; its state persists across page navigation within `/dashboard/*`.
+- Bonus: a `(marketing)/` route group exists with its own layout, holding at least two pages whose URLs don't include "marketing" but whose layout is the marketing layout.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does a `layout.tsx` file do?
+
+**A:** **It wraps every page (and nested route) below the folder it's in. Layouts stay mounted as the user navigates within their subtree; only the inner page swaps.**
+
+```tsx
+// app/dashboard/layout.tsx
+export default function DashboardLayout({
+  children,
+}: { children: React.ReactNode }) {
+  return (
+    <div className="flex">
+      <Sidebar />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+What this does:
+
+- Every URL under `/dashboard/*` is wrapped by this layout.
+- The `<Sidebar />` component is mounted once when the user enters the dashboard.
+- Navigating between `/dashboard/settings` and `/dashboard/billing` does NOT re-render the sidebar — only the page content inside `{children}` swaps.
+
+The compositional model: layouts nest. A page inside three nested folders gets wrapped by all three layouts (root + middle + inner). Each layer in the layout chain stays mounted; only the innermost layer (the page) re-renders on navigation.
+
+Key properties to remember:
+
+- **One root layout.** `app/layout.tsx` is required. It's the only layout with `<html>` and `<body>` tags. Without it, the app won't render.
+- **Optional nested layouts.** Add `layout.tsx` to any folder; it wraps that subtree.
+- **Layouts can fetch data.** Since they're server components by default, they can `await` data in their body — fetching the current user, loading a config — and pass it to their children.
+- **State persists.** Any React state inside a layout component survives child route changes. Sidebar collapse, modal open/closed, form drafts — they all stay alive within the layout's scope.
+
+The mental check: "is this UI specific to one URL, or does it stay as the user navigates within a section?" One URL → page. Stays mounted → layout.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `layout.tsx` and `template.tsx`?
+
+**A:** **`layout.tsx` stays mounted across child navigation. `template.tsx` looks the same but is unmounted and re-mounted on every navigation, so its state and effects re-run.**
+
+```tsx
+// app/dashboard/layout.tsx — persists
+// app/dashboard/template.tsx — re-mounts every time
+```
+
+Both wrap their subtree. Both receive `{children}`. Both can be server or client components. The difference is *lifecycle*.
+
+When you'd use a layout:
+- Sidebars, navs, headers — anything where re-rendering would be visually annoying.
+- Components with React state you want to persist (a collapsed/expanded sidebar; a draft in a form).
+- Server components that fetch data — fetching once on entry, then reusing.
+
+When you'd use a template (rare):
+- You want a page-enter animation to play every time the user navigates. (A persistent layout wouldn't re-fire its `useEffect`; a template would.)
+- You want React state to reset on every navigation — a search box that should clear, a counter that should reset.
+- Tracking events that should fire on every page view, even within the same subtree.
+
+In practice, layouts cover 95% of cases. `template.tsx` is the escape hatch for the "I need this to re-render fresh on navigation" case. Most projects never use templates; some use them for specific animation use cases.
+
+You can have both in the same folder — Next.js composes them as `layout > template > children`. The layout persists; the template re-mounts inside it.
+
+The mnemonic that works: **layout = lifetime; template = transient.**
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Can you have a `layout.tsx` without a `page.tsx` in the same folder?
+
+**A:** **Yes — a folder can have a layout without rendering its own page. The folder doesn't become a route, but its layout still wraps child routes.**
+
+```text
+app/
+├── layout.tsx                    ← required root layout
+└── dashboard/
+    ├── layout.tsx                ← wraps subtree, but /dashboard itself has no page
+    ├── settings/page.tsx          → /dashboard/settings (renders, wrapped by both layouts)
+    └── billing/page.tsx           → /dashboard/billing
+```
+
+What happens at `/dashboard` (no `page.tsx` in that folder):
+- Next.js returns 404 for that URL — there's no page to render.
+- `/dashboard/settings` still works — it's wrapped by `dashboard/layout.tsx` and the root layout.
+
+This pattern shows up when:
+
+- **The section has no "index" page.** Maybe `/dashboard/settings` is the natural landing page; visiting `/dashboard` bare doesn't make sense. You can either: (a) leave it 404, (b) redirect from `app/dashboard/page.tsx` to `/dashboard/settings`, or (c) make `app/dashboard/page.tsx` a real overview page. Different choices for different apps.
+
+- **Route groups don't need a page.** `app/(marketing)/` is a group with its own layout, but the group itself isn't a URL. Pages inside the group (like `app/(marketing)/about/page.tsx`) work fine.
+
+- **Auth wrappers.** You might create `app/(app)/layout.tsx` to enforce login. The `(app)` group doesn't render at any URL; it just wraps every authenticated page below.
+
+The inverse — `page.tsx` without `layout.tsx` — is also fine and very common. Most pages live in folders that have no layout of their own; they're wrapped only by the root layout (and any ancestor layouts above them).
+
+The summary: layouts and pages are *independent files with independent roles*. A folder can have neither (a "container" folder), only a layout (a section wrapper without its own URL), only a page (a leaf route), or both (a section with its own landing page).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does state in a layout persist when the user navigates between sibling pages?
+
+**A:** **Because layouts don't unmount during navigation within their subtree. React's reconciler keeps the layout component instance; only the inner `{children}` slot swaps.**
+
+The mechanical version:
+
+```tsx
+// app/dashboard/layout.tsx
+"use client";
+
+export default function DashboardLayout({ children }) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  return (
+    <div className="flex">
+      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+When the user navigates from `/dashboard/settings` to `/dashboard/billing`:
+
+1. Next.js's client-side router knows both URLs are under `/dashboard/*`.
+2. The route tree is: `RootLayout → DashboardLayout → page`.
+3. The `RootLayout` and `DashboardLayout` components are *already in the React tree* — they don't get re-mounted, just stay where they are.
+4. The `<children>` slot's content changes — `settings/page.tsx`'s rendered tree is unmounted; `billing/page.tsx`'s rendered tree is mounted in its place.
+
+From React's perspective, this is the same as if you'd written:
+
+```tsx
+function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  return (
+    <DashboardLayout sidebarOpen={sidebarOpen}>
+      {currentRoute === "settings" ? <Settings /> : <Billing />}
+    </DashboardLayout>
+  );
+}
+```
+
+The `DashboardLayout` component's instance persists; only what's inside it changes. React state inside the layout — the `sidebarOpen` — is therefore preserved across the swap.
+
+The contrast: if you put the same `useState` inside `app/dashboard/settings/page.tsx`, it would reset every time the user navigated away and back, because the *page* unmounts on navigation.
+
+Three useful corollaries:
+
+- **`useState` in a layout = section-wide state.** Sidebar collapse, theme, drawer open/closed.
+- **`useState` in a page = page-specific state.** Form drafts, scroll position within that page.
+- **Both persist across re-renders, neither across full page reloads.** Hitting browser refresh, navigating to a totally different section — these unmount layouts. The browser is starting over.
+
+The persistence is *the entire point* of layouts as a feature. Once you've internalized "what state belongs in the layout vs. the page?", complex apps become trivial to organize.
+
+</InterviewQuestion>

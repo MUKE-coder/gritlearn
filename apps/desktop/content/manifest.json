@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "phases": [
     {
       "id": "phase-01",
@@ -87,11 +87,11 @@
       "title": "Next.js Full-Stack",
       "subtitle": "The Easiest Way to Build Real Apps",
       "concepts": [
-        { "slug": "phase-03/what-is-nextjs", "title": "What Next.js is", "available": false },
-        { "slug": "phase-03/project-setup", "title": "Project setup and file structure", "available": false },
-        { "slug": "phase-03/pages-app-router", "title": "Pages and the App Router", "available": false },
-        { "slug": "phase-03/layouts-nested-routes", "title": "Layouts and nested routes", "available": false },
-        { "slug": "phase-03/linking-navigation", "title": "Linking and navigation", "available": false },
+        { "slug": "phase-03/what-is-nextjs", "title": "What Next.js is", "available": true },
+        { "slug": "phase-03/project-setup", "title": "Project setup and file structure", "available": true },
+        { "slug": "phase-03/pages-app-router", "title": "The App Router", "available": true },
+        { "slug": "phase-03/layouts-nested-routes", "title": "Layouts and nested routes", "available": true },
+        { "slug": "phase-03/linking-navigation", "title": "Linking and navigation", "available": true },
         { "slug": "phase-03/server-vs-client", "title": "Server components vs client components", "available": false },
         { "slug": "phase-03/rendering-strategies", "title": "Rendering strategies (SSR, SSG, client)", "available": false },
         { "slug": "phase-03/data-fetching", "title": "Data fetching in Next.js", "available": false },

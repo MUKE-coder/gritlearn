@@ -1,0 +1,148 @@
+<!--
+  Type any URL → see the folder path it resolves to under app/.
+  Demonstrates the folder = route mapping.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>URL → folder mapper</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 800px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .form { display: flex; gap: 0.5rem; margin-top: 1rem; }
+      .form input {
+        flex: 1; padding: 0.55rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.92rem;
+      }
+      .form button {
+        padding: 0.55rem 1.1rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+      }
+      .presets {
+        display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.7rem;
+      }
+      .presets button {
+        padding: 0.3rem 0.7rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.8rem;
+      }
+      .presets button:hover { background: #f4f4f5; }
+      h2 { font-size: 0.95rem; margin: 1.5rem 0 0.4rem; }
+      .out {
+        background: #0a0a0d; color: #ededee; padding: 0.95rem 1.1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.88rem; line-height: 1.65;
+      }
+      .out .accent { color: #7fff5b; }
+      .out .info   { color: #38bdf8; }
+      .out .muted  { color: #71717a; }
+      .out .bad    { color: #f87171; }
+      .row { padding: 0.15rem 0; }
+      .params {
+        background: #fef3c7; border: 1px solid #fde68a; padding: 0.55rem 0.85rem;
+        border-radius: 4px; margin-top: 0.5rem; font-size: 0.88rem; color: #92400e;
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>URL → folder mapper</h1>
+    <p>Type a URL. The page shows which folder under <code>app/</code> would handle it. Try the presets to see the four route kinds (static, dynamic, catch-all, group).</p>
+
+    <div class="form">
+      <input id="url" type="text" value="/blog/hello-world" />
+      <button id="go">Resolve</button>
+    </div>
+
+    <div class="presets">
+      <button data-u="/">/ (home)</button>
+      <button data-u="/about">/about</button>
+      <button data-u="/blog">/blog</button>
+      <button data-u="/blog/hello-world">/blog/hello-world</button>
+      <button data-u="/products/47/reviews">/products/47/reviews</button>
+      <button data-u="/docs/api/users/create">/docs/api/users/create</button>
+      <button data-u="/pricing">/pricing</button>
+    </div>
+
+    <h2>Resolves to</h2>
+    <div class="out" id="out"></div>
+
+    <script>
+      // Simulated route table — paths in the order they'd be matched.
+      const routes = [
+        { path: "/",                   file: "app/page.tsx",                          kind: "static" },
+        { path: "/about",              file: "app/about/page.tsx",                    kind: "static" },
+        { path: "/blog",               file: "app/blog/page.tsx",                     kind: "static" },
+        { path: "/blog/:slug",         file: "app/blog/[slug]/page.tsx",              kind: "dynamic", params: ["slug"] },
+        { path: "/products",           file: "app/products/page.tsx",                 kind: "static" },
+        { path: "/products/:id",       file: "app/products/[id]/page.tsx",            kind: "dynamic", params: ["id"] },
+        { path: "/products/:id/reviews", file: "app/products/[id]/reviews/page.tsx",   kind: "dynamic", params: ["id"] },
+        { path: "/docs/*",             file: "app/docs/[...path]/page.tsx",           kind: "catch-all", params: ["path"] },
+        { path: "/pricing",            file: "app/(marketing)/pricing/page.tsx",      kind: "group" },
+        { path: "/careers",            file: "app/(marketing)/careers/page.tsx",      kind: "group" },
+      ];
+
+      function resolve(url) {
+        const segments = url.split("?")[0].split("#")[0].split("/").filter(Boolean);
+        for (const r of routes) {
+          const expected = r.path.split("/").filter(Boolean);
+          // Catch-all
+          if (expected[expected.length - 1] === "*") {
+            const prefix = expected.slice(0, -1);
+            if (segments.length >= prefix.length &&
+                prefix.every((p, i) => p === segments[i])) {
+              const captured = segments.slice(prefix.length);
+              return { ...r, captured: { path: captured } };
+            }
+            continue;
+          }
+          // Static or dynamic with same length
+          if (expected.length !== segments.length) continue;
+          const params = {};
+          let match = true;
+          for (let i = 0; i < expected.length; i++) {
+            if (expected[i].startsWith(":")) {
+              params[expected[i].slice(1)] = segments[i];
+            } else if (expected[i] !== segments[i]) {
+              match = false; break;
+            }
+          }
+          if (match) return { ...r, captured: params };
+        }
+        return null;
+      }
+
+      function render(url) {
+        const result = resolve(url);
+        const out = document.getElementById("out");
+        if (!result) {
+          out.innerHTML = `<div class="row"><span class="bad">✗ no route matches "${url}"</span></div>
+            <div class="row muted">  Next.js would render 404 (or app/not-found.tsx)</div>`;
+          return;
+        }
+        const lines = [];
+        lines.push(`<div class="row"><span class="info">URL</span>      <span class="accent">${url}</span></div>`);
+        lines.push(`<div class="row"><span class="info">File</span>     ${result.file}</div>`);
+        lines.push(`<div class="row"><span class="info">Kind</span>     ${result.kind}</div>`);
+        if (result.kind === "group") {
+          lines.push(`<div class="row muted">  (the (marketing) folder doesn't appear in the URL)</div>`);
+        }
+        let html = lines.join("");
+        if (result.captured && Object.keys(result.captured).length > 0) {
+          html += `<div class="params">params: ${JSON.stringify(result.captured)}</div>`;
+        }
+        out.innerHTML = html;
+      }
+
+      document.getElementById("go").addEventListener("click", () => {
+        render(document.getElementById("url").value.trim());
+      });
+      document.querySelectorAll(".presets button").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.getElementById("url").value = b.dataset.u;
+          render(b.dataset.u);
+        });
+      });
+      render("/blog/hello-world");
+    </script>
+  </body>
+</html>

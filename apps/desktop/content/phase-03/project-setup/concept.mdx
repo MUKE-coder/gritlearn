@@ -1,0 +1,455 @@
+## Project setup and file structure
+
+A fresh Next.js project has about 15 files and 4 folders. Two of those folders matter for your daily work; the rest you can ignore for now. Once you can find your way around `app/`, `public/`, and `package.json`, you're set up to start building. This concept does a small tour so the folder structure stops being intimidating.
+
+<Analogy>
+A Next.js project is **a small, well-stocked apartment when you first walk in**.
+
+You pulled the keys, opened the front door, and stepped inside. The apartment is fully furnished. Bed, couch, table, fridge, plates in the cupboard, soap in the bathroom. You don't have to *make* the apartment — it's there. Your only job is to figure out which drawer holds what and start living.
+
+That's `pnpm create next-app`. One command, 15 seconds, and you have a working full-stack app — folder structure laid out, dev server ready, types configured, Tailwind installed, every piece of plumbing in place. Most of the boxes in the apartment are labelled and you can mostly ignore them on day one. The few you'll actually open every day:
+
+- **`app/`** — where you'll spend 95% of your time. Every page, every route, every layout. Folders here are URLs; `page.tsx` files are pages. Like the living room — the place you're actually *in*.
+- **`public/`** — static files served directly: images, favicons, robots.txt. Anything here is reachable at `https://your-site.com/<filename>`. Like the front porch — visible from the street.
+- **`package.json`** — your scripts (`dev`, `build`, `start`) and your dependencies. Like the apartment lease — what you're paying for, what's included.
+
+The other folders and files (`node_modules/`, `.next/`, `next.config.ts`, `tsconfig.json`, `tailwind.config.ts`) exist; you'll meet them occasionally. They're the kitchen plumbing — you don't open them daily but you'd notice if they were missing.
+
+Three habits that pay off once you've internalized the layout:
+
+1. **`app/` is the answer.** When you want to know "where do I add a new page?", "where do I put a layout?", "where do I make an API endpoint?" — every answer is *somewhere in `app/`*. You're not building a custom directory structure; you're using the framework's.
+
+2. **Tailwind, TypeScript, ESLint are pre-wired.** Don't spend the first day configuring them. They work. Add a class to a `<div>`; it styles. Add a type; it checks. Forget a semicolon; the linter complains. Treat them as part of the apartment.
+
+3. **One `pnpm dev` is enough.** You don't need to start a separate API server, a separate frontend, two terminals. One command runs everything. The `app/` folder serves both routes and API endpoints, in one process.
+
+The framing for this concept: stop trying to *understand* every file in the apartment. Walk through the rooms you use daily; trust that the plumbing in the walls is fine. The next two concepts (the App Router, layouts) make `app/` make sense. Everything else, you can pick up over weeks of building real things.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the Next.js project folder tree with what each folder/file is for"
+  caption="The fresh project. Three boxes worth knowing on day one. The rest, ignore until you need them."
+>
+
+```
+my-app/
+├── app/                    ← ★ everything you'll write goes here
+│   ├── layout.tsx          ← root HTML shell — wraps every page
+│   ├── page.tsx            ← the homepage (/)
+│   ├── globals.css         ← Tailwind imports + your global CSS
+│   └── favicon.ico
+│
+├── public/                 ← ★ static files served at /
+│   ├── images/
+│   └── robots.txt
+│
+├── node_modules/           ← installed dependencies. NEVER open.
+├── .next/                  ← build cache. NEVER open. .gitignored.
+│
+├── package.json            ← ★ scripts + dependencies
+├── tsconfig.json           ← TypeScript settings
+├── next.config.ts          ← Next.js config (ignore until needed)
+├── tailwind.config.ts      ← Tailwind config (when customizing)
+├── postcss.config.js       ← Tailwind plumbing
+├── .eslintrc.json          ← linter config
+├── .gitignore              ← node_modules, .next, .env.local
+└── README.md               ← Next.js boilerplate notes
+```
+
+</Illustration>
+
+### Creating a project
+
+The official scaffolder:
+
+```bash
+pnpm create next-app@latest my-app
+```
+
+(Or `npx create-next-app@latest my-app` if you don't use pnpm.)
+
+You'll be asked a series of questions. For Phase 3, answer:
+
+| Prompt                                    | Answer                       |
+| ------------------------------------------ | ----------------------------- |
+| Would you like to use TypeScript?         | **Yes**                       |
+| Would you like to use ESLint?              | **Yes**                       |
+| Would you like to use Tailwind CSS?       | **Yes**                       |
+| Would you like to use `src/` directory?   | **No**                        |
+| Would you like to use App Router?         | **Yes**                       |
+| Would you like to customize import alias? | **No** (keep the default `@/*`) |
+
+These are the defaults most teams use. The TypeScript / Tailwind / App Router combo is the modern norm; `src/` is a personal preference (some teams use it, but this curriculum doesn't); the import alias `@/` lets you write `import { Foo } from "@/lib/foo"` instead of long `../../../` paths.
+
+After answering, the scaffolder installs dependencies (~30 seconds), and you `cd my-app && pnpm dev` to start.
+
+### The folders that matter
+
+**`app/`** — the only folder you'll regularly create files in. Every URL on your site corresponds to a folder under `app/`. Every page is a `page.tsx`. Every layout is a `layout.tsx`. Every API route is a `route.ts`. The App Router concept dives into the mechanics; for now, know that this is where you live.
+
+**`public/`** — static files. Drop an image at `public/logo.png` and it's reachable at `/logo.png` in your app:
+
+```jsx
+<img src="/logo.png" alt="Logo" />
+```
+
+Use this for: favicons, OG images, marketing screenshots, the robots.txt. Don't use it for: anything generated by your code (those go through the `<Image>` component or a build step).
+
+**`node_modules/`** — installed dependencies. You never edit anything here. You never even *look* at anything here. It's the compiled-down library code your project uses. Gitignored; recreated by `pnpm install`.
+
+### The files that matter
+
+**`package.json`** — the project manifest. Three sections you'll touch:
+
+```json
+{
+  "name": "my-app",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.x",
+    "react": "18.x",
+    "react-dom": "18.x"
+  },
+  "devDependencies": {
+    "typescript": "5.x",
+    "tailwindcss": "3.x",
+    "eslint": "8.x"
+  }
+}
+```
+
+- **`scripts`** — the commands you can run. `pnpm dev` runs `next dev`, etc.
+- **`dependencies`** — packages your *production* code uses (React, Next, your fetcher, your UI lib).
+- **`devDependencies`** — packages only your *development* tools use (TypeScript, ESLint, Tailwind). Doesn't ship to production.
+
+Add packages with `pnpm add <package>` (dev: `pnpm add -D <package>`). They appear here.
+
+**`tsconfig.json`** — TypeScript settings. The `create-next-app` defaults are sensible; you'll rarely change this until you have a specific need.
+
+**`next.config.ts`** — Next.js's own config. Empty by default. You add to it when you need custom redirects, image domains, etc. Most apps go months without touching it.
+
+**`tailwind.config.ts`** — what files Tailwind scans for classes, plus your custom design tokens (colors, fonts, spacing). You'll touch this once when picking your color palette, then maybe once a month after that.
+
+**`.gitignore`** — Git ignores `node_modules/`, `.next/`, `.env.local`. Don't remove these entries; they're there for a reason (secrets, big folders, generated files).
+
+### The four daily commands
+
+```bash
+pnpm dev                 # start the dev server (with hot reload). use during development.
+pnpm build               # build for production. checks types, optimizes, bundles.
+pnpm start               # serve the production build locally. test before deploy.
+pnpm lint                # run ESLint on the codebase.
+```
+
+99% of dev time: `pnpm dev`. The hot-reload is so fast (under a second for most changes) that you'll edit, save, see the result in the browser, and never think about the build step.
+
+`pnpm build` matters when you push to production — CI runs it; Vercel runs it on deploy. Running it locally before a big PR catches build-only errors (some TypeScript errors only surface during build, not during dev).
+
+### Where to put your own code
+
+The convention most Next.js codebases settle on:
+
+```text
+app/                    # routes (see App Router concept)
+components/             # reusable React components (Button, Card, etc.)
+lib/                    # utility functions, API clients, schemas
+hooks/                  # custom React hooks
+types/                  # shared TypeScript types (optional — many use lib/)
+public/                 # static files
+```
+
+Two things to note:
+
+1. **The framework only mandates `app/` and `public/`**. The other folders are convention. You could put everything in `app/`; nobody would stop you. The convention exists because separating concerns makes large projects manageable.
+
+2. **There's no enforced structure inside the convention.** Some teams group by feature (`features/auth/`, `features/billing/`); others by file type (`components/`, `hooks/`). Phase 2's clean-code concept covered the "group by feature" preference; it works well in Next.js apps too. For Phase 3 lessons, we'll keep it simple: `components/` and `lib/` at the root.
+
+### What's in `app/layout.tsx` and `app/page.tsx` out of the box
+
+After scaffolding, these two files contain the boilerplate:
+
+`app/layout.tsx`:
+```tsx
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({
+  children,
+}: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+This is the HTML shell. Every page is wrapped in this. The `metadata` export sets the default `<title>` and `<meta description>`. The `children` is where the current page renders.
+
+`app/page.tsx`:
+```tsx
+export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center">
+      <h1 className="text-4xl font-bold">Welcome to Next.js!</h1>
+    </main>
+  );
+}
+```
+
+A simple homepage. Change anything; the browser hot-reloads.
+
+### When something's wrong — `node_modules` and `.next`
+
+Two folders are common culprits when Next.js misbehaves:
+
+- **`.next/`** — the build cache. If you see weird "module not found" errors after a config change, deleting `.next/` and re-running `pnpm dev` usually fixes it.
+
+- **`node_modules/`** — installed packages. If a dependency upgrade goes badly, delete `node_modules/` AND `pnpm-lock.yaml` (or `package-lock.json`), then run `pnpm install`. Slow but cleans everything.
+
+The combo: `rm -rf .next node_modules && pnpm install && pnpm dev` is the "turn it off and on again" of Next.js dev. Try it first when nothing else works.
+
+<ExampleProject
+  src="folder-tour"
+  title="A guided tour of every file in a fresh Next.js project"
+  description="A clickable rendering of the file tree. Click any file or folder; the right pane shows what it's for, when you'd open it, and (for code files) a snippet of the contents. The 15 files of a fresh scaffold, demystified one click at a time."
+/>
+
+<ExampleProject
+  src="scripts-explained"
+  title="The four scripts — what each one actually does"
+  description="A side-by-side of dev / build / start / lint. Each card shows: the command, what it runs under the hood, when to use it, and what the typical output looks like. The cheat-sheet you'll glance at for the first week and then never need."
+/>
+
+<Exercise
+  title="Build a 'hello' page with one component, one image, one custom script"
+  starter={`Using the project you created in the last lesson (or scaffold a fresh one):
+
+  1. Replace the contents of app/page.tsx with a simple greeting:
+       export default function Page() {
+         return <main className="p-8"><h1>Hello, {name}</h1></main>;
+       }
+     ...where {name} is YOUR name. Hot-reload should show it.
+
+  2. Make a components/ folder at the project root.
+     Create components/Greeting.tsx:
+       export function Greeting({ name }: { name: string }) {
+         return <h1 className="text-3xl font-bold">Hello, {name}</h1>;
+       }
+     Then import and use it in app/page.tsx:
+       import { Greeting } from "@/components/Greeting";
+
+  3. Add an image to public/ — any PNG/JPG. Reference it in page.tsx:
+       <img src="/your-image.png" alt="me" className="w-32 mt-4" />
+     Notice the path starts at "/" — public/ is the root.
+
+  4. Add a custom script to package.json's "scripts" object:
+       "scripts": {
+         "dev": "next dev",
+         "build": "next build",
+         "start": "next start",
+         "lint": "next lint",
+         "clean": "rm -rf .next node_modules"
+       }
+     Then run \`pnpm clean\` to confirm it works (you'll need to
+     \`pnpm install\` after to recover).
+
+  5. Open the project in your editor. Confirm:
+     - Tailwind classes (p-8, text-3xl, w-32) all apply.
+     - The image loads.
+     - The Greeting component is imported via the @/ alias.
+     - The custom script runs.
+
+  6. Commit your changes to a fresh git repo:
+       git init
+       git add -A
+       git commit -m "feat: first Next.js page with custom component"`}
+>
+
+- `app/page.tsx` renders a custom greeting visible at localhost:3000.
+- A `components/Greeting.tsx` file exists and exports a typed component.
+- The page imports and uses the Greeting via the `@/components/` alias.
+- A static image was added to `public/` and rendered with `<img src="/...">`.
+- A custom script (`clean` or similar) was added to `package.json` and run successfully.
+- Tailwind classes apply correctly on the rendered page.
+- The project is committed to a fresh git repo with at least one meaningful commit message.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `pnpm dev` and `pnpm build`?
+
+**A:** **`dev` runs a development server with hot-reload; `build` produces a production-optimized bundle.** Different tools for different stages.
+
+```text
+pnpm dev                                  pnpm build
+─────────                                 ──────────
+- starts a dev server on localhost:3000   - reads your code
+- hot-reload (saves trigger re-render)    - type-checks the whole project
+- source maps on (debuggable)             - bundles + minifies JS
+- error overlays in the browser           - generates the .next/ folder
+- slower (no optimization)                - prepares for `next start`
+- relaxes some safety checks              - strict — fails on type errors
+```
+
+When to use each:
+
+- **`dev`** during development. You'll have it running all day. Hot reload is the killer feature.
+- **`build`** before you ship. Locally, run it to catch errors the dev server didn't surface (some TypeScript errors only show during build). In CI, runs automatically on every push. On Vercel, runs on deploy.
+
+A subtle difference worth knowing: `dev` doesn't run server components through the full server-rendering pipeline; some bugs only appear in `build` + `start`. The pattern that catches them:
+
+```bash
+pnpm build && pnpm start
+```
+
+This runs the build, then serves the production bundle locally. Behavior matches what users will see in production. Run this before any PR that touches server components or data fetching.
+
+The pattern: **dev for speed during the loop, build to verify before the loop ends.** Both are essential; neither replaces the other.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the `@/` import alias and where is it configured?
+
+**A:** **`@/` is a shortcut for "the project root." Configured in `tsconfig.json`, it lets you write `import { Foo } from "@/lib/foo"` instead of long relative paths like `../../../lib/foo`.**
+
+```ts
+// tsconfig.json (snippet)
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}
+```
+
+The `paths` mapping tells TypeScript "anywhere I see `@/...`, treat it as `./...` from the project root." `create-next-app` sets this up for you.
+
+In practice:
+
+```tsx
+// Without the alias — fragile, ugly
+import { Button } from "../../../components/Button";
+
+// With the alias — short, stable
+import { Button } from "@/components/Button";
+```
+
+Three reasons this matters:
+
+1. **Refactor-safe.** When you move a file, the `@/` imports still work. The `../../../` version breaks the moment any folder moves.
+
+2. **Readability.** A reader sees `@/components/Button` and knows exactly where that file lives — without parsing the relative path.
+
+3. **Project convention.** Every Next.js project ships with `@/`. Using it everywhere makes your codebase look like every other modern Next.js codebase. Cognitive load: minimal.
+
+You can customize the alias — `"~/"` and `"#/"` are seen in some codebases — but `@/` is the convention. Don't change it unless you have a very specific reason.
+
+A related point: relative imports (`./Button`) are still fine for files in the *same folder*. The alias shines for cross-folder imports. Don't over-apply it; use it when paths would otherwise have multiple `../`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does the App Router put pages in folders with `page.tsx` files instead of just naming the files directly?
+
+**A:** **Because each route owns multiple files, not just one. A folder lets the route group its page, layout, loading state, error boundary, and metadata in one place.**
+
+A real route in App Router might look like:
+
+```text
+app/dashboard/
+├── page.tsx           ← the main UI
+├── layout.tsx         ← wrapper just for this route
+├── loading.tsx        ← shown while page.tsx is fetching data
+├── error.tsx          ← error boundary for this route
+├── not-found.tsx      ← 404 UI for this route's dynamic segments
+└── components/        ← components used only here
+    ├── StatCard.tsx
+    └── ActivityFeed.tsx
+```
+
+Six files (or more) all serving one URL: `/dashboard`. Each file has a *role* in the framework's routing model:
+
+- `page.tsx` → the page itself.
+- `layout.tsx` → wraps it (and any nested routes below).
+- `loading.tsx` → React Suspense fallback while the page renders.
+- `error.tsx` → React error boundary.
+- `not-found.tsx` → 404 UI.
+
+If pages were single files (`app/dashboard.tsx`), Next.js would need a separate convention for each of these — naming or directory tricks. The folder + file-role approach is cleaner:
+
+- The URL is the folder path. `app/dashboard/` → `/dashboard`.
+- The file role is the file name. `page.tsx` is the page; `layout.tsx` is the layout.
+
+This also enables **dynamic segments** via folder names:
+
+```text
+app/blog/[slug]/page.tsx       → /blog/:slug
+app/users/[id]/posts/[postId]/page.tsx   → /users/:id/posts/:postId
+```
+
+The folder structure IS the URL structure; the files inside define each route's behavior. Opening any complex route's folder shows everything that defines it — page, layout, loading state, error boundary, route-only components — in one place.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Should you use `npm`, `yarn`, or `pnpm` for a Next.js project?
+
+**A:** **All three work; `pnpm` is the modern preferred choice for most teams in 2026.**
+
+The three are JavaScript "package managers" — they install dependencies, update them, run scripts. The differences:
+
+**`npm`** (the default, ships with Node):
+- Always works.
+- Slower than the alternatives.
+- Uses more disk space (every project gets its own copy of every dependency).
+
+**`yarn`** (Facebook's, 2016):
+- Was much faster than npm when it launched.
+- Yarn 1 is mature and still widely used.
+- Yarn 2+ (Berry) is a fairly different tool with PnP — has divided the community.
+
+**`pnpm`** (newcomer, but mature since 2020):
+- Fastest install times.
+- Saves disk space dramatically (one copy of each version on your machine, hard-linked into each project).
+- Strict — won't let you import packages you didn't declare. Catches phantom dependencies.
+- The default in most modern tooling: Vercel, Turborepo, Next.js docs all show pnpm examples first.
+
+For Phase 3, use `pnpm`. Install once:
+
+```bash
+# Install pnpm globally
+npm install -g pnpm
+```
+
+Then every command in this curriculum uses `pnpm`:
+
+```bash
+pnpm create next-app
+pnpm install
+pnpm dev
+pnpm add zod
+pnpm add -D @types/node
+```
+
+You can substitute `npm install` / `npm run dev` / `npm install zod` if you prefer; they do the same things. But every Next.js team you join in 2026 will almost certainly use pnpm.
+
+A subtlety: when joining an existing project, **use whatever package manager that project uses**. Mixing (some files install with npm, some with pnpm) creates bugs around lockfiles. The lockfile (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`) is the source of truth for what versions are installed; only one should exist per project.
+
+</InterviewQuestion>

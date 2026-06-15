@@ -1,0 +1,127 @@
+<!--
+  Three flavors of dynamic segment, each demonstrated in its own row:
+  [slug], [...path], (group). Shows folder path, example URL, params shape.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Three dynamic-route flavors</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+      table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+      th, td {
+        text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid #eee;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; vertical-align: top;
+      }
+      th { background: #f4f4f5; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; }
+      td.folder { color: #15803d; }
+      td.url    { color: #1e40af; }
+      td.params { color: #b45309; }
+      .note {
+        background: #fef3c7; border-left: 3px solid #fbbf24; padding: 0.5rem 0.75rem;
+        border-radius: 4px; font-size: 0.88rem; color: #92400e; margin: 0.5rem 0 1.2rem;
+      }
+      .card { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; margin-bottom: 1rem; }
+      .card h3 {
+        margin: 0; font-family: ui-monospace, monospace; font-size: 0.95rem; color: #15803d;
+      }
+      .card p { margin: 0.3rem 0 0; font-size: 0.88rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.6rem 0.85rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.55;
+        margin: 0.55rem 0 0; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Three dynamic-route flavors</h1>
+    <p>Brackets and parentheses in folder names do different jobs. Here's each one with its rule, a real example, and what shows up in your component.</p>
+
+    <div class="card">
+      <h3>[slug] — single dynamic segment</h3>
+      <p>One folder name in brackets captures exactly one URL segment as a string.</p>
+      <table>
+        <thead><tr><th>Folder</th><th>Example URL</th><th>params</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="folder">app/blog/[slug]/page.tsx</td>
+            <td class="url">/blog/hello-world</td>
+            <td class="params">{ slug: "hello-world" }</td>
+          </tr>
+          <tr>
+            <td class="folder">app/users/[id]/posts/[postId]/page.tsx</td>
+            <td class="url">/users/47/posts/9</td>
+            <td class="params">{ id: "47", postId: "9" }</td>
+          </tr>
+        </tbody>
+      </table>
+<pre>// app/blog/[slug]/page.tsx
+export default function BlogPost({
+  params,
+}: { params: { slug: string } }) {
+  return &lt;h1&gt;Post: {params.slug}&lt;/h1&gt;;
+}</pre>
+    </div>
+
+    <div class="card">
+      <h3>[...path] — catch-all segment</h3>
+      <p>Three dots inside the brackets capture <em>one or more</em> segments as an array. Used for docs sites, file browsers, anywhere URL depth is variable.</p>
+      <table>
+        <thead><tr><th>Folder</th><th>Example URL</th><th>params</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="folder">app/docs/[...path]/page.tsx</td>
+            <td class="url">/docs/a</td>
+            <td class="params">{ path: ["a"] }</td>
+          </tr>
+          <tr>
+            <td class="folder">app/docs/[...path]/page.tsx</td>
+            <td class="url">/docs/api/users/create</td>
+            <td class="params">{ path: ["api", "users", "create"] }</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">Does <strong>not</strong> match <code>/docs</code> (zero segments). For that, use <code>[[...path]]</code> (double brackets — optional catch-all).</div>
+    </div>
+
+    <div class="card">
+      <h3>(name) — route group (URL-less)</h3>
+      <p>Parentheses around a folder name <em>don't</em> add to the URL. Used to share a layout across pages that should stay at top-level URLs.</p>
+      <table>
+        <thead><tr><th>Folder</th><th>URL</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="folder">app/(marketing)/pricing/page.tsx</td>
+            <td class="url">/pricing</td>
+            <td>"(marketing)" is invisible in the URL</td>
+          </tr>
+          <tr>
+            <td class="folder">app/(marketing)/careers/page.tsx</td>
+            <td class="url">/careers</td>
+            <td>Shares the marketing layout</td>
+          </tr>
+          <tr>
+            <td class="folder">app/(dashboard)/settings/page.tsx</td>
+            <td class="url">/settings</td>
+            <td>Different layout from the marketing group</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">The classic SaaS pattern: <code>(marketing)/</code> for the public site with a public nav; <code>(app)/</code> for the authenticated UI with a sidebar.</div>
+    </div>
+
+    <h2>Compare them at a glance</h2>
+    <table>
+      <thead><tr><th>Pattern</th><th>In URL?</th><th>params shape</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td><code>[slug]</code></td><td>Yes</td><td>string</td><td>single id / slug</td></tr>
+        <tr><td><code>[...path]</code></td><td>Yes</td><td>string[]</td><td>nested paths, depth unknown</td></tr>
+        <tr><td><code>[[...path]]</code></td><td>Yes</td><td>string[] | undefined</td><td>nested AND root</td></tr>
+        <tr><td><code>(group)</code></td><td>No</td><td>—</td><td>shared layouts at flat URLs</td></tr>
+      </tbody>
+    </table>
+  </body>
+</html>

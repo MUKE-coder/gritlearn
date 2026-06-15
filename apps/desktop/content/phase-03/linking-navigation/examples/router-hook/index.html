@@ -1,0 +1,168 @@
+<!--
+  A working highlighted nav using usePathname (simulated), with four
+  router buttons demonstrating push, replace, back, refresh.
+  History panel shows the browser-history stack changing.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>useRouter — push / replace / back / refresh</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 800px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .nav {
+        display: flex; gap: 0.4rem; padding: 0.6rem; background: #fafafa;
+        border: 1px solid #e4e4e7; border-radius: 8px; margin-top: 1rem;
+      }
+      .nav button {
+        padding: 0.4rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.85rem;
+      }
+      .nav button.active { background: #15803d; color: #fff; border-color: #15803d; font-weight: 700; }
+      .url-bar {
+        margin-top: 0.5rem; padding: 0.4rem 0.7rem; background: #1f2937;
+        color: #ededee; font-family: ui-monospace, monospace; font-size: 0.85rem;
+        border-radius: 4px;
+      }
+      .page {
+        margin-top: 0.5rem; padding: 1rem; background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        min-height: 6rem;
+      }
+      .actions {
+        display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;
+      }
+      .actions button {
+        padding: 0.45rem 0.85rem; border: 1px solid #1e40af; border-radius: 4px;
+        background: #1e40af; color: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.82rem;
+      }
+      .actions button:hover { background: #1e3a8a; }
+      .actions button.alt { background: #fff; color: #1e40af; }
+      .history {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        min-height: 8rem;
+      }
+      .history .row { padding: 2px 0; }
+      .history .row.current { color: #7fff5b; font-weight: 700; }
+      .history .row.passed  { color: #71717a; }
+      .history .row.future  { color: #38bdf8; opacity: 0.55; }
+      pre {
+        background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.75rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>useRouter + usePathname — programmatic navigation</h1>
+
+    <h2>The nav (highlights the current path via usePathname)</h2>
+    <div class="nav" id="nav"></div>
+    <div class="url-bar">→ <span id="url"></span></div>
+    <div class="page">
+      <strong id="pageTitle"></strong>
+      <p id="pageBody"></p>
+    </div>
+
+    <h2>The router methods</h2>
+    <div class="actions">
+      <button data-act="push-set">router.push("/settings")</button>
+      <button data-act="replace-set" class="alt">router.replace("/settings")</button>
+      <button data-act="back">router.back()</button>
+      <button data-act="refresh">router.refresh()</button>
+      <button data-act="random">push to random page</button>
+    </div>
+
+    <h2>Browser history (what the back button knows)</h2>
+    <div class="history" id="history"></div>
+
+<pre>
+"use client";
+import { useRouter, usePathname } from "next/navigation";
+
+const router = useRouter();
+const pathname = usePathname();
+
+router.push("/dashboard");       <span style="color:#71717a">// add to history, navigate</span>
+router.replace("/login");        <span style="color:#71717a">// navigate WITHOUT adding to history</span>
+router.back();                    <span style="color:#71717a">// go back, same as browser button</span>
+router.refresh();                 <span style="color:#71717a">// re-fetch current route's data</span>
+</pre>
+
+    <script>
+      const routes = {
+        "/":         { title: "Home",     body: "Welcome." },
+        "/about":    { title: "About",    body: "About us." },
+        "/blog":     { title: "Blog",     body: "Articles and updates." },
+        "/settings": { title: "Settings", body: "User preferences." },
+        "/dashboard":{ title: "Dashboard",body: "Overview of stats." },
+      };
+
+      let history = ["/"];
+      let idx     = 0;
+      let refreshTick = 0;
+
+      function current() { return history[idx]; }
+
+      function pushUrl(u) {
+        // truncate any "future" entries (typical browser behavior after a push)
+        history = history.slice(0, idx + 1);
+        history.push(u);
+        idx = history.length - 1;
+        refreshTick = 0;
+        render();
+      }
+      function replaceUrl(u) {
+        history[idx] = u;
+        refreshTick = 0;
+        render();
+      }
+      function back() {
+        if (idx > 0) { idx -= 1; refreshTick = 0; render(); }
+      }
+      function refresh() { refreshTick += 1; render(); }
+
+      function render() {
+        const url = current();
+        document.getElementById("url").textContent = url + (refreshTick ? ` (refreshed ×${refreshTick})` : "");
+        const r = routes[url] || { title: "404", body: "Not found" };
+        document.getElementById("pageTitle").textContent = r.title;
+        document.getElementById("pageBody").textContent  = r.body;
+
+        // Nav
+        const nav = document.getElementById("nav");
+        nav.innerHTML = Object.keys(routes).map((p) =>
+          `<button data-go="${p}" class="${p === url ? "active" : ""}">${p}</button>`
+        ).join("");
+        nav.querySelectorAll("button").forEach((b) => {
+          b.addEventListener("click", () => pushUrl(b.dataset.go));
+        });
+
+        // History
+        const h = document.getElementById("history");
+        h.innerHTML = history.map((u, i) => {
+          const cls = i === idx ? "current" : i < idx ? "passed" : "future";
+          const arrow = i === idx ? "→" : " ";
+          return `<div class="row ${cls}">${arrow} [${i}] ${u}</div>`;
+        }).join("");
+      }
+
+      document.querySelectorAll("[data-act]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const a = b.dataset.act;
+          if      (a === "push-set")    pushUrl("/settings");
+          else if (a === "replace-set") replaceUrl("/settings");
+          else if (a === "back")        back();
+          else if (a === "refresh")     refresh();
+          else if (a === "random") {
+            const keys = Object.keys(routes);
+            pushUrl(keys[Math.floor(Math.random() * keys.length)]);
+          }
+        });
+      });
+
+      render();
+    </script>
+  </body>
+</html>

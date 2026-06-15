@@ -1,0 +1,498 @@
+## Pages and the App Router
+
+In Next.js, you don't configure routes — you create folders. Every folder under `app/` is a URL segment; every `page.tsx` inside a folder is a page. Dynamic segments like `/blog/:slug` are folders named `[slug]`. The whole routing system you'd otherwise wire up with React Router becomes a single rule: **folders are routes**. Once you've internalized this, navigating a Next.js project's URL structure is as easy as reading the file tree.
+
+<Analogy>
+The App Router is **a building's address system written into its floor plan**.
+
+Picture a large office building. Every room has an address — "Building B, Floor 4, Room 412." The address isn't decided by a separate map; it's *the floor plan itself*. If you walk to floor 4 and stop at the fourth door on the right, you're at 412 by construction. There's no separate "Floor 4 Room 412 → check this directory" lookup; the *path you walked* IS the address.
+
+The App Router works exactly like this. The folder structure under `app/` and the URLs your site responds to are the *same thing*:
+
+```text
+app/dashboard/settings/page.tsx        → /dashboard/settings
+app/blog/[slug]/page.tsx                 → /blog/:slug  (dynamic — any slug works)
+app/products/[id]/reviews/page.tsx      → /products/:id/reviews
+```
+
+You don't write `<Route path="/blog/:slug" element={<BlogPost/>} />` anywhere. The presence of `app/blog/[slug]/page.tsx` IS the route. The brackets in the folder name are how you say "this segment is a parameter; capture it." Inside `page.tsx`, the captured slug arrives as a prop:
+
+```tsx
+export default function BlogPost({ params }: { params: { slug: string } }) {
+  return <h1>Post: {params.slug}</h1>;
+}
+```
+
+Three things this design gives you:
+
+1. **No routing configuration to maintain.** Add a folder; you've added a route. Delete a folder; the route disappears. Move a folder; the URL changes accordingly. The file tree IS the route table; they can't drift out of sync because they're the same artifact.
+
+2. **Route boundaries match component boundaries.** A "section" of your site — say, the dashboard — gets its own folder. Everything that defines that section (the layout, the page, the loading state, the error boundary, the section-only components) lives inside that folder. Open the folder; everything related is right there.
+
+3. **Refactor-safe URLs.** You decide your `/billing` route should now be `/account/billing`? Move the folder. The URL changes; the files come with it. Compare with router-config systems where the route is declared in one file but the components live somewhere else — refactoring requires careful coordination.
+
+Plus a few special filenames that make the role explicit:
+
+- **`page.tsx`** — the actual page UI. Required for a route to exist at that path.
+- **`layout.tsx`** — wraps every page below this folder. Persists across child route changes.
+- **`loading.tsx`** — React Suspense fallback while the page is fetching data.
+- **`error.tsx`** — error boundary. Shows if anything in `page.tsx` (or below) throws.
+- **`not-found.tsx`** — shown when `notFound()` is called or a dynamic segment doesn't match.
+- **`route.ts`** — turns the folder into an API endpoint instead of a UI page (covered in route handlers).
+
+The pattern is mechanical, predictable, and reads itself. Once you know "folder = route, page.tsx = page, brackets = dynamic," you can predict the URL of any file in any Next.js project and find the file for any URL by walking the folder tree.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an app/ folder tree with each route mapped to its corresponding URL"
+  caption="The folder tree under app/ IS the URL tree. Brackets create dynamic segments."
+>
+
+```
+   app/                          URL
+   │
+   ├── page.tsx                  → /                    (home)
+   │
+   ├── about/page.tsx            → /about
+   │
+   ├── blog/
+   │   ├── page.tsx              → /blog                (list)
+   │   └── [slug]/page.tsx       → /blog/:slug          (single — slug is dynamic)
+   │
+   ├── products/
+   │   ├── page.tsx              → /products
+   │   └── [id]/
+   │       ├── page.tsx          → /products/:id
+   │       └── reviews/page.tsx  → /products/:id/reviews
+   │
+   ├── (marketing)/              → URL-less group (route group)
+   │   ├── pricing/page.tsx      → /pricing
+   │   └── careers/page.tsx      → /careers
+   │
+   └── api/
+       └── users/route.ts        → API endpoint at /api/users
+```
+
+</Illustration>
+
+### The simplest possible page
+
+```tsx
+// app/about/page.tsx
+
+export default function About() {
+  return (
+    <main className="p-8">
+      <h1 className="text-3xl font-bold">About us</h1>
+      <p>This is the about page.</p>
+    </main>
+  );
+}
+```
+
+Three things to note:
+
+1. **Default export.** Next.js looks for a default export from `page.tsx`. Without one, the route doesn't render.
+2. **No routing imports.** No `useRouter` config, no `<Route>`, no `<BrowserRouter>`. The page IS the file at `app/about/page.tsx`.
+3. **It's just a React component.** Whatever you can put in a React component, you can put here. The framework wraps it in the layout chain (covered next concept) and serves it as HTML.
+
+### Dynamic segments — `[name]`
+
+Folders with brackets become URL parameters:
+
+```text
+app/blog/[slug]/page.tsx      → matches /blog/anything-here
+```
+
+The captured value arrives as a prop:
+
+```tsx
+// app/blog/[slug]/page.tsx
+
+interface Props {
+  params: { slug: string };
+}
+
+export default function BlogPost({ params }: Props) {
+  return <h1>Post: {params.slug}</h1>;
+}
+```
+
+`params.slug` is whatever the URL had in that position. For `/blog/hello-world`, `params.slug` is `"hello-world"`.
+
+Multiple dynamic segments stack:
+
+```text
+app/users/[userId]/posts/[postId]/page.tsx
+```
+
+```tsx
+export default function Post({
+  params,
+}: { params: { userId: string; postId: string } }) {
+  return <p>User {params.userId} → Post {params.postId}</p>;
+}
+```
+
+### Catch-all segments — `[...slug]`
+
+Sometimes you want a *whole path* captured, not just one segment:
+
+```text
+app/docs/[...path]/page.tsx
+```
+
+Matches `/docs/getting-started`, `/docs/api/users`, `/docs/api/users/create` — anything starting with `/docs/`. The captured value is an *array*:
+
+```tsx
+export default function Docs({ params }: { params: { path: string[] } }) {
+  // For /docs/api/users → params.path = ["api", "users"]
+  return <p>Path: {params.path.join("/")}</p>;
+}
+```
+
+Used for: docs sites where the URL structure mirrors a content tree, file viewers, anything where the depth of the URL is variable.
+
+### Route groups — `(name)`
+
+Parentheses in a folder name create a **route group**. Unlike brackets, parentheses don't add to the URL — they're purely organizational:
+
+```text
+app/(marketing)/pricing/page.tsx       → /pricing       (NO "marketing" in URL)
+app/(marketing)/careers/page.tsx       → /careers
+app/(dashboard)/settings/page.tsx      → /settings      (NO "dashboard" in URL)
+app/(dashboard)/billing/page.tsx       → /billing
+```
+
+The two groups share the same URL space but can have *different layouts*. Pages in `(marketing)/` use the marketing layout (navbar, footer); pages in `(dashboard)/` use the dashboard layout (sidebar, no navbar). The folder structure stays organized; the URLs stay clean.
+
+This is a workhorse pattern for any app with distinct sections that should look different — marketing pages vs. authenticated app, public docs vs. customer portal.
+
+### Special filenames at any level
+
+Each of these special files lives alongside `page.tsx` (or in any folder) and gets recognized by the framework:
+
+| File              | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `page.tsx`        | The page UI. Required for a route.                    |
+| `layout.tsx`      | Wraps this folder's page and children.                |
+| `loading.tsx`     | Shown while `page.tsx` is rendering (Suspense).       |
+| `error.tsx`       | Catches errors in `page.tsx` or below (Error boundary). |
+| `not-found.tsx`   | Shown for `notFound()` or unmatched dynamic segments.  |
+| `route.ts`        | Replaces `page.tsx` to make the folder an API endpoint. |
+| `template.tsx`    | Like `layout.tsx` but re-renders on every navigation.  |
+| `default.tsx`     | Fallback for parallel routes (advanced).               |
+
+You'll use `page`, `layout`, and `loading` constantly; `error` and `not-found` weekly; `route` whenever you build an API; the rest occasionally.
+
+### Pages don't need to be at the root
+
+Routes can be nested deeply without affecting how the page is written:
+
+```text
+app/(dashboard)/settings/billing/invoices/[id]/page.tsx
+```
+
+This matches `/settings/billing/invoices/:id` (the `(dashboard)` group doesn't appear in the URL). The page file is identical to a root-level page — same default export, same component structure. The folder depth doesn't change the component.
+
+### Navigating between routes
+
+URLs are folders; navigation between them uses `<Link>`:
+
+```tsx
+import Link from "next/link";
+
+export default function Page() {
+  return (
+    <nav>
+      <Link href="/">Home</Link>
+      <Link href="/about">About</Link>
+      <Link href={`/blog/${post.slug}`}>{post.title}</Link>
+    </nav>
+  );
+}
+```
+
+`<Link>` is covered in detail in the linking-navigation concept. The headline: it's like `<a href>` but smarter — pre-fetches the destination, doesn't reload the page, preserves React state.
+
+### What `app/` doesn't include
+
+A few non-routing things worth knowing live *outside* `app/`:
+
+- **Components** that aren't pages → `components/` at the project root.
+- **Utilities, fetch wrappers** → `lib/`.
+- **Hooks** → `hooks/`.
+- **Types** → `lib/types.ts` or `types/`.
+
+Inside `app/`, by convention, you only put files that the framework recognizes (`page`, `layout`, etc.) or components that are specific to one route (e.g. `app/dashboard/_components/StatCard.tsx` — the leading underscore tells Next.js "this is a non-route, don't try to make a URL out of it").
+
+### From thinking to coding
+
+The shift to make: instead of asking *"what's the route config look like for /blog/:slug?"*, ask *"what folder do I need to create for /blog/:slug?"* The answer is always a path under `app/` — and once you've answered it, the file you need to create is `page.tsx` inside that path.
+
+That's the *whole* App Router. Five additional concepts (layouts, navigation, loading, error, dynamic params) are decorations on this central pattern: folder = route, `page.tsx` = page.
+
+<ExampleProject
+  src="route-tree"
+  title="A clickable URL → file mapper"
+  description="Type any URL (or click a preset); the page shows you the folder path it resolves to under app/. Try /, /about, /blog/hello-world, /products/47/reviews. Watch how dynamic segments resolve."
+/>
+
+<ExampleProject
+  src="dynamic-routes"
+  title="Three flavors of dynamic segment side-by-side"
+  description="A page demonstrating [slug] (single segment), [...path] (catch-all), and (group) (URL-less). Each row shows the folder path, an example URL, and what params or path comes through to the page component."
+/>
+
+<Exercise
+  title="Build a 6-route site with two route groups"
+  starter={`In your Next.js project from the setup lesson, build these routes:
+
+  1. / (home)
+  2. /about
+  3. /pricing
+  4. /docs (a docs landing page)
+  5. /docs/getting-started (with shared docs layout — next lesson)
+  6. /blog/[slug] (any URL like /blog/hello-world should render)
+
+Folder structure to create:
+
+  app/
+    page.tsx                                ← /
+    about/page.tsx                          ← /about
+    (marketing)/
+      pricing/page.tsx                       ← /pricing  (no "marketing" in URL)
+    docs/
+      page.tsx                               ← /docs
+      getting-started/page.tsx               ← /docs/getting-started
+    blog/
+      [slug]/page.tsx                        ← /blog/:slug — read params.slug
+
+Each page.tsx should:
+  - Have a short heading naming the route ("Pricing page", "Blog post: {slug}").
+  - Include a Tailwind class or two for visible styling (p-8, text-3xl, etc.).
+  - For /blog/[slug], display the dynamic slug:
+      export default function Post({ params }: { params: { slug: string } }) {
+        return <h1 className="text-3xl">Post: {params.slug}</h1>;
+      }
+
+Run pnpm dev and verify each route:
+  http://localhost:3000/
+  http://localhost:3000/about
+  http://localhost:3000/pricing               ← notice: NOT /marketing/pricing
+  http://localhost:3000/docs
+  http://localhost:3000/docs/getting-started
+  http://localhost:3000/blog/hello-world      ← any string works for the slug
+
+Bonus: add a (dashboard) route group containing /settings and /billing.
+Confirm they render at /settings and /billing — not under /dashboard.`}
+>
+
+- Six (or more) `page.tsx` files exist at the correct paths.
+- Each page renders at its URL with no errors.
+- `/pricing` works as a URL despite being inside `(marketing)/` — the parentheses are stripped.
+- `/blog/[slug]` works for any slug value; the slug appears in the page's UI.
+- Tailwind classes apply to the rendered output.
+- (Bonus) A second route group `(dashboard)` was added with at least two pages, both reachable at their flat URLs (`/settings`, `/billing`).
+- The student can articulate why `(marketing)` doesn't show in the URL but `[slug]` does.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** In Next.js's App Router, how do you create a dynamic route like `/blog/:slug`?
+
+**A:** **Make a folder named `[slug]` (with the brackets) and put a `page.tsx` inside it.**
+
+```text
+app/blog/[slug]/page.tsx           → matches /blog/anything
+```
+
+Inside `page.tsx`, the captured value arrives via `params`:
+
+```tsx
+export default function BlogPost({ params }: { params: { slug: string } }) {
+  return <h1>Post: {params.slug}</h1>;
+}
+```
+
+For a URL like `/blog/hello-world`, `params.slug` is `"hello-world"`.
+
+The bracket convention:
+
+- **`[name]`** — single segment. `app/blog/[slug]/page.tsx` matches `/blog/x` but not `/blog/x/y`.
+- **`[...name]`** — catch-all. `app/docs/[...path]/page.tsx` matches `/docs/x`, `/docs/x/y`, `/docs/x/y/z`. `params.path` is an array.
+- **`[[...name]]`** — optional catch-all. Same as catch-all but also matches `/docs` (the bare base, with no slug).
+
+The pattern is the entire dynamic-routing surface. No router config, no array of routes. The framework reads the folder structure and figures it out.
+
+In your `page.tsx`, you might want to:
+- Validate the param (`if (!/^[a-z-]+$/.test(slug)) notFound()`).
+- Fetch data based on it (`const post = await getPost(slug)`).
+- Generate static paths at build time for known values (`generateStaticParams`).
+
+All these patterns build on top of the brackets — but the bracket itself is what creates the route.
+
+A common gotcha: confusing `[slug]` with `(slug)`. The bracket is a dynamic parameter that affects URLs; the parenthesis is a route group that doesn't appear in URLs at all. Different tools, different jobs.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `page.tsx` and `layout.tsx`?
+
+**A:** **`page.tsx` is the route's UI for that exact URL. `layout.tsx` wraps every page (and child route) below the folder it's in. Layouts persist across navigation within their subtree; pages re-render.**
+
+```text
+app/
+├── layout.tsx           ← wraps EVERY page in the app (root layout)
+├── page.tsx             ← the / page
+└── dashboard/
+    ├── layout.tsx       ← wraps every page under /dashboard
+    ├── page.tsx         ← /dashboard
+    └── settings/
+        └── page.tsx     ← /dashboard/settings  ← wrapped by BOTH layouts
+```
+
+When the user navigates from `/dashboard` to `/dashboard/settings`:
+
+- The root `layout.tsx` is **already mounted** — stays.
+- The `dashboard/layout.tsx` is **already mounted** — stays.
+- The `dashboard/page.tsx` **unmounts**; `dashboard/settings/page.tsx` **mounts**.
+
+The dashboard layout's UI (a sidebar, say) persists. Any React state inside it stays. Only the page area swaps.
+
+What goes in each:
+
+- **`layout.tsx`** — the section's wrapper. `<html><body>` (only in the root layout), nav, sidebar, footer, persistent UI. Receives `children` as a prop and renders it where the inner page should appear.
+
+  ```tsx
+  export default function Layout({ children }: { children: React.ReactNode }) {
+    return (
+      <div>
+        <Sidebar />
+        <main>{children}</main>
+      </div>
+    );
+  }
+  ```
+
+- **`page.tsx`** — the per-route UI. The content that changes when the URL changes.
+
+  ```tsx
+  export default function Page() {
+    return <h1>Dashboard home</h1>;
+  }
+  ```
+
+A folder needs a `page.tsx` to be a valid route. `layout.tsx` is optional (the root layout is the only required one). A folder with only `layout.tsx` and no `page.tsx` doesn't render at that URL — the layout wraps *children* below, not itself.
+
+The layouts/nested-routes concept covers this pattern in detail. The headline: **layouts persist; pages change.**
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a route group, and when would you use one?
+
+**A:** **A route group is a folder wrapped in parentheses — `(name)` — that organizes routes without adding to the URL. Used to share layouts across pages that should remain at top-level URLs.**
+
+```text
+app/
+├── (marketing)/                ← group, NO "marketing" in URL
+│   ├── layout.tsx               ← marketing layout (public nav + footer)
+│   ├── page.tsx                  → /
+│   ├── about/page.tsx            → /about
+│   └── pricing/page.tsx          → /pricing
+│
+└── (dashboard)/                ← group, NO "dashboard" in URL
+    ├── layout.tsx               ← dashboard layout (sidebar)
+    ├── settings/page.tsx         → /settings
+    └── billing/page.tsx          → /billing
+```
+
+What it gives you:
+
+1. **Two separate layouts** — the marketing pages have a public navbar/footer; the dashboard pages have a sidebar. Without the group, they'd share a single root layout.
+
+2. **Clean URLs** — even though the folder structure has `(marketing)/about`, the URL is just `/about`. No URL-level grouping shows up.
+
+3. **Code organization** — related routes live in the same folder. Open the `(dashboard)/` folder and every dashboard page is right there.
+
+When you'd use one:
+
+- **Marketing + app** — `(marketing)/` for the public pages with one layout; `(app)/` for the authenticated UI with another layout. Most SaaS apps have this split.
+
+- **Auth flow grouping** — `(auth)/login/page.tsx`, `(auth)/register/page.tsx`, `(auth)/forgot-password/page.tsx` all share a centered-card auth layout, but their URLs stay flat (`/login`, `/register`).
+
+- **A/B testing variants** — some teams use groups to isolate experimental routes.
+
+When NOT to use them:
+
+- If your routes naturally nest (`/admin/users`, `/admin/settings`), use a real folder (`admin/`) — the `/admin/` prefix is meaningful and shouldn't be hidden.
+
+- If two pages would coincidentally have the same final URL because of group routing, Next.js will complain at build time:
+
+  ```text
+  app/(marketing)/about/page.tsx
+  app/(blog)/about/page.tsx          ← ❌ collision: both → /about
+  ```
+
+  One URL = one page; route groups can't create duplicates.
+
+The pattern is one of the most useful in the App Router. Almost every non-trivial Next.js app has at least one route group.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `[slug]` and `[[...slug]]`?
+
+**A:** **`[slug]` is a single dynamic segment that's required. `[[...slug]]` is an optional catch-all that captures any number of segments — including zero — as an array.**
+
+```text
+app/blog/[slug]/page.tsx
+   matches: /blog/hello-world
+   matches: /blog/anything
+   does NOT match: /blog
+   does NOT match: /blog/a/b   (only single segment)
+
+app/docs/[...slug]/page.tsx
+   matches: /docs/a              → slug = ["a"]
+   matches: /docs/a/b/c          → slug = ["a", "b", "c"]
+   does NOT match: /docs          (must have at least one segment)
+
+app/docs/[[...slug]]/page.tsx
+   matches: /docs                 → slug = undefined
+   matches: /docs/a               → slug = ["a"]
+   matches: /docs/a/b/c           → slug = ["a", "b", "c"]
+```
+
+The progression:
+
+1. **`[slug]`** — required, single segment. The classic case. Captures a string.
+
+2. **`[...slug]`** — required, multiple segments. Captures an array of strings. Useful when the URL depth is unknown but at least one segment is required.
+
+3. **`[[...slug]]`** — optional, multiple segments. Captures an array OR undefined. Useful when "no segments" is also a valid case — most commonly, a docs site where `/docs` is the index page AND `/docs/a/b/c` is a specific page, both served by the same file.
+
+In your page:
+
+```tsx
+// app/docs/[[...slug]]/page.tsx
+export default function Docs({ params }: { params: { slug?: string[] } }) {
+  if (!params.slug) return <DocsIndex />;
+  const path = params.slug.join("/");
+  return <DocsPage path={path} />;
+}
+```
+
+When to reach for each:
+
+- **`[slug]`** — 90% of dynamic routes. Posts, products, users, anything with a single ID in the URL.
+- **`[...slug]`** — docs sites, file browsers, anything where the URL path mirrors a content tree.
+- **`[[...slug]]`** — when "no path" should serve the same handler as "any path." Less common.
+
+The optional catch-all is the one most people forget about. When you find yourself with two files — `app/docs/page.tsx` AND `app/docs/[...slug]/page.tsx` — and they're both doing similar work, the optional catch-all `[[...slug]]` combines them into one.
+
+</InterviewQuestion>

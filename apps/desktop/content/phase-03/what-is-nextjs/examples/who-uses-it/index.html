@@ -1,0 +1,108 @@
+<!--
+  A grid of real, well-known Next.js sites. Each card links to the
+  public site. The point is to demystify "is Next.js production-ready"
+  by showing it runs the biggest internet properties.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Who uses Next.js</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+      .card {
+        border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.85rem; background: #fafafa;
+        text-decoration: none; color: #18181b; transition: all 0.15s;
+      }
+      .card:hover { border-color: #15803d; background: #ecfdf5; }
+      .card h2 { margin: 0; font-size: 1rem; }
+      .card p { margin: 0.3rem 0 0; font-size: 0.82rem; color: #555; }
+      .card .meta {
+        margin-top: 0.5rem; font-size: 0.72rem; color: #71717a; text-transform: uppercase;
+        letter-spacing: 0.05em; font-family: ui-monospace, monospace;
+      }
+      .ext { color: #71717a; font-size: 0.8rem; }
+      .verify {
+        background: #fef3c7; border: 1px solid #fde68a; padding: 0.7rem 1rem;
+        border-radius: 6px; margin-top: 1.5rem; font-size: 0.9rem; color: #92400e;
+      }
+      .verify strong { color: #78350f; }
+      code { background: #fff; padding: 1px 6px; border-radius: 3px; font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Sites you've used today that run on Next.js</h1>
+    <p>Production at planet scale. Open any of them in a browser, view source — you'll find Next.js fingerprints (the <code>__NEXT_DATA__</code> script tag, <code>_next/static/</code> URLs).</p>
+
+    <div class="grid">
+      <a class="card" href="https://www.tiktok.com" target="_blank" rel="noreferrer noopener">
+        <h2>TikTok</h2>
+        <p>The web client at tiktok.com. Hundreds of millions of users.</p>
+        <div class="meta">tiktok.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://www.notion.so" target="_blank" rel="noreferrer noopener">
+        <h2>Notion</h2>
+        <p>The marketing site + parts of the app.</p>
+        <div class="meta">notion.so <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://stripe.com" target="_blank" rel="noreferrer noopener">
+        <h2>Stripe</h2>
+        <p>Public marketing + docs. Famous for its design.</p>
+        <div class="meta">stripe.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://openai.com" target="_blank" rel="noreferrer noopener">
+        <h2>OpenAI</h2>
+        <p>openai.com, chat.openai.com — large parts on Next.js.</p>
+        <div class="meta">openai.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://www.twitch.tv" target="_blank" rel="noreferrer noopener">
+        <h2>Twitch</h2>
+        <p>Mobile web client. (Amazon's own Next.js installation.)</p>
+        <div class="meta">twitch.tv <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://vercel.com" target="_blank" rel="noreferrer noopener">
+        <h2>Vercel</h2>
+        <p>The makers of Next.js. Their own site is the demo.</p>
+        <div class="meta">vercel.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://www.hulu.com" target="_blank" rel="noreferrer noopener">
+        <h2>Hulu</h2>
+        <p>Streaming product's web client.</p>
+        <div class="meta">hulu.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://www.washingtonpost.com" target="_blank" rel="noreferrer noopener">
+        <h2>The Washington Post</h2>
+        <p>One of the largest news sites on the web.</p>
+        <div class="meta">washingtonpost.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://nike.com" target="_blank" rel="noreferrer noopener">
+        <h2>Nike</h2>
+        <p>nike.com — high-traffic global retail.</p>
+        <div class="meta">nike.com <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://github.com/features/copilot" target="_blank" rel="noreferrer noopener">
+        <h2>GitHub Copilot</h2>
+        <p>The product page; some Copilot Workspace surfaces.</p>
+        <div class="meta">github.com/features/copilot <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://linear.app" target="_blank" rel="noreferrer noopener">
+        <h2>Linear</h2>
+        <p>The web app every modern startup uses for tickets.</p>
+        <div class="meta">linear.app <span class="ext">↗</span></div>
+      </a>
+      <a class="card" href="https://jbeditor.com" target="_blank" rel="noreferrer noopener">
+        <h2>JEditor</h2>
+        <p>This very platform. The site you're learning on.</p>
+        <div class="meta">jbeditor.com <span class="ext">↗</span></div>
+      </a>
+    </div>
+
+    <div class="verify">
+      <strong>Verify any of them:</strong> open the site → View Source (Ctrl+U / Cmd+Opt+U) →
+      Ctrl+F for <code>__NEXT_DATA__</code> or <code>/_next/static/</code>. Both are
+      fingerprints of a Next.js production build. You'll see them in every site above.
+    </div>
+  </body>
+</html>

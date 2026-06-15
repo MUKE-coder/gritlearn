@@ -1,0 +1,109 @@
+<!--
+  The four scripts — dev, build, start, lint — each as a card with
+  what runs under the hood, when to use, typical output.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The four scripts — what each does</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .card { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .card h2 { margin: 0 0 0.4rem; font-size: 1rem; font-family: ui-monospace, monospace; color: #15803d; }
+      .card .when { font-size: 0.75rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.6rem; }
+      .card p { margin: 0.4rem 0; font-size: 0.88rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.6rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.5;
+        margin: 0.5rem 0 0.3rem; white-space: pre-wrap;
+      }
+      pre .prompt { color: #7fff5b; }
+      pre .ok     { color: #7fff5b; }
+      pre .err    { color: #f87171; }
+      pre .info   { color: #38bdf8; }
+      pre .muted  { color: #71717a; }
+      .tip {
+        margin-top: 1.5rem; background: #fef3c7; border: 1px solid #fde68a;
+        padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.92rem; color: #92400e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The four daily scripts</h1>
+    <p>Defined in <code>package.json</code>'s <code>scripts</code> object. Each one runs a different Next.js command for a different stage of work.</p>
+
+    <div class="grid">
+
+      <div class="card">
+        <h2>pnpm dev</h2>
+        <p>Starts a development server with <strong>hot reload</strong>. Edit a file, save, see the change in the browser instantly.</p>
+<pre><span class="prompt">$</span> pnpm dev
+<span class="info">▲ Next.js 14.2.0</span>
+<span class="muted">  - Local:        http://localhost:3000</span>
+<span class="muted">  - Environments: .env.local</span>
+
+<span class="muted">✓ Ready in 1.2s</span>
+<span class="muted">○ Compiling /...</span>
+<span class="ok">✓ Compiled / in 142ms</span></pre>
+        <div class="when">When to use</div>
+        <p>Active development. Have it running all day, leave the browser tab open.</p>
+      </div>
+
+      <div class="card">
+        <h2>pnpm build</h2>
+        <p>Builds a <strong>production bundle</strong>. Runs the TypeScript type-check, optimizes JS, generates static pages, writes <code>.next/</code>.</p>
+<pre><span class="prompt">$</span> pnpm build
+<span class="info">▲ Next.js 14.2.0</span>
+
+<span class="muted">  Creating an optimized production build...</span>
+<span class="muted">  Compiled successfully in 8.3s</span>
+<span class="muted">  Running TypeScript ...</span>
+<span class="muted">  Generating static pages (4/4)</span>
+
+<span class="muted">Route (app)</span>
+<span class="muted">┌ ○ /                    142 B   84.3 kB</span>
+<span class="muted">├ ○ /about               147 B   84.3 kB</span>
+<span class="muted">└ ƒ /api/users           0 B     0 B</span>
+
+<span class="ok">✓ Build successful</span></pre>
+        <div class="when">When to use</div>
+        <p>Before pushing a big change. CI runs it on every PR. Vercel runs it on deploy. Catches type errors that <code>dev</code> doesn't.</p>
+      </div>
+
+      <div class="card">
+        <h2>pnpm start</h2>
+        <p>Serves the <strong>production bundle</strong> locally (the output of <code>pnpm build</code>). Behaves like real production.</p>
+<pre><span class="prompt">$</span> pnpm build && pnpm start
+<span class="muted">▲ Next.js 14.2.0</span>
+<span class="muted">  - Local: http://localhost:3000</span>
+
+<span class="ok">✓ Ready in 320ms</span></pre>
+        <div class="when">When to use</div>
+        <p>To verify production behavior locally before deploy. Some bugs only show in production builds (server components, ISR, edge runtime).</p>
+      </div>
+
+      <div class="card">
+        <h2>pnpm lint</h2>
+        <p>Runs <strong>ESLint</strong> on the codebase. Flags style violations, unused variables, common mistakes.</p>
+<pre><span class="prompt">$</span> pnpm lint
+<span class="muted">▲ Next.js 14.2.0</span>
+
+<span class="muted">./app/page.tsx</span>
+<span class="err">  12:7  Error: 'name' is assigned but never used. (no-unused-vars)</span>
+
+<span class="err">✖ 1 error</span></pre>
+        <div class="when">When to use</div>
+        <p>Before committing. Some teams run <code>pnpm lint</code> as a pre-commit hook so it runs automatically.</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>One-liner you'll memorize:</strong>
+      <code style="background:#fff;padding:1px 6px;border-radius:3px;">pnpm build && pnpm start</code>
+      — verifies a production build locally before pushing. Catches every "works in dev, breaks in production" bug.
+    </div>
+  </body>
+</html>
