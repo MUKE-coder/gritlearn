@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "webhook-row-01",
+  "type": "registry:block",
+  "title": "Webhook Row",
+  "description": "Webhook endpoint row with success rate and actions (Stripe-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/webhook-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/webhook-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three ways to spell every color</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 20px 0 40px; }
+      .swatch { padding: 16px; border-radius: 8px; color: white; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.4; }
+      .swatch .name { font-size: 13px; font-weight: 600; margin-bottom: 4px; opacity: 0.9; }
+
+      .tweaker { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; }
+      .tweaker label { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-family: ui-monospace, monospace; font-size: 13px; }
+      .tweaker input[type=range] { flex: 1; }
+      #preview { width: 100%; height: 80px; border-radius: 8px; margin-top: 16px; transition: background 0.1s; }
+    </style>
+  </head>
+  <body>
+    <h1>Three ways to spell every color</h1>
+    <p>Each swatch below is the <em>same</em> brand color, spelled four different ways. CSS doesn't care which form you use — pick the most readable for the situation.</p>
+
+    <h2>Brand accent — #4763e4</h2>
+    <div class="palette">
+      <div class="swatch" style="background: red;">
+        <div class="name">Named</div>
+        red
+      </div>
+      <div class="swatch" style="background: #4763e4;">
+        <div class="name">Hex</div>
+        #4763e4
+      </div>
+      <div class="swatch" style="background: rgb(71, 99, 228);">
+        <div class="name">RGB</div>
+        rgb(71, 99, 228)
+      </div>
+      <div class="swatch" style="background: hsl(230, 75%, 59%);">
+        <div class="name">HSL</div>
+        hsl(230, 75%, 59%)
+      </div>
+    </div>
+
+    <h2>Try hsl: easy to tweak</h2>
+    <p>HSL is great when you want to lighten or darken a shade. Drag the sliders below.</p>
+    <div class="tweaker">
+      <label>Hue (0–360°) <input id="h" type="range" min="0" max="360" value="230" /> <span id="hVal">230</span></label>
+      <label>Saturation (0–100%) <input id="s" type="range" min="0" max="100" value="75" /> <span id="sVal">75</span></label>
+      <label>Lightness (0–100%) <input id="l" type="range" min="0" max="100" value="59" /> <span id="lVal">59</span></label>
+      <div id="preview" style="background: hsl(230, 75%, 59%);"></div>
+      <p style="font-family: ui-monospace, monospace; font-size: 12px; color: #4b5563; margin-top: 10px;">
+        Current: <span id="out">hsl(230, 75%, 59%)</span>
+      </p>
+    </div>
+
+    <script>
+      const h = document.getElementById("h");
+      const s = document.getElementById("s");
+      const l = document.getElementById("l");
+      const out = document.getElementById("out");
+      const preview = document.getElementById("preview");
+      const update = () => {
+        document.getElementById("hVal").textContent = h.value;
+        document.getElementById("sVal").textContent = s.value;
+        document.getElementById("lVal").textContent = l.value;
+        const css = `hsl(${h.value}, ${s.value}%, ${l.value}%)`;
+        preview.style.background = css;
+        out.textContent = css;
+      };
+      [h, s, l].forEach((i) => i.addEventListener("input", update));
+    </script>
+  </body>
+</html>

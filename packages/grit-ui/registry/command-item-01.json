@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "command-item-01",
+  "type": "registry:block",
+  "title": "Command Item",
+  "description": "Command palette item with icon and keyboard shortcut (Linear)",
+  "files": [
+    {
+      "path": "components/grit-ui/command-item-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/command-item-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

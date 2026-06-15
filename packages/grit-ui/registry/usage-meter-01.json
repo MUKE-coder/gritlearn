@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "usage-meter-01",
+  "type": "registry:block",
+  "title": "Usage Meter",
+  "description": "Resource usage bar with limit and percentage (Vercel/Linear-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/usage-meter-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/usage-meter-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

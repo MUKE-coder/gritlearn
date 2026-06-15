@@ -1,0 +1,139 @@
+## HTML text elements
+
+Most of the web is, when you scrape away the dynamic stuff, just *words*. Articles, product descriptions, error messages, blog posts, this very lesson. HTML gives you a small alphabet of tags for marking up text — telling the browser "this is a heading," "this is a paragraph," "this part is more important than the rest." Knowing the right tag for each job is more about *semantics* (what something *means*) than about how it looks.
+
+<Analogy>
+HTML text elements are **road signs**.
+
+Driving down a highway, you see signs that say STOP, YIELD, EXIT 12, 50 MPH. The signs don't paint the road or move your car — they *describe what's happening* so you can react. STOP means stop. EXIT 12 means exit 12. You can paint a yield sign red and it's still a yield sign; you can paint a stop sign blue and it still means STOP. The *meaning* is in the shape, not the color.
+
+HTML text tags work the same way. `<h1>` doesn't mean "make this big and bold" — it means "this is the most important heading on the page." `<strong>` doesn't mean "make this bold" — it means "this part really matters." Browsers happen to render `<h1>` as big and bold and `<strong>` as bold *by default*, but you can change that with CSS without changing the meaning.
+
+Picking the right tag is like putting the right sign on the road. If you slap a YIELD where a STOP belongs, drivers behave wrong — and screen readers, search engines, and CSS rules in your code behave wrong too.
+</Analogy>
+
+<Illustration
+  alt="Diagram of heading hierarchy showing h1 through h6 with decreasing importance"
+  caption="Headings have a hierarchy. h1 is the page's single main title; h2 starts each major section; h3 starts subsections inside h2 sections; and so on down to h6."
+>
+
+```
+   <h1>  ──── one per page: what this whole page is about
+     <h2>  ────── a major section
+       <h3>  ──────── a subsection of that section
+         <h4>  ────────── a sub-sub-section
+           <h5>
+             <h6>  ──── rarely used; you're probably overstructuring
+```
+
+</Illustration>
+
+### Headings: `<h1>` through `<h6>`
+
+Headings give the page an outline. `<h1>` is the page's top-level title — use one per page. `<h2>` starts each major section, `<h3>` starts subsections inside those, and so on. The browser renders them progressively smaller, but the *real* purpose is for screen readers and search engines to understand the structure.
+
+Two mistakes to avoid:
+
+1. **Skipping levels** — going from `<h1>` straight to `<h3>` and never using `<h2>`. Screen-reader users navigate by heading level; skipping is like a table of contents that has Chapter 1, then jumps to Chapter 1.1.2 without ever mentioning Chapter 1.1.
+2. **Using headings to make text big** — if you want big bold text that *isn't* a section title, use CSS, not a heading tag. A "Welcome!" sign in a footer is not the page's main heading; it's just big text.
+
+### Paragraphs: `<p>`
+
+For ordinary running text. Each `<p>` becomes its own block on the page with a little vertical space around it. Don't try to use `<br>` (line break) to fake paragraphs — `<br>` is meant for places where a line break is *semantically* part of the content (an address, a poem). Two paragraphs are two `<p>` tags.
+
+### Lists: `<ul>`, `<ol>`, `<li>`
+
+- `<ul>` is an **unordered list** — bullets. Order doesn't matter.
+- `<ol>` is an **ordered list** — numbers. The order is meaningful.
+- `<li>` is one **list item**. Always inside a `<ul>` or `<ol>`.
+
+Use `<ul>` for "a list of features." Use `<ol>` for "step 1, step 2, step 3" where the sequence is the whole point. Both render with default spacing and indentation that you'll usually override with CSS.
+
+### Inline emphasis: `<strong>`, `<em>`, and friends
+
+- `<strong>` — **strong importance**. Browsers render as bold. Use for content that, if you said the sentence out loud, you'd raise your voice on. (Screen readers will literally do that.)
+- `<em>` — *emphasis*. Browsers render as italic. Use for the word in a sentence that carries the emphasis.
+- `<code>` — `code`. Renders in monospace. Use for inline code: function names, file paths, command-line flags.
+- `<small>` — slightly smaller. Use sparingly for side notes, fine print, attributions.
+
+Bold and italic also have non-semantic equivalents (`<b>` and `<i>`) that *only* change the look. Almost always prefer `<strong>` and `<em>`; reach for `<b>`/`<i>` only when you really mean "this is bold but not important" or "this is italic but not emphasized" (e.g. a book title in italics is `<i>`, not `<em>`).
+
+### Block quotes and preformatted text
+
+- `<blockquote>` — for quoting another source. Browsers indent it.
+- `<pre>` — preformatted text. Whitespace and line breaks are preserved. Use for code blocks (often nested with `<code>` inside).
+
+### Why all this distinction matters
+
+Once you start adding CSS, you'll style by tag (`h1 { ... }`) and by class. You'll style by semantic meaning. When you reach for JavaScript or React later, you'll select elements by their meaning too. And accessibility tools — screen readers, voice control, search-engine crawlers — all rely on you having picked the right tag in the first place. The 10 minutes you spend learning these tags pays off for years.
+
+<ExampleProject
+  src="blog-post"
+  title="A short article using every text tag"
+  description="A single-page article with headings, paragraphs, lists, emphasis, inline code, and a blockquote. The CSS is intentionally minimal so you can see the browser's default styling — that's the styling you'd override with your own CSS later."
+/>
+
+<ExampleProject
+  src="bad-vs-good-headings"
+  title="Right vs wrong heading hierarchy"
+  description="Two versions of the same content side by side. The left uses semantically correct headings (h1 → h2 → h3). The right uses h1 everywhere and styles them with CSS to fake the hierarchy. Both *look* the same; only the left works with screen readers."
+/>
+
+<Exercise
+  title="Mark up a recipe"
+  starter={`Pick any recipe you like (or invent one). Create an HTML page
+that uses, in order:
+
+  - <h1> for the recipe name.
+  - <p> with a one-sentence description.
+  - <h2>Ingredients</h2> followed by a <ul> of ingredients.
+  - <h2>Steps</h2> followed by an <ol> of steps.
+  - In step 1, mark one critical word with <strong> and one
+    fancy/imported ingredient with <em>.
+  - At the very bottom, a <p><small>...</small></p> with a credit
+    line ("Adapted from grandma's notebook").
+
+No CSS needed — focus on the right tags in the right order.`}
+>
+
+- Exactly one `<h1>` on the page.
+- Both `<h2>`s come *after* the `<h1>`, not before.
+- The ingredients list uses `<ul>` (order doesn't matter for ingredients).
+- The steps list uses `<ol>` (order matters — step 2 after step 1).
+- Each `<li>` opens *and* closes; they're not separated by commas.
+- `<strong>` is used for *importance*, not just to make text bold for looks.
+- The `<small>` is inside a `<p>` (it's an inline element).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `<strong>` and `<b>`? Between `<em>` and `<i>`?
+
+**A:** Same look, different meaning. `<strong>` and `<em>` are *semantic* — they say "this text is important" or "this text carries the emphasis." Screen readers literally change their tone for them. `<b>` and `<i>` are *visual only* — they say "make this bold/italic" without claiming the content matters more. Almost always prefer the semantic ones. The non-semantic ones are for cases where you want the styling but the meaning isn't "important" or "emphasized" — like italicizing a book title, where the italics are a typesetting convention, not emphasis.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Should there be more than one `<h1>` on a page?
+
+**A:** The modern recommendation is one `<h1>` per page — the page's main title. Some HTML5 specs technically allow multiple `<h1>`s inside `<section>` and `<article>` elements, but in practice screen readers don't handle that consistently. The safe rule is: one `<h1>`. Everything else uses `<h2>` and below.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do screen-reader users care so much about heading hierarchy?
+
+**A:** Most screen readers offer a "navigate by headings" shortcut — press `H` and you jump to the next heading on the page. Power users use this *constantly* to skim long pages, the same way sighted users skim with their eyes. If your headings are out of order (h1 → h3 → h2) or you skip levels (h1 → h4), the navigation feels broken — like a table of contents with random chapter numbers. Done right, headings turn a page into a Table of Contents your assistive tech can navigate in seconds.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use `<pre>` and when should you use `<code>`?
+
+**A:** They do different things. `<code>` is **inline**: a single function name or file path mid-sentence, like `const x = 1` here. `<pre>` is **block-level**: it preserves whitespace and line breaks, so multi-line code listings keep their indentation. The common pattern for code blocks is `<pre><code>...</code></pre>` — `<pre>` to keep the formatting, `<code>` to mark it semantically as code. Code-syntax-highlighter libraries usually inject classes onto this exact combination.
+
+</InterviewQuestion>

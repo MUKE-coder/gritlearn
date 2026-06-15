@@ -1,0 +1,242 @@
+## CSS selectors and specificity
+
+Every CSS rule starts with a *selector* — the part that says "this rule applies to **these** elements." There are dozens of ways to write a selector, but you'll use about ten of them constantly. And when two rules try to style the same element, CSS uses a scoring system called *specificity* to decide which one wins. This lesson is short on theory and long on patterns you'll use every day.
+
+<Analogy>
+Selectors are **how a teacher gets a specific student's attention** in a noisy classroom.
+
+There are different ways to call on someone:
+
+- **By name:** "Maria!" — that's a class or id selector, very specific.
+- **By group:** "Everyone in row 3!" — that's like `p` (every paragraph) or `.lead` (every element with that class).
+- **By location:** "The person sitting next to Maria!" — that's a sibling selector.
+- **By position:** "The third kid from the left!" — that's `:nth-child(3)`.
+- **By state:** "Everyone with their hand up!" — that's a pseudo-class like `:hover` or `:checked`.
+
+Now imagine two teachers shouting at the same time — "All boys, stand up!" and "Maria, sit down!" Maria has to obey *one* of them. She picks the more specific instruction: the one that named her directly. That's *specificity* — when two CSS rules apply to the same element, the more specific one wins.
+
+Mastering selectors is mastering how to be the right amount of specific. Too generic and your rule hits things you didn't mean to. Too specific and you can't override it later without writing something even uglier.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing specificity weights for inline, id, class, and tag selectors"
+  caption="Specificity is a four-part score: inline styles, then ids, then classes/attributes/pseudo-classes, then tags. Higher score wins."
+>
+
+```
+   Specificity score: ( inline , ids , classes , tags )
+
+   style="..."        →  (1, 0, 0, 0)       always wins
+   #header            →  (0, 1, 0, 0)
+   .menu.active       →  (0, 0, 2, 0)
+   div.nav            →  (0, 0, 1, 1)
+   nav a              →  (0, 0, 0, 2)
+   *                  →  (0, 0, 0, 0)       loses to anything
+
+   Read left-to-right; higher number wins.
+```
+
+</Illustration>
+
+### The selectors you'll use 95% of the time
+
+```css
+/* By tag name */
+p { … }              /* every <p> */
+h1 { … }             /* every <h1> */
+
+/* By class — the workhorse */
+.lead { … }          /* every element with class="lead" */
+.btn.primary { … }   /* elements with BOTH classes */
+
+/* By id — for unique elements */
+#header { … }        /* the element with id="header" */
+
+/* By attribute */
+[type="email"] { … } /* every input with type="email" */
+[disabled] { … }     /* every element with a disabled attribute */
+
+/* Universal */
+* { box-sizing: border-box; }  /* every element on the page */
+```
+
+### Combining selectors: descendant, child, sibling
+
+```css
+/* Descendant — A space means "any depth below" */
+article p { … }        /* every <p> inside an <article> */
+.card .title { … }     /* every .title inside a .card */
+
+/* Direct child — > means "immediate child only" */
+ul > li { … }          /* only <li> that's a direct child of <ul> */
+
+/* Adjacent sibling — + means "the element right after" */
+h2 + p { … }           /* a <p> immediately after an <h2> */
+
+/* Subsequent siblings — ~ means "any sibling after" */
+h2 ~ p { … }           /* every <p> that's a later sibling of an <h2> */
+```
+
+### State selectors: pseudo-classes
+
+These respond to *state* — what the element is doing right now, where it is in its parent, what the user is doing with it.
+
+```css
+a:hover { color: blue; }         /* mouse is over the link */
+a:focus { outline: 2px solid; }  /* keyboard focused */
+a:visited { color: purple; }     /* user has visited this URL */
+
+input:disabled { opacity: 0.5; }
+input:checked + label { … }
+input:required { … }
+
+li:first-child { … }             /* first <li> in its parent */
+li:last-child { … }
+li:nth-child(odd) { … }          /* every other one */
+li:nth-child(3n+1) { … }         /* every third one starting at 1 */
+
+p:not(.intro) { … }              /* every <p> EXCEPT .intro */
+```
+
+### Pseudo-elements
+
+A pseudo-element is a *virtual* element you can style — most often `::before` and `::after`, which insert content before or after the element's children.
+
+```css
+.quote::before { content: "“"; font-size: 2em; }
+.quote::after  { content: "”"; }
+```
+
+Two colons (`::before`) is modern; you'll also see one colon (`:before`) in older code. Both work.
+
+### Specificity: when two rules collide
+
+When multiple rules match the same element, CSS picks the most *specific* one. The score has four parts, read left to right:
+
+| Source | Weight |
+|---|---|
+| Inline `style="..."` | 1, 0, 0, 0 |
+| Ids (`#x`) | 0, 1, 0, 0 |
+| Classes / attributes / pseudo-classes | 0, 0, 1, 0 |
+| Tags / pseudo-elements | 0, 0, 0, 1 |
+
+Higher number wins. Equal scores → the rule that comes later in the source wins.
+
+```css
+p              { color: red; }     /* (0,0,0,1) */
+.intro p       { color: blue; }    /* (0,0,1,1) — wins */
+#main .intro p { color: green; }   /* (0,1,1,1) — wins over both */
+```
+
+### `!important`: the nuclear override
+
+Add `!important` to a value and that declaration jumps the entire cascade except for other `!important` rules. It looks like this:
+
+```css
+p { color: red !important; }
+```
+
+Avoid it. Once you've used `!important` once in a project, you'll end up using it again to override the first one, and again to override the second. You become trapped. Use it only when you're overriding inline styles you can't change (e.g. a third-party widget) or in print stylesheets.
+
+### Practical rules of thumb
+
+- **Use classes by default.** They're reusable and have low specificity.
+- **Use ids sparingly.** One per page (e.g. `#main-content` for skip links). Their high specificity makes them hard to override.
+- **Stay shallow.** `article .card .title h3` is hard to override; `.card-title` is easy.
+- **Don't fight specificity with more specificity.** If you're writing more selectors than you need to win a fight, restructure the loser instead.
+
+<ExampleProject
+  src="selector-zoo"
+  title="Every common selector, live"
+  description="A reference page where every kind of selector — tag, class, id, descendant, child, sibling, pseudo-class, pseudo-element, attribute — is demonstrated on a real element. Toggle each rule in DevTools to see what it does."
+/>
+
+<ExampleProject
+  src="specificity-fight"
+  title="Two rules walk into a bar"
+  description="The same paragraph has three rules trying to color it: a tag selector, a class selector, and an id selector. The winner is highlighted. Tweak the rules — add a class to one, an !important to another — and watch the winner change."
+/>
+
+<Exercise
+  title="Use five different selectors on the same page"
+  starter={`Create a page with a list of three book titles, each with an
+author. Then write CSS that uses each of these selectors at least
+once:
+
+  1. A tag selector — style the body's font.
+  2. A class selector — style ".featured" titles in bold.
+  3. An id selector — style "#newest" with a colored background.
+  4. A descendant selector — style "li .author" smaller and grey.
+  5. A pseudo-class — style "a:hover" with an underline.
+
+Open the page and confirm each rule does what you expect. Then in
+DevTools' Elements panel, click on the featured book and read the
+"Computed" tab — every rule that applied to it should be listed
+in cascade order.`}
+>
+
+- The CSS uses five distinct selector types, one for each requirement.
+- The `#newest` id is used on exactly one element (ids are unique).
+- The `.featured` class is used on at least one element and can be reused.
+- The descendant selector (`li .author`) uses a space, not a comma or `>`.
+- The pseudo-class is preceded by the selector it modifies (`a:hover`, not `:hover a`).
+- DevTools' Computed tab shows the rules applied in priority order.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a CSS class selector and an id selector?
+
+**A:**
+
+- A **class** (`.button`) can be used on as many elements as you want — it's *reusable*. Specificity weight: (0,0,1,0).
+- An **id** (`#header`) is meant for one element per page — it's *unique*. Specificity weight: (0,1,0,0), which is **ten classes' worth**.
+
+Default to classes. Use ids only for things that genuinely exist once on the page (like `#main` for skip-to-content), because their high specificity makes them hard to override later. Most real CSS projects barely use ids at all.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does this selector mean: `article > h2`?
+
+**A:** "Style every `<h2>` that is a **direct child** of an `<article>`." The `>` means direct child only — it skips `<h2>`s that are nested deeper. Compare:
+
+- `article h2` (with a space) — any `<h2>` anywhere inside an `<article>`, no matter how deeply nested.
+- `article > h2` (with `>`) — only `<h2>`s that are immediate children of `<article>`.
+
+Direct-child selectors are useful when you want to style a list's items but not items in nested lists.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is CSS specificity, and how do you calculate it?
+
+**A:** Specificity is the algorithm CSS uses to decide which rule wins when multiple rules apply to the same element. It's a 4-part score, often written as `(a, b, c, d)`:
+
+- `a` = 1 if the rule comes from an inline `style` attribute, 0 otherwise.
+- `b` = count of `#id` selectors in the rule.
+- `c` = count of class, attribute, and pseudo-class selectors.
+- `d` = count of tag and pseudo-element selectors.
+
+Compare left to right: higher number wins. Equal scores → the rule defined **later** in the source wins. `!important` overrides everything except other `!important` rules. Example: `#main .card h2:hover` is `(0, 1, 2, 1)` — beats `.card.featured h2` which is `(0, 0, 3, 1)`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use `!important`?
+
+**A:** Almost never. `!important` short-circuits the cascade, which makes the cascade unreliable. Once one rule uses `!important`, the next time someone needs to override it, they reach for `!important` too. You end up in an `!important` arms race that nobody wins.
+
+Legitimate uses:
+
+1. **Overriding inline styles you don't control** — a third-party widget that injects `style="..."` you can't strip. You need `!important` to beat the inline style.
+2. **Print stylesheets** — `@media print { * { color: black !important; } }` to force-undo screen styling.
+3. **Utility classes in frameworks like Tailwind** — `text-red-500` ships with `!important` so it always wins over component styles.
+
+If you find yourself reaching for `!important` to win a fight inside your own code, restructure the losing rule — make it less specific or move it later — instead.
+
+</InterviewQuestion>

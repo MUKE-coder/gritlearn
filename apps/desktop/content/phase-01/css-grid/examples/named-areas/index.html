@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Responsive card grid in one line</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 1120px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+
+      /* THE MAGIC LINE. */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 20px;
+      }
+
+      .card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 140px;
+      }
+      .card h3 { margin: 0; font-size: 15px; }
+      .card p  { margin: 0; color: #4b5563; font-size: 13px; }
+      .card .pill { font-size: 11px; color: #4763e4; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body>
+    <h1>Resize the window</h1>
+    <p>
+      The 9 cards below are inside <code>grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));</code>.
+      One line. The browser packs as many ≥220px columns as fit, each sharing leftover space equally. No media queries.
+    </p>
+
+    <div class="grid">
+      <div class="card"><span class="pill">Feature</span><h3>Bundled curriculum</h3><p>Every lesson lives in the binary.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Native editor</h3><p>Monaco — same as VS Code.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Works offline</h3><p>Signup is the only network step.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Real examples</h3><p>Two runnable projects per concept.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Analogy-first</h3><p>A physical handle on every idea.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Progress tracking</h3><p>Local SQLite, syncs when online.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Interview prep</h3><p>Four questions per concept.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>One sequenced path</h3><p>HTML → desktop apps in 10 phases.</p></div>
+      <div class="card"><span class="pill">Feature</span><h3>Free in beta</h3><p>No paywall, no credit card.</p></div>
+    </div>
+  </body>
+</html>

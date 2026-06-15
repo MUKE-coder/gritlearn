@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "permission-row-01",
+  "type": "registry:block",
+  "title": "Permission Row",
+  "description": "Permission scope row with role toggle buttons (Linear)",
+  "files": [
+    {
+      "path": "components/grit-ui/permission-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/permission-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

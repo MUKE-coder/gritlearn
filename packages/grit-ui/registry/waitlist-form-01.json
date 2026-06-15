@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "waitlist-form-01",
+  "type": "registry:block",
+  "title": "Waitlist Form",
+  "description": "Pre-launch waitlist signup with position counter and join count",
+  "files": [
+    {
+      "path": "components/grit-ui/waitlist-form-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/waitlist-form-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

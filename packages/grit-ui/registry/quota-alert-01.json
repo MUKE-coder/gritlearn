@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "quota-alert-01",
+  "type": "registry:block",
+  "title": "Quota Alert",
+  "description": "Usage quota warning with progress bar and upgrade (Vercel)",
+  "files": [
+    {
+      "path": "components/grit-ui/quota-alert-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/quota-alert-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

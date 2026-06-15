@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "hero-01",
+  "type": "registry:block",
+  "title": "Hero Section",
+  "description": "Bold hero with gradient text, announcement badge, and dual CTA buttons",
+  "files": [
+    {
+      "path": "components/grit-ui/hero-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/hero-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

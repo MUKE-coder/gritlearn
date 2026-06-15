@@ -1,0 +1,183 @@
+## HTML links and images
+
+The web is called a *web* because pages link to each other. Click a link, jump to another page or another part of this page or to an email client or to your phone's dialer. Add an image and your page suddenly has a photograph, a diagram, a logo. These two element types — `<a>` for anchors (links) and `<img>` for images — are the *fabric* of the web. Almost every page you use every day relies on them.
+
+<Analogy>
+Links are **doors**. Images are **windows**.
+
+Imagine a house. The doors lead somewhere — through this door is the kitchen, through that one is the back garden, through the side door is your neighbor's house. You can label each door with where it goes. Some doors lead to other rooms in the same house (jumping to a section of the same page). Some lead outside (linking to another website). Some open your phone and tell it to dial a number (`tel:` links). Some open your email program (`mailto:` links).
+
+Windows don't lead anywhere — they just *show you something else*. A photo on the wall, a view of the garden, a printed diagram. They're embedded in the wall but they belong to a different reality. Images on a web page work exactly the same way: the `<img>` tag is a hole in the page through which the browser shows you a separate file.
+
+When you build a website, you're laying out a house. Doors connect rooms. Windows let in views. Without doors, every page is an island. Without windows, every page is text.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an a element with href attribute pointing to a destination URL, and an img element with src and alt attributes"
+  caption="Links use href to say where you go. Images use src to say what file to show, and alt to describe what's in the image."
+>
+
+```
+   <a href="https://example.com">           <img
+     read more                                src="cat.jpg"
+   </a>                                       alt="A black cat napping in a sunbeam"
+                                            />
+       │                                     │       │
+       │                                     │       └─ description (REQUIRED)
+       │                                     └─ where the file lives
+       └─ the destination of this link
+```
+
+</Illustration>
+
+### Links: `<a>` (the anchor element)
+
+```html
+<a href="https://example.com">Visit Example</a>
+```
+
+The `<a>` element creates a link. The attribute that does the work is **`href`** ("**h**ypertext **ref**erence"). It can point at:
+
+- **An absolute URL** — `href="https://gritlearn.dev"`. Goes to that whole address.
+- **A relative URL** — `href="about.html"` or `href="../docs/index.html"`. Goes to a file relative to the current one. This is what you use within your own site.
+- **An anchor on the same page** — `href="#contact"`. Jumps to the element on this page that has `id="contact"`.
+- **An email** — `href="mailto:hi@example.com"`. Opens the user's email program with the recipient pre-filled.
+- **A phone number** — `href="tel:+1234567890"`. On mobile, dials.
+
+A few attributes you'll see a lot:
+
+- **`target="_blank"`** — open the link in a new tab. Pair with `rel="noopener noreferrer"` for safety (it stops the new page from messing with the old one or seeing referrer info).
+- **`download`** — instead of opening the link, treat it as a download.
+- **`rel="..."`** — describes the relationship (`"author"`, `"license"`, `"nofollow"` for SEO).
+
+### Images: `<img>`
+
+```html
+<img src="cat.jpg" alt="A black cat napping in a sunbeam" />
+```
+
+`<img>` is a **void element** — no closing tag, no content between tags. Two attributes you cannot skip:
+
+- **`src`** — the path to the image file. Just like `href`, this can be absolute or relative.
+- **`alt`** — a short description of what's in the image. Used by screen readers, shown when the image fails to load, indexed by search engines.
+
+Yes, you really do need `alt` every time. The exception: if the image is *purely decorative* (a swoosh in a header, a corner flourish), you set `alt=""` (empty string). That tells assistive tech "this image carries no information, skip it." Never *omit* the attribute; always have one, even if it's empty.
+
+Other useful attributes:
+
+- **`width`** and **`height`** — set them in pixels. Reserves the right amount of space while the image loads, prevents layout jumping.
+- **`loading="lazy"`** — defer loading until the image is about to scroll into view. Saves bandwidth on long pages.
+- **`srcset`** and **`sizes`** — serve different image files to different screen sizes. Important once you care about retina displays and mobile data.
+
+### Writing good `alt` text
+
+Good `alt` text describes what a sighted user would see *and what it means in context*. Not "image of a cat" — every screen reader already says "image:" before reading the alt. Not "cat.jpg". Try:
+
+- **Decorative**: `alt=""`
+- **Informational**: `alt="Sales chart showing Q3 up 12% from Q2"`
+- **Functional** (image is a button or link): `alt="Search"` (describe what it *does*)
+- **Complex** (like a diagram): describe the takeaway, not the pixels — and consider a longer description elsewhere on the page.
+
+### File paths: a recurring beginner trip
+
+The browser resolves a relative path against the current HTML file's URL:
+
+```
+your-folder/
+├── index.html
+├── about.html
+└── images/
+    └── me.jpg
+```
+
+In `index.html`:
+
+- `<a href="about.html">` — same folder. Works.
+- `<img src="images/me.jpg">` — go into `images/` and find `me.jpg`. Works.
+- `<img src="/images/me.jpg">` — the leading `/` means "start at the website's root." This only works once you've deployed; locally it'll break unless your dev server treats the project folder as root.
+- `<img src="me.jpg">` — looks for `me.jpg` next to `index.html`. Won't find it. 404.
+
+When something doesn't load, open the browser's DevTools Network tab — it'll show you exactly what URL it tried to fetch.
+
+<ExampleProject
+  src="my-portfolio-links"
+  title="A tiny portfolio with internal + external links"
+  description="A single page with a header, sections for projects and contact, and intra-page anchor links that scroll smoothly to each section. Outbound links open in new tabs with the safety rel attributes. Click around and watch the URL bar."
+/>
+
+<ExampleProject
+  src="image-gallery"
+  title="An image gallery with proper alt text"
+  description="A three-image gallery using a free-CDN photo service. Each image has descriptive alt text. One image has alt='' to demonstrate decorative usage. Width/height set on each to prevent layout shift while loading."
+/>
+
+<Exercise
+  title="Add navigation and a photo to your About page"
+  starter={`Take the About page you've been building. Add:
+
+  - At the top of the body, a <nav> containing an unordered list
+    of in-page links: #intro, #skills, #contact.
+  - Wrap each section's heading with a matching id="..." so the
+    links work.
+  - An <img> showing any photo you like (or use a placeholder URL
+    like https://picsum.photos/seed/me/300/300). Give it real alt
+    text describing what's in the picture.
+  - One <a> at the bottom linking to your favourite website,
+    opening in a new tab safely.
+
+Open the page. Clicking nav links should scroll to the matching
+section. Clicking the bottom link should open a new tab.`}
+>
+
+- The in-page links use `href="#section-name"` and match an element's `id`.
+- Each `id` is unique on the page (no two elements share an id).
+- The `<img>` has both a `src` AND an `alt` attribute.
+- The `alt` describes *what's in the picture*, not the file name.
+- The outbound link has `target="_blank"` AND `rel="noopener noreferrer"`.
+- No `<a>` has an empty `href=""` (that creates a link that just reloads the page).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `href` and `src`?
+
+**A:** They look similar but mean different things. `href` is on `<a>` and `<link>` — it points to a *destination* the user navigates to (or, in the case of `<link>`, a resource the page references). `src` is on `<img>`, `<script>`, `<iframe>`, `<video>` — it points to a *file the browser fetches and embeds into the page*. Mnemonic: `href` is "go *here* if you click"; `src` is "*show me* this." A link is a one-way door; a `src` is a file pulled in and rendered.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do screen readers, search engines, and other tools care about `alt` text?
+
+**A:** Three reasons:
+
+1. **Screen readers**: read the `alt` out loud so blind users know what the image conveys.
+2. **Failed loads**: when an image 404s or fails to download, the browser displays the `alt` text instead — so the page is still understandable.
+3. **Search engines**: index `alt` text to know what's in an image. Good alt = better image-search results and better page-level SEO.
+
+Always include an `alt` attribute. If the image is purely decorative, use `alt=""` (empty, not missing) — that tells assistive tech to skip it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why pair `target="_blank"` with `rel="noopener noreferrer"`?
+
+**A:** When a link opens in a new tab, the new page gets a `window.opener` reference back to the page that opened it. A malicious destination can use that reference to redirect or modify the original tab — a phishing technique called "tabnabbing." `rel="noopener"` severs the reference. `rel="noreferrer"` additionally stops the browser from sending a `Referer` header (useful when you don't want to leak the source URL). Modern browsers now apply `noopener` automatically to `_blank` links, but adding it explicitly keeps you safe on older browsers and is good hygiene.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between an *absolute* URL, a *relative* URL, and a *root-relative* URL?
+
+**A:**
+
+- **Absolute**: `https://example.com/about` — fully qualified, works anywhere. Use for external sites.
+- **Root-relative**: `/about` — starts at the website's root. Works only after deploy; ambiguous locally.
+- **Relative**: `about.html` or `../docs/about.html` — relative to the current file's location. Useful for local development and small static sites; brittle if you move files.
+
+Most modern app frameworks (Next.js, React Router) resolve all URLs as root-relative because they handle routing in JavaScript. Plain static HTML projects use a mix. The browser's DevTools Network tab is the fastest way to debug "I linked X but the browser fetched Y."
+
+</InterviewQuestion>

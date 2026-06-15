@@ -1,0 +1,195 @@
+## What JavaScript is
+
+HTML decides what's on the page. CSS decides what it looks like. JavaScript decides what happens when you *do* something — when you click, type, scroll, hover, submit. It is the third pillar of the web, the layer that turns a beautiful static brochure into a dynamic, interactive app. It's also the language that escaped the browser: JavaScript runs on servers (Node.js), on phones (React Native), and inside this very editor (Wails + Vite). Learning JavaScript opens almost every door in modern software development.
+
+<Analogy>
+JavaScript is **the muscles that make the body move**.
+
+You've built a skeleton (HTML) and dressed it (CSS). The body looks great — but it just stands there. Click a button: nothing happens. Type in a field: the page doesn't respond. Scroll to the bottom: no animation, no lazy-loaded images, no "load more" button. The page is *alive in shape* but not in *motion*.
+
+JavaScript is the muscle layer. It listens for what the user does and decides how the body should respond. Click → run this code. Type → validate the input. Scroll past 80% → fetch the next page of results. Drag → reorder the list. Without JavaScript, the body has form but no agency.
+
+Two parts of the analogy help later:
+
+- **The brain (your code) controls the muscles (the JS runtime).** You don't directly twitch a leg muscle — you decide "walk" and the muscles handle it. Similarly, you write high-level intent (`button.addEventListener("click", save)`) and the JavaScript engine handles the low-level mechanics.
+- **The muscles need the skeleton.** JavaScript without HTML is a language with nothing to manipulate. JavaScript with no rendered page can't do anything visible. The three layers compose: HTML gives the structure, CSS the look, JavaScript the behavior.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the three layers of the web: HTML structure, CSS style, JavaScript behavior"
+  caption="HTML, CSS, JavaScript — the three layers that build every interactive web page. Each is independently learnable; together they make the modern web."
+>
+
+```
+   ┌──────────────────────────────────────────────────┐
+   │ JavaScript      ← BEHAVIOR (the muscles)         │
+   │                   click → save                    │
+   │                   type → validate                 │
+   │                   scroll → load more              │
+   ├──────────────────────────────────────────────────┤
+   │ CSS             ← STYLE (the clothing)           │
+   │                   colors, spacing, fonts          │
+   ├──────────────────────────────────────────────────┤
+   │ HTML            ← STRUCTURE (the skeleton)       │
+   │                   headings, paragraphs, buttons   │
+   └──────────────────────────────────────────────────┘
+
+   They compose top-down: JS reads + changes HTML elements that CSS has styled.
+```
+
+</Illustration>
+
+### A first taste
+
+The simplest JavaScript that does *anything*:
+
+```html
+<button id="greet">Click me</button>
+<p id="output"></p>
+
+<script>
+  document.getElementById("greet").addEventListener("click", () => {
+    document.getElementById("output").textContent = "Hello, world!";
+  });
+</script>
+```
+
+Read it as:
+
+1. "Find the button with id `greet`."
+2. "Listen for clicks on it."
+3. "When clicked, run this function."
+4. "Inside, find the paragraph with id `output` and set its text."
+
+Four steps. That's the JS playbook in miniature: **select an element, listen for an event, do something in response**. Every interactive feature you'll build is some elaboration of those four steps.
+
+### Where JavaScript runs
+
+**In the browser** — the original use case. Every browser ships a JavaScript engine (V8 in Chrome and Edge, JavaScriptCore in Safari, SpiderMonkey in Firefox). Your code downloads as part of the page and runs in a sandbox with access to the DOM and a few APIs (fetch, storage, history).
+
+**On the server** — Node.js (and now Deno, Bun) lets you run JavaScript outside the browser, with access to the filesystem, network sockets, processes, and so on. Most modern backend tooling, even for non-JS apps, runs on Node.
+
+**On mobile** — React Native compiles a React app to a real iOS/Android UI driven by a JavaScript runtime.
+
+**On desktop** — Electron and Wails embed a browser-grade JS runtime in a native window. Your IDE, Slack, Discord, Visual Studio Code, and the very GritLearn app you're reading this in are all JavaScript-powered desktop apps.
+
+The skill compounds: **once you know JavaScript, you can write across the whole stack**.
+
+### The three things every program does
+
+Strip away the syntax and every JavaScript program is doing some combination of:
+
+1. **Read data** — from variables, from the DOM, from a server, from local storage.
+2. **Transform data** — combine, filter, format, calculate.
+3. **Write data somewhere** — update the DOM, save to storage, send to a server, print to the console.
+
+The lessons in this phase teach you each piece in turn:
+
+- **Variables, types, operators** — how to hold and combine data.
+- **Conditionals and loops** — how to make decisions and repeat work.
+- **Functions** — how to package logic for reuse.
+- **Arrays and objects** — the two collection shapes for everything.
+- **DOM** — how to read and change what's on the page.
+- **Events** — how to respond to user actions.
+- **Fetch and async** — how to talk to a server.
+
+By the end of Phase 1 you'll have written hundreds of lines of JavaScript and built a real interactive app. Each lesson stays small; the compounding effect across thirty lessons is what makes you productive.
+
+### What JavaScript is *not*
+
+- **Not Java.** The name was a 1995 marketing decision; the languages are unrelated. Java is to JavaScript what car is to carpet — same first syllable, very different things.
+- **Not exotic.** Modern JS (ES2015 and after) is a pleasant, expressive language with classes, modules, async/await, destructuring, arrow functions. The "bad parts" you've heard about are real but easily avoided.
+- **Not optional.** Even if you end up writing Python, Go, or Rust on the backend, you'll write JavaScript in the browser. There is no "other" frontend language. (TypeScript adds types, but it compiles down to JavaScript and the runtime is the same.)
+
+### A note on syntax
+
+JavaScript syntax looks like C-family languages: curly braces, semicolons (mostly optional), parentheses for function calls. If you've seen Java, C, C#, or Go, the shape will feel familiar. If you haven't seen any of them, you're not behind — the next few lessons teach the syntax from scratch.
+
+<ExampleProject
+  src="static-vs-interactive"
+  title="The same page, with and without JS"
+  description="A page with two versions of a 'show more' feature: one is plain HTML+CSS, one adds three lines of JavaScript. Compare. The CSS version uses a checkbox hack; the JS version is shorter, cleaner, and more flexible. Demonstrates exactly the value the JS layer adds."
+/>
+
+<ExampleProject
+  src="three-pillars"
+  title="HTML + CSS + JS — three files, one page"
+  description="A small page split into three files: structure.html, style.css, behavior.js. The behavior.js is annotated to point at the three-step pattern (select, listen, respond). Lets you see each layer in isolation."
+/>
+
+<Exercise
+  title="Make a counter button"
+  starter={`Create a page with:
+
+  - An <h1> saying "Counter".
+  - A <button> labeled "+1".
+  - A <p id="display"> showing the current count, starting at 0.
+
+In a <script> at the bottom of the body, write JavaScript that:
+
+  - Reads the button and the display element from the DOM.
+  - Keeps a counter variable starting at 0.
+  - Listens for click on the button.
+  - On each click, increments the counter and updates the display.
+
+Open the page. Click the button. The number should go up. You've
+just done all three steps of the JS playbook: select, listen, respond.`}
+>
+
+- The `<script>` tag is at the **bottom of the body** (so the DOM is ready when it runs) OR uses `defer`.
+- The button has a real `<button>` element (not a `<div>`).
+- The counter variable is declared with `let` (we'll cover let vs const next lesson).
+- `addEventListener('click', ...)` is the event-listening pattern, not the older `onclick=` attribute.
+- The display updates via `.textContent = counter` — not via reloading the page.
+- Clicking the button multiple times keeps incrementing (state is preserved between clicks).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the role of JavaScript in a web page, and how does it relate to HTML and CSS?
+
+**A:** JavaScript is the **behavior layer** — it makes the page respond to user actions. HTML gives the page *structure* (what elements exist); CSS gives it *style* (how those elements look); JavaScript gives it *behavior* (what happens when you click, type, scroll, drag). All three layers work together: JS reads from and modifies the HTML elements that CSS has styled. Without JavaScript, a page is static — beautiful but lifeless. JavaScript is what turns a brochure into an app.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Is JavaScript the same as Java?
+
+**A:** No. They share four letters and that's it. **Java** is a strongly-typed compiled language from Sun Microsystems (1995), mainly used for enterprise backends, Android apps, and big distributed systems. **JavaScript** is a dynamic interpreted language from Netscape (also 1995), originally for browser scripting, now used everywhere from frontends to servers (Node.js) to desktop apps (Wails, Electron). The name was a marketing decision in 1995 to ride Java's hype — it has caused confusion for thirty years and counting. When you mean the language that runs in browsers, just say "JavaScript" (or "JS").
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Where can JavaScript run, and why does that matter?
+
+**A:** Four major contexts:
+
+1. **In the browser** — the original use case. Every browser embeds a JS engine (V8 in Chrome, JavaScriptCore in Safari, SpiderMonkey in Firefox). Sandboxed with access to the DOM and web APIs.
+2. **On the server** — **Node.js** (since 2009) gave JS access to the filesystem, network, processes. Bun and Deno are newer alternatives. Most modern backend tooling — webpack, Vite, Prettier, eslint — runs on Node, even if your actual backend is in another language.
+3. **On mobile** — **React Native** compiles a React app to a real iOS/Android UI driven by a JS runtime. **Expo** is the standard build tool.
+4. **On desktop** — **Electron** and **Wails** embed a browser-grade JS runtime in a native window. The Slack, Discord, VS Code, Spotify, and GritLearn desktop apps are all JS-powered.
+
+This matters because **the skill compounds**: learn JavaScript once, work across the entire stack. You can write a backend API in Node, a website that hits it in React, a mobile app in React Native, and a desktop app in Wails — all with the same language and similar idioms.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does "the DOM" mean, and what does JavaScript do with it?
+
+**A:** The **D**ocument **O**bject **M**odel is the **in-memory tree** the browser builds from your HTML. Every `<div>`, `<p>`, `<button>` becomes a JavaScript object with properties (`textContent`, `style`, `dataset`, `children`) and methods (`appendChild`, `addEventListener`, `remove`).
+
+JavaScript uses the DOM to read and modify what's on the page:
+
+- `document.getElementById("save")` — find an element by id.
+- `el.textContent = "Hello"` — change its text.
+- `el.classList.add("highlight")` — add a CSS class.
+- `el.addEventListener("click", fn)` — react to events.
+- `document.createElement("div")` — make a new element.
+
+The DOM is *the bridge between JavaScript and the page*. React, Vue, Svelte, and every other framework ultimately do their work *through* the DOM — they batch and optimize the calls, but underneath, every visible change is a DOM mutation. Most "the page didn't update" bugs trace to a confused mental model of how JS code and DOM state relate. We'll spend a whole lesson on the DOM later in this phase.
+
+</InterviewQuestion>

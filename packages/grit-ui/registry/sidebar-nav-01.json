@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "sidebar-nav-01",
+  "type": "registry:block",
+  "title": "Sidebar Nav",
+  "description": "App sidebar with icon + label nav items (Linear/Notion)",
+  "files": [
+    {
+      "path": "components/grit-ui/sidebar-nav-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/sidebar-nav-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "billing-history-row-01",
+  "type": "registry:block",
+  "title": "Billing History Row",
+  "description": "Invoice row with status badge and PDF download (Stripe)",
+  "files": [
+    {
+      "path": "components/grit-ui/billing-history-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/billing-history-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

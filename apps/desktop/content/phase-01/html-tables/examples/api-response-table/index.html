@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Render JSON as a table</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+      thead th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+      .ok { background: #ecfdf5; color: #047857; }
+      .pending { background: #fffbeb; color: #b45309; }
+      .failed { background: #fef2f2; color: #b91c1c; }
+      pre.json { background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Render JSON as a table</h1>
+    <p>The data lives in a JavaScript array right here. A tiny script reads it and writes table rows.</p>
+
+    <h2>The data</h2>
+    <pre class="json" id="raw"></pre>
+
+    <h2>Rendered</h2>
+    <table>
+      <thead>
+        <tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <script>
+      const orders = [
+        { id: "#1042", customer: "Aisha N.",  total: 89.5,  status: "ok" },
+        { id: "#1043", customer: "Brian K.",  total: 24.0,  status: "pending" },
+        { id: "#1044", customer: "Daniel R.", total: 312.7, status: "ok" },
+        { id: "#1045", customer: "Sandra M.", total: 17.99, status: "failed" },
+      ];
+      document.getElementById("raw").textContent = JSON.stringify(orders, null, 2);
+
+      const rows = document.getElementById("rows");
+      const pill = (s) =>
+        `<span class="pill ${s}">${s.toUpperCase()}</span>`;
+      const fmt = (n) => "$" + n.toFixed(2);
+      rows.innerHTML = orders
+        .map(
+          (o) =>
+            `<tr>
+              <td>${o.id}</td>
+              <td>${o.customer}</td>
+              <td>${fmt(o.total)}</td>
+              <td>${pill(o.status)}</td>
+            </tr>`,
+        )
+        .join("");
+    </script>
+  </body>
+</html>

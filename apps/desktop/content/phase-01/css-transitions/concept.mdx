@@ -1,0 +1,253 @@
+## CSS transitions and animations
+
+A button that snaps instantly between states feels mechanical. The same button that *eases* between states — color, size, position — feels alive. CSS gives you two systems for adding motion: **transitions** (smooth value changes triggered by a state like `:hover`) and **animations** (more elaborate sequences defined with keyframes). They share a lot of vocabulary, but you reach for them at different moments.
+
+<Analogy>
+Transitions are **the way a soft-close drawer glides shut**.
+
+Imagine two filing cabinets. One has slamming drawers — you push them and they bang into the frame, hard, every time. The other has soft-close drawers — you push them and they ease themselves the last inch, decelerating into the slot. Same physical event, completely different feeling. The soft close is doing one thing: *interpolating between two states over time*.
+
+CSS transitions do the same job for values on a webpage. The button's normal color is one state; the hover color is another. Without a transition, the change is a slam — instant. With a transition, the browser interpolates the values over 200ms — a soft close. The element doesn't decide *what* to change, only how to *get there smoothly*.
+
+Animations are the bigger sibling: instead of going from state A to state B, you describe a whole choreographed sequence — "start small, grow, rotate, fade out" — using **keyframes**. Same idea, more steps. Think of a transition as one soft-close motion and an animation as a full dance routine.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a transition between hover states with timing curves: linear, ease, ease-in, ease-out, ease-in-out"
+  caption="A transition interpolates a value over time. The timing function decides whether the change is steady, accelerates, or decelerates."
+>
+
+```
+   value
+     ▲                                          ┌───── ease
+     │                                       ┌──┘
+     │                              ┌──────┘
+     │                  ┌─────────┘
+     │           ┌────┘
+     │      ┌───┘
+     │  ┌─┘
+     └────────────────────────────────────────────────► time
+        start          mid                       end
+
+   linear        steady, robotic
+   ease          starts slow, ends slow (CSS default)
+   ease-in       starts slow, ends fast
+   ease-out      starts fast, ends slow  ← most natural for "things leaving"
+   ease-in-out   slow at both ends
+```
+
+</Illustration>
+
+### Transitions: the three properties you'll use most
+
+```css
+.btn {
+  background: #4763e4;
+  transform: translateY(0);
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.btn:hover {
+  background: #3a53c6;
+  transform: translateY(-2px);
+}
+```
+
+A transition needs three things:
+
+- **What property** to transition (`background`, `transform`, etc.). Use `all` if you mean every animatable property — convenient but slightly wasteful.
+- **Duration** — how long the change takes. 150–250ms is the sweet spot for buttons. Below 100ms feels instant; above 400ms feels sluggish.
+- **Timing function** — `ease`, `ease-out`, `linear`, etc. Decides the *shape* of the curve.
+
+The shorthand `transition: prop duration timing` reads in that order. You can list multiple, comma-separated, when different properties need different timings.
+
+### Which properties can be transitioned
+
+Most numeric, color, and transform properties can be transitioned. **Cannot:** `display`, `gap` (in older browsers), most layout properties that would force a reflow. **Should not:** `height` and `width` (they force layout) — prefer `transform: scale(...)` which only repaints.
+
+The big rule for smooth animation: **prefer `transform` and `opacity`** over `top`/`left`/`width`/`height`. Transforms are GPU-accelerated and don't trigger layout recalculation.
+
+```css
+/* SLOW — triggers layout on every frame */
+.move-bad { transition: left 300ms; }
+.move-bad:hover { left: 20px; }
+
+/* FAST — GPU composite only */
+.move-good { transition: transform 300ms; }
+.move-good:hover { transform: translateX(20px); }
+```
+
+On a slow phone, the second version stays at 60fps where the first one stutters.
+
+### Animations: keyframes for elaborate sequences
+
+```css
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #4763e4;
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+```
+
+Read it as: "from this state, to this state, named `spin`. Apply that animation to `.loader`, running 800ms per cycle, linear, forever."
+
+Keyframes can have intermediate stops by percentage:
+
+```css
+@keyframes bounce {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-20px); }
+  100% { transform: translateY(0); }
+}
+```
+
+The `animation` shorthand is verbose but readable once memorized:
+
+```
+animation: name duration timing delay iterations direction fill-mode play-state
+```
+
+You'll usually only set the first 3–4: `animation: bounce 1s ease-in-out infinite`.
+
+### `prefers-reduced-motion`: respect user preferences
+
+Some users get motion sickness from animated UIs. CSS has a media query for it:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+```
+
+Drop this at the bottom of your stylesheet. Users who've enabled "reduce motion" in their OS settings see your page without the animations — no extra work from you.
+
+### When to use which
+
+- **Transitions** for state changes: hover, focus, "card selected," toggling open/close. The trigger is *something happening*.
+- **Animations** for ongoing motion or first-load reveals: spinners, attention-getting pulses, hero text sliding in.
+
+If you find yourself reaching for an animation for a simple hover, a transition is probably cleaner.
+
+<ExampleProject
+  src="hover-transitions"
+  title="A button that comes alive"
+  description="One button with no transition, one with a 200ms transition. Hover both. The difference is the difference between a banged-shut drawer and a soft-close drawer. The same button is then varied with each timing function so you can feel the difference between ease-out and ease-in."
+/>
+
+<ExampleProject
+  src="keyframe-spinner"
+  title="A spinner, three ways"
+  description="Three loading indicators: a rotating border-circle, a pulsing dot, and a three-dot wave. Each uses @keyframes. The CSS is short. The motion is what makes a 'loading' state feel respectful instead of broken."
+/>
+
+<Exercise
+  title="Animate your About page header"
+  starter={`Take the About page and add a tasteful entrance animation:
+
+  - When the page loads, the h1 fades in and slides up from 10px
+    below its final position.
+  - Each <li> in your list fades in with a slight delay between
+    them — 100ms staggered, so they cascade in one by one.
+  - Add a hover transition to one element of your choice (a link,
+    the title, the photo). It should be subtle — color shift +
+    small lift, around 200ms.
+
+Wrap the whole thing in a @media (prefers-reduced-motion: reduce)
+override at the bottom that disables every transition and
+animation. Toggle "Reduce motion" in your OS to confirm.`}
+>
+
+- The h1 uses `@keyframes` with `opacity: 0; transform: translateY(10px);` going to `opacity: 1; transform: none;`.
+- Each `<li>` uses the same animation with `animation-delay` set in increments (e.g. `:nth-child(1) { delay: 0ms }`, `:nth-child(2) { delay: 100ms }`).
+- The hover transition uses `transform` not `top`/`left`.
+- Transition durations are between 150–300ms — not too fast, not too slow.
+- The `prefers-reduced-motion` block at the bottom uses `!important` to override every duration.
+- Toggling OS-level "reduce motion" turns the animations off cleanly.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a CSS transition and a CSS animation?
+
+**A:**
+
+- A **transition** smoothly interpolates between *two* states — the element's current state and a new one triggered by something like `:hover` or a class change. You only describe the *end* state; CSS handles the interpolation. Reaches for `transition: property duration timing`.
+- An **animation** runs a longer sequence defined by **keyframes** — `from`, `to`, or percentage stops. It can repeat, reverse, and run on its own without any trigger. Reaches for `@keyframes` + `animation: name duration timing`.
+
+Use a transition for state changes (hover, focus, toggle). Use an animation for ongoing or one-shot sequences (spinners, hero reveals).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why prefer `transform` and `opacity` for animations over `width`, `height`, `top`, `left`?
+
+**A:** Performance. Most browsers handle properties in three categories:
+
+- **Layout** properties (`width`, `height`, `top`, `left`, `margin`) force the browser to **recalculate the page's layout** — expensive.
+- **Paint** properties (`color`, `background`) force a **repaint** — moderate.
+- **Composite** properties (`transform`, `opacity`) only need a **GPU composite** — cheap.
+
+Animating `transform` and `opacity` runs on the GPU and can hold 60fps even on a slow phone. Animating `width` or `top` runs on the CPU and stutters as soon as anything else is happening on the page. The visible result is often identical — `transform: translateX(20px)` looks the same as `left: 20px` — but only one is smooth.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is the `prefers-reduced-motion` media query, and why should you support it?
+
+**A:** It's a CSS media query that matches when the user has enabled "reduce motion" in their OS accessibility settings (macOS, iOS, Windows, Android all expose this). Some users get motion sickness or anxiety from animated UIs; some find it distracting; some just prefer a calmer interface.
+
+The recommended pattern is a block at the end of your stylesheet:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+It makes all animations and transitions instantaneous (effectively off) without you having to disable each one individually. Cheap to add, respects user preferences. WCAG 2.1 calls it out as a recommended accessibility practice.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Walk me through the `animation` shorthand and what each value means.
+
+**A:** The full shorthand reads:
+
+```css
+animation: name duration timing-function delay iteration-count direction fill-mode play-state;
+```
+
+Most commonly you'll set:
+
+- **name** — the keyframes name (`spin`, `fadeIn`).
+- **duration** — how long one cycle takes (`800ms`, `1s`).
+- **timing-function** — `linear`, `ease`, `ease-in-out`, etc.
+- **delay** — wait before the first cycle starts (`0s`, `200ms`).
+- **iteration-count** — how many times to run; `infinite` for forever.
+- **direction** — `normal`, `reverse`, `alternate` (forward then back).
+- **fill-mode** — what state to hold *before/after* the animation. `forwards` keeps the final keyframe values; `backwards` applies the first keyframe during the delay.
+
+A real example: `animation: fadeIn 400ms ease-out 100ms 1 normal forwards` — fade in over 400ms with ease-out, wait 100ms before starting, run once, stay at the final state after.
+
+You can also split into long-hand properties (`animation-delay`, `animation-fill-mode`) for clarity in big stylesheets.
+
+</InterviewQuestion>

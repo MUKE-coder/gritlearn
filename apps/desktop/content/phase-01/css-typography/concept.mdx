@@ -1,0 +1,230 @@
+## CSS typography and fonts
+
+Typography is the single biggest lever you have for making a page feel good. Same content, two type treatments — one looks like a wedding invitation, the other like a parking ticket. Modern CSS gives you fine control over font family, size, weight, line height, letter spacing, and the all-important *vertical rhythm* between elements. Get five or six of these dials right and the rest of your design works around them.
+
+<Analogy>
+Typography is **the voice that reads the page out loud**.
+
+Think about the difference between hearing the same paragraph read by a news anchor, by a child, by a sleepy uncle at Thanksgiving. The words are identical. The *voice* changes everything — speed, pitch, the gap between sentences, the emphasis on certain syllables.
+
+Type does the same job in print. A page set in a stately serif at 18pt with generous line spacing reads in your head like a thoughtful, careful narrator. The same page in a tight condensed sans-serif at 12pt reads like a hurried, impatient one. Heavy bold all over feels like shouting; thin uppercase letterforms feel like a whisper.
+
+In CSS:
+
+- **`font-family`** is which voice (serif, sans-serif, monospace, a specific named font).
+- **`font-size`** and **`font-weight`** are how loud and how strong.
+- **`line-height`** is how slow the narrator speaks — bigger line-height, more space to breathe.
+- **`letter-spacing`** and **`text-align`** shape the cadence.
+
+Good typography isn't decoration. It's pacing. It tells the reader how to feel about every word before they read a single one.
+</Analogy>
+
+<Illustration
+  alt="Diagram of three pieces of text shown with different font-family, size, weight, and line-height settings, each evoking a different feeling"
+  caption="Five dials — family, size, weight, line-height, letter-spacing — give the page a voice. Pick a few, set them deliberately, and the page sings."
+>
+
+```
+   FAMILY          SIZE        WEIGHT     LINE-HEIGHT    FEELING
+   ──────          ────        ──────     ───────────    ───────
+   serif         18 px         400        1.6            Calm, careful
+   sans-serif    14 px         500        1.4            Tight, modern
+   monospace     13 px         400        1.5            Technical
+   condensed     32 px         700        1.0            Loud, urgent
+```
+
+</Illustration>
+
+### Font family: pick a stack, not a single name
+
+```css
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+```
+
+CSS reads font-family left to right and uses the first one available on the user's system. That list above tries Inter first; if Inter isn't installed (because the page didn't load it), it tries the OS's system font (`-apple-system` on macOS, `Segoe UI` on Windows), and finally falls back to any sans-serif.
+
+**Generic family names** at the end are mandatory: `serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`. The browser uses one of those as a last-resort guarantee that *something* renders.
+
+**Quote names with spaces:** `"Helvetica Neue"`, `"PT Sans"`. Single-word names can go without quotes but quoting them always is fine and consistent.
+
+### System font stacks
+
+Loading a custom font costs bandwidth and creates a flash of unstyled text before it arrives. For utility apps and admin dashboards, many sites ship the **system font stack** — Apple's San Francisco on macOS, Segoe UI on Windows, Roboto on Android. They look great everywhere and load instantly:
+
+```css
+font-family:
+  system-ui,
+  -apple-system,
+  "Segoe UI",
+  Roboto,
+  "Helvetica Neue",
+  Arial,
+  sans-serif;
+```
+
+GitHub, Medium, and most modern admin panels use a variant of this.
+
+### Font size: prefer `rem`, build a scale
+
+```css
+:root { font-size: 16px; }   /* root size; 1rem = 16px */
+
+h1 { font-size: 2.25rem; }   /* 36px */
+h2 { font-size: 1.875rem; }  /* 30px */
+h3 { font-size: 1.5rem; }    /* 24px */
+h4 { font-size: 1.25rem; }   /* 20px */
+p  { font-size: 1rem; }      /* 16px */
+small { font-size: 0.875rem; } /* 14px */
+```
+
+That's a **type scale** — a deliberate set of sizes you reuse instead of typing arbitrary pixel values everywhere. Tailwind, Material, and most design systems publish one. Stick to your scale and your headings feel like they belong to the same family.
+
+### Line height: the unsung hero
+
+`line-height` is the vertical space between lines of text. It's **unitless** by convention — `line-height: 1.5` means "1.5× the current font size."
+
+- **1.0** — cramped. Headlines only.
+- **1.2 – 1.3** — tight. Headings, captions.
+- **1.4 – 1.5** — comfortable. UI body text.
+- **1.6 – 1.7** — generous. Long-form reading (this very lesson is around 1.7).
+
+The number-one fix for "this paragraph looks dense" is bumping `line-height` from 1.4 to 1.6.
+
+### Weight and style
+
+- **`font-weight`** ranges from 100 (thin) to 900 (black), in increments of 100. The familiar names map to numbers: normal=400, bold=700.
+- **`font-style: italic`** for italicized text. Most fonts ship a real italic; some only have a "fake italic" rendered by slanting the regular face — which looks worse.
+
+### Letter spacing and text transform
+
+```css
+.label {
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+```
+
+That's the "small uppercase label" that's everywhere on modern dashboards. Uppercase text reads worse than mixed-case at long lengths, but for one-or-two-word labels it works beautifully — provided you add **`letter-spacing`** of 0.05em to 0.1em so the letters have room to breathe.
+
+### Loading a web font
+
+Two ways:
+
+#### 1. Google Fonts (or any CDN) `<link>`
+
+```html
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+```
+
+Then `font-family: "Inter", sans-serif;` and you're styled.
+
+#### 2. `@font-face` for self-hosted files
+
+```css
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+```
+
+Slower setup, but no third-party dependency and better performance because the browser can load the file alongside everything else. Most production sites self-host.
+
+**`font-display: swap`** is important — it tells the browser to show fallback text immediately and swap in the custom font when it loads, instead of blanking the text until then. Saves a Lighthouse "flash of invisible text" penalty.
+
+<ExampleProject
+  src="typography-scale"
+  title="A complete type scale in action"
+  description="One page showing every step of a 1.25× type scale (small, base, lg, xl, 2xl, ... 5xl) on real headlines and body text. Line-height, letter-spacing, and weights are baked in. Edit the variables at the top and watch every level retune."
+/>
+
+<ExampleProject
+  src="google-fonts"
+  title="Three font families compared"
+  description="The same content rendered with Inter (sans-serif), Lora (serif), and JetBrains Mono. Three voices, same words. Loaded from Google Fonts with proper preconnect and font-display: swap to avoid the flash of invisible text."
+/>
+
+<Exercise
+  title="Build a calm type scale"
+  starter={`Create a stylesheet that defines:
+
+  - A CSS variable --font-base of 16px.
+  - Five type-scale variables: --text-sm, --text-base, --text-lg,
+    --text-xl, --text-2xl. Each step is 1.25× larger than the
+    previous (you can use calc() or just multiply by hand).
+  - A line-height of 1.6 for body text, 1.2 for headings.
+  - A font-family stack starting with system-ui.
+
+Then write a page that uses each size on a real element — small
+captions at --text-sm, body paragraphs at --text-base, h3s at
+--text-lg, h2s at --text-xl, h1 at --text-2xl. Confirm the page
+feels like a typography sample, not a CSS test.`}
+>
+
+- Five `--text-*` variables are declared on `:root`.
+- Each step is roughly 1.25× the previous (16, 20, 25, 31.25, 39).
+- Headings use the larger variables; body text uses `--text-base`.
+- `line-height` is set differently for body (1.6) and headings (1.2).
+- The `font-family` stack starts with `system-ui` or `-apple-system`.
+- Looking at the page, the hierarchy is clear: you can tell which thing is the heading at a glance.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does `font-family` accept a comma-separated list?
+
+**A:** It's a **fallback chain**. The browser tries the first name on the user's system; if it's not installed, it tries the next; and so on. The list always ends with a **generic family** like `sans-serif` or `serif` so *something* always renders. Example:
+
+```css
+font-family: "Inter", -apple-system, "Segoe UI", sans-serif;
+```
+
+The page tries Inter (probably from a webfont), then macOS's San Francisco, then Windows' Segoe UI, then any sans-serif as a last resort. Without the generic at the end, the user sees the browser's default font (usually Times New Roman) which looks wrong.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a reasonable `line-height` for body text, and why?
+
+**A:** **1.5 to 1.7** for reading body text. Lower (1.2 – 1.3) for headings where dense type looks tighter; higher (1.7 – 1.9) for long-form articles where you want generous breathing room. The number is unitless on purpose: `line-height: 1.5` means "1.5× the current font size," so it scales correctly with `font-size` everywhere on the page. Using a fixed `px` line-height (`line-height: 24px`) breaks the moment any parent changes font size.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `font-display: swap` do, and why is it important?
+
+**A:** When the browser loads a custom font, there's a delay between the page rendering and the font being ready. `font-display` controls what happens in between:
+
+- **`swap`** — show fallback text immediately, swap to the real font when it arrives. User can read content during the transition.
+- **`block`** — hide the text for up to 3 seconds while waiting for the font, then show fallback if it still hasn't arrived. Creates a "flash of invisible text" (FOIT).
+- **`fallback`** — short blank period, then fallback; if the font arrives within 3s, swap.
+- **`optional`** — use the font only if it's already cached. Best performance; no swap visible to user.
+
+`swap` is the modern default for body fonts because it prioritizes content over visual perfection. Lighthouse penalizes pages without it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a "type scale" and why use one?
+
+**A:** A type scale is a small, pre-determined set of font sizes (e.g. 12, 14, 16, 20, 24, 32, 48 px) that you use everywhere instead of picking arbitrary sizes per element. It's analogous to a musical scale — sticking to seven notes makes the result harmonious; using random pitches sounds wrong.
+
+Two big wins:
+
+1. **Visual rhythm.** Headings, captions, and body text feel like they belong to the same family because their sizes relate proportionally.
+2. **Maintainability.** "Make every heading slightly bigger" is one edit to the scale; not a hunt-and-replace across every component.
+
+Common scales use a ratio of 1.125 (subtle), 1.25 (balanced), or 1.5 (dramatic) between steps. Tailwind ships a scale; Material Design ships a scale; the Modular Scale website helps you build one. Pick or build a scale at the start of a project and use it forever.
+
+</InterviewQuestion>

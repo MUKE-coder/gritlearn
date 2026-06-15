@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "shipping-estimate-01",
+  "type": "registry:block",
+  "title": "Shipping Estimate",
+  "description": "Shipping option selector with carrier and delivery estimate",
+  "files": [
+    {
+      "path": "components/grit-ui/shipping-estimate-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/shipping-estimate-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "command-palette-shell-01",
+  "type": "registry:block",
+  "title": "Command Palette Shell",
+  "description": "Full command palette modal with search, groups, and keyboard shortcuts",
+  "files": [
+    {
+      "path": "components/grit-ui/command-palette-shell-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/command-palette-shell-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

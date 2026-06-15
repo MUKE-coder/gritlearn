@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "breadcrumb-01",
+  "type": "registry:block",
+  "title": "Breadcrumb",
+  "description": "Breadcrumb navigation with chevron separators (Vercel)",
+  "files": [
+    {
+      "path": "components/grit-ui/breadcrumb-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/breadcrumb-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A blog post — with semantic landmarks</title>
+    <style>
+      :root { --bg: #fff; --fg: #111827; --muted: #6b7280; --line: #e5e7eb; --accent: #4763e4; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; color: var(--fg); background: var(--bg); line-height: 1.6; }
+      header.site { border-bottom: 1px solid var(--line); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+      header.site .logo { font-weight: 700; letter-spacing: -0.02em; }
+      nav.site ul { list-style: none; display: flex; gap: 18px; padding: 0; margin: 0; }
+      nav.site a { color: var(--muted); text-decoration: none; }
+      nav.site a:hover { color: var(--fg); }
+      main { display: grid; grid-template-columns: 1fr 280px; gap: 40px; max-width: 960px; margin: 30px auto; padding: 0 24px; }
+      article header { margin-bottom: 16px; }
+      article h1 { margin: 0; font-size: 32px; }
+      article header .meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      article footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+      aside { background: #f9fafb; border: 1px solid var(--line); border-radius: 10px; padding: 16px; height: fit-content; position: sticky; top: 16px; }
+      aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+      aside ul { padding-left: 18px; margin: 0; }
+      aside li { margin: 6px 0; }
+      footer.site { border-top: 1px solid var(--line); padding: 16px 24px; text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
+      @media (max-width: 720px) { main { grid-template-columns: 1fr; } aside { position: static; } }
+    </style>
+  </head>
+  <body>
+    <header class="site">
+      <div class="logo">GritLearn Notes</div>
+      <nav class="site" aria-label="Primary">
+        <ul>
+          <li><a href="#">Home</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">About</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <header>
+          <h1>Why analogies stick</h1>
+          <div class="meta">
+            By Jane Doe · <time datetime="2026-03-12">March 12, 2026</time>
+          </div>
+        </header>
+
+        <p>I used to think analogies were a soft skill — a nice-to-have for explaining things to friends at parties. Then I started teaching code, and I realized analogies are the entire game.</p>
+        <p>When I explain closures with words alone, students nod. When I say "closures are a backpack the function carries with it," they laugh, and a week later they still remember.</p>
+
+        <section>
+          <h2>The mechanism</h2>
+          <p>An analogy gives an abstract idea a <em>physical handle</em>. Once you have something to grab, you can move it around in your head. That's all "understanding" really is.</p>
+        </section>
+
+        <section>
+          <h2>Where they go wrong</h2>
+          <p>An analogy can also overpromise. If you tell a beginner "JavaScript objects are like JavaScript classes," you've told them a lie they'll have to unlearn. Pick the analogy carefully — and tell them where it leaks.</p>
+        </section>
+
+        <footer>
+          Filed under <a href="#">teaching</a>, <a href="#">writing</a>.
+        </footer>
+      </article>
+
+      <aside aria-label="Related articles">
+        <h2>Related</h2>
+        <ul>
+          <li><a href="#">The first ten lessons</a></li>
+          <li><a href="#">What "syntax" really means</a></li>
+          <li><a href="#">Boredom is a deeper problem than difficulty</a></li>
+        </ul>
+      </aside>
+    </main>
+
+    <footer class="site">
+      © 2026 GritLearn Notes · <a href="#">RSS</a>
+    </footer>
+  </body>
+</html>

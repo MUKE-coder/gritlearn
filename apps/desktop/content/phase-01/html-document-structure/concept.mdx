@@ -1,0 +1,136 @@
+## HTML document structure
+
+A few minutes ago you saw the smallest HTML page that runs — just a heading and a paragraph. Browsers are forgiving, so that "works." But every *real* HTML file follows a stricter shape that gives the browser important information up front: which version of HTML you're using, what character encoding to expect, what to put in the browser tab, how the page should behave on mobile. That shape is the *document structure*, and you'll type it at the top of every HTML file for the rest of your career.
+
+<Analogy>
+A full HTML page is **the structure of a formal letter**.
+
+Every formal letter you've ever written has the same shape: an envelope on the outside (sender, recipient, postage), a sealed letter inside, and within the letter, two halves — the **header** (date, salutation, "Re:") and the **body** (the actual message). You don't get to skip any of those parts. The envelope tells the post office how to route the letter. The header tells the reader what's about to happen. The body is the content.
+
+A web page is exactly the same:
+
+- `<!DOCTYPE html>` is the envelope's postage stamp — it tells the browser "I'm modern HTML5, here's how to read me."
+- `<html>` is the letter inside the envelope.
+- `<head>` is the header section — invisible to the reader, but tells them what to expect: the title, the encoding, the styles to load.
+- `<body>` is the visible message — every heading, paragraph, image, button, the lot.
+
+Once you know the shape, you stop having to think about it, the same way you stop having to think about how to address an envelope.
+</Analogy>
+
+<Illustration
+  alt="Diagram of HTML document structure showing DOCTYPE, html element wrapping head and body"
+  caption="Every HTML file has the same outer skeleton. The browser uses the head to set up the page; the body is what the user sees."
+>
+
+```
+   <!DOCTYPE html>                   ← envelope: "I'm modern HTML5"
+   <html lang="en">                  ← the letter
+     <head>                          ← invisible header
+       <meta charset="utf-8">        ← which character set
+       <meta name="viewport" ...>    ← how to scale on mobile
+       <title>My Page</title>        ← shows in browser tab
+       <link rel="stylesheet" ...>   ← which CSS files to load
+     </head>
+     <body>                          ← visible content starts here
+       <h1>Hello</h1>
+       <p>This is the message.</p>
+     </body>
+   </html>
+```
+
+</Illustration>
+
+### Walking through the parts
+
+**`<!DOCTYPE html>`** — pronounced "doctype HTML". This isn't really a tag, it's a one-line declaration that tells the browser "use modern HTML5 rules to parse this file." It must be the very first thing in the file, before even a blank line. If you forget it, browsers fall back to "quirks mode," an old-internet compatibility mode that breaks a lot of CSS in subtle ways.
+
+**`<html lang="en">`** — the root element. Everything else lives inside it. The `lang="en"` attribute tells screen readers and search engines what language the page is in (use `"es"` for Spanish, `"fr"` for French, and so on). It's a small thing that helps accessibility a lot.
+
+**`<head>`** — invisible to the visitor. The browser uses it to set up the page before rendering. Common elements inside `<head>`:
+
+- `<meta charset="utf-8">` — say which character encoding you're using. UTF-8 covers almost every alphabet on Earth and is the modern default. Without it, accented characters and emoji can render as `Ã©` or `?`.
+- `<meta name="viewport" content="width=device-width, initial-scale=1">` — tell mobile browsers "render at the device's actual width and don't auto-zoom." Without it, your page on a phone looks like a desktop page squashed into 360px.
+- `<title>...</title>` — the text that shows in the browser tab and in search-engine results. Pick something specific; "Untitled" is a sign of an unfinished page.
+- `<link rel="stylesheet" href="style.css">` — load a CSS file. We'll meet these properly when we get to CSS.
+- `<script src="app.js" defer></script>` — load a JavaScript file. Same — we'll come back to this.
+
+**`<body>`** — everything the visitor actually sees. All your headings, paragraphs, images, buttons live here. The body's content is what gets parsed into the visible DOM tree.
+
+### Why this shape and not some other?
+
+You'll see this structure in *every single* HTML file on the web. Why is there a separate `<head>` and `<body>` at all? Because the browser needs information before it can draw the page. The character encoding has to be known before any text is rendered. The viewport meta needs to apply before layout starts. Stylesheets in `<head>` get downloaded and parsed before the body is rendered so the page doesn't flash unstyled content at you. Putting setup metadata in one place keeps the visible content clean.
+
+### What "boilerplate" really means
+
+When people say "HTML boilerplate," they mean the seven or eight lines that every page starts with — the doctype, html, head, meta tags, title, and the opening body tag. Type it from memory often enough and your fingers will do it without your brain. (Or use your editor's snippet feature — both work.)
+
+<ExampleProject
+  src="boilerplate"
+  title="The boilerplate, annotated"
+  description="A complete HTML5 file with every line commented to explain what it does and what would happen if you removed it. Read it top-to-bottom, then delete pieces one at a time and reload to see the consequences."
+/>
+
+<ExampleProject
+  src="bad-encoding"
+  title="What happens without UTF-8"
+  description="The same page with two versions side-by-side: one declares UTF-8, one declares latin1. Accented words and emoji break in the second. Demonstrates why the charset meta tag matters."
+/>
+
+<Exercise
+  title="Wrap your About page in proper structure"
+  starter={`Take the About page you built in the last lesson and wrap it
+in a full HTML5 boilerplate. Add:
+  - A doctype declaration.
+  - <html lang="en">
+  - <head> with charset, viewport, and a meaningful <title>.
+  - <body> containing your existing heading, paragraph, list, and rule.
+
+Open the result. The page should look identical to before, but
+the tab now shows your title.`}
+>
+
+- The file starts with `<!DOCTYPE html>` on line 1.
+- `<html>` has a `lang` attribute.
+- `<head>` contains `<meta charset="utf-8">`, the viewport meta tag, and a `<title>`.
+- The `<title>` is descriptive (e.g. "About — Jane Doe"), not "Untitled".
+- The visible content (`<h1>`, `<p>`, `<ul>`, `<hr>`) is inside `<body>`, not `<head>`.
+- Tags close in reverse order: `</body></html>` are the last two lines.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `<head>` and `<body>` in an HTML document?
+
+**A:** `<head>` contains metadata about the page — character encoding, the title that shows in the browser tab, links to stylesheets and scripts, the viewport meta tag, and so on. It's invisible to the user. `<body>` contains everything the user actually sees — headings, paragraphs, images, forms. The browser uses the `<head>` to set up the page (load styles, configure viewport) *before* rendering the `<body>`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does the `<!DOCTYPE html>` declaration do, and what happens if you leave it out?
+
+**A:** It tells the browser to use modern HTML5 parsing rules. Without it, browsers fall back to "quirks mode" — an old compatibility mode that emulates 1990s-era browsers. In quirks mode many CSS layout rules behave differently (notably the box model), so omitting the doctype is a great way to make perfectly good CSS misbehave in mysterious ways. Modern HTML5 doctype is `<!DOCTYPE html>` with no extra version info, by design — it's the minimum the browser needs.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do mobile-friendly pages include `<meta name="viewport" content="width=device-width, initial-scale=1">`?
+
+**A:** By default, mobile browsers (especially older Safari and Chrome) assume a page was designed for desktop. They render it at a virtual width of about 980px and then *scale that down* to fit the phone screen — which makes text tiny and forces the user to pinch-zoom. The viewport meta tag tells the browser "actually, render at the device's real width and start at 1x zoom." That single line is the difference between a page that looks usable on a phone and one that doesn't. Frameworks like Tailwind and Bootstrap also rely on it for their responsive utilities to behave correctly.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Where should `<script>` tags go — in the head or at the bottom of the body? Why?
+
+**A:** Depends on the script. By default, a `<script src="...">` blocks HTML parsing while it downloads and executes — if you put it in `<head>`, the page can't render until the script is done. Two solutions:
+
+- **`<script src="..." defer></script>`** in `<head>`. The script downloads in parallel with HTML parsing but executes only *after* the HTML is fully parsed. This is the modern preferred choice for most app code.
+- **`<script src="..."></script>`** just before `</body>`. By the time the browser reaches the tag, the body is fully parsed, so the script can immediately query the DOM. This was the standard advice before `defer` was widely supported and is still a valid pattern.
+
+For analytics or instrumentation that needs to run *before* the page paints, you sometimes want a synchronous script in `<head>` — but that's a special case.
+
+</InterviewQuestion>

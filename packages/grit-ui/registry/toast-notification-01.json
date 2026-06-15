@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "toast-notification-01",
+  "type": "registry:block",
+  "title": "Toast Notification",
+  "description": "Toast notification with variants and dismiss (Sonner-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/toast-notification-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/toast-notification-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

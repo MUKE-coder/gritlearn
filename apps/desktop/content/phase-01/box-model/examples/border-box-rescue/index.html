@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>content-box vs border-box</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+      .ruler { background: linear-gradient(to right, transparent 99px, #d1d5db 99px, #d1d5db 100px) 0/100px 100%; height: 8px; margin-bottom: 6px; position: relative; }
+      .ruler::after { content: "300px →"; position: absolute; top: 12px; left: 0; font-size: 11px; color: #6b7280; }
+
+      .card {
+        width: 300px;
+        padding: 20px;
+        border: 4px solid #4763e4;
+        background: #eef2ff;
+        margin-top: 0;
+      }
+      .card.content-box { box-sizing: content-box; }
+      .card.border-box  { box-sizing: border-box; }
+
+      .pane h2 { margin: 0 0 8px; font-size: 16px; }
+      .note { font-size: 12px; color: #555; margin-top: 6px; font-family: ui-monospace, monospace; }
+      .small { font-size: 13px; color: #4b5563; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <h1>content-box vs border-box</h1>
+    <p>Both cards declare <code>width: 300px; padding: 20px; border: 4px solid;</code>. Only the box-sizing differs. The grey ruler above each card is exactly 300px wide so you can see the difference.</p>
+
+    <div class="row">
+      <div class="pane">
+        <h2>box-sizing: content-box (default)</h2>
+        <div class="ruler"></div>
+        <div class="card content-box">
+          <div class="small">Renders at <strong>348px</strong> — width 300 + left/right padding (40) + left/right border (8).</div>
+        </div>
+        <div class="note">Card is wider than the 300px ruler.</div>
+      </div>
+
+      <div class="pane">
+        <h2>box-sizing: border-box (recommended)</h2>
+        <div class="ruler"></div>
+        <div class="card border-box">
+          <div class="small">Renders at exactly <strong>300px</strong> — padding and border are subtracted from the width.</div>
+        </div>
+        <div class="note">Card fits inside the 300px ruler.</div>
+      </div>
+    </div>
+
+    <hr style="margin: 40px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+
+    <p>
+      Set <code>* { box-sizing: border-box; }</code> at the top of every stylesheet you write. Every CSS framework already does this — it's the single most useful one-liner in CSS.
+    </p>
+  </body>
+</html>

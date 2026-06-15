@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>See requests in DevTools</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #0e1116;
+        color: #e6edf3;
+        max-width: 720px;
+        margin: 40px auto;
+        padding: 0 24px;
+        line-height: 1.6;
+      }
+      h1 { margin: 0 0 12px; }
+      ol li { margin: 8px 0; }
+      kbd {
+        background: #1c2230;
+        border: 1px solid #2b3343;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-family: ui-monospace, "JetBrains Mono", monospace;
+        font-size: 13px;
+      }
+      img { max-width: 100%; border: 1px solid #2b3343; border-radius: 8px; }
+      .badge {
+        display: inline-block;
+        background: #6e8bff20;
+        color: #6e8bff;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>See it for yourself <span class="badge">2 min</span></h1>
+    <p>
+      Looking at requests is the single most underrated skill in web dev.
+      Once you can read the Network tab, half of all "why is this broken?"
+      stops being a mystery.
+    </p>
+    <ol>
+      <li>Open this page's DevTools: <kbd>F12</kbd> (Windows / Linux) or <kbd>⌘⌥I</kbd> (Mac).</li>
+      <li>Click the <strong>Network</strong> tab at the top of DevTools.</li>
+      <li>Press <kbd>Ctrl/⌘ + R</kbd> to reload this page.</li>
+      <li>
+        Watch the list fill. The first row is the HTML you're reading;
+        below it are the rows for every image, font, and script the
+        browser fetched <em>because</em> of that HTML.
+      </li>
+      <li>Click any row → look at the <strong>Headers</strong>, <strong>Response</strong>, and <strong>Timing</strong> sub-tabs.</li>
+    </ol>
+    <p>
+      Notice the four-beat dance is laid bare here:
+      <strong>Headers</strong> shows the request,
+      <strong>Response</strong> shows what came back, and
+      <strong>Timing</strong> shows how long each step took.
+      Same pattern, every request, forever.
+    </p>
+  </body>
+</html>

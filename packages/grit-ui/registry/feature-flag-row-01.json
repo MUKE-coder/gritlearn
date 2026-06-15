@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "feature-flag-row-01",
+  "type": "registry:block",
+  "title": "Feature Flag Row",
+  "description": "Feature flag toggle row with key and rollout (LaunchDarkly)",
+  "files": [
+    {
+      "path": "components/grit-ui/feature-flag-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/feature-flag-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "notification-item-01",
+  "type": "registry:block",
+  "title": "Notification Item",
+  "description": "Notification row with unread dot and mark-read (Linear-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/notification-item-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/notification-item-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

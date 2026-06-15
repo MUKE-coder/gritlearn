@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "data-table-row-01",
+  "type": "registry:block",
+  "title": "Data Table Row",
+  "description": "Table row with checkbox, status badge, and actions",
+  "files": [
+    {
+      "path": "components/grit-ui/data-table-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/data-table-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

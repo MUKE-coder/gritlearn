@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A signup form</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 420px; margin: 60px auto; padding: 0 20px; line-height: 1.6; }
+      form { display: flex; flex-direction: column; gap: 12px; }
+      label { font-size: 13px; color: #555; }
+      input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+      input:focus { outline: 2px solid #4763e4; border-color: #4763e4; }
+      .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+      .checkbox-row input { width: auto; }
+      button { padding: 12px; background: #4763e4; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+      button:hover { background: #3a53c6; }
+      .output { margin-top: 30px; padding: 16px; background: #f3f4f6; border-radius: 8px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+      .output.empty { color: #888; }
+    </style>
+  </head>
+  <body>
+    <h1>Sign up</h1>
+    <p style="font-size: 13px; color: #666;">
+      We don't have a server here. On submit, the form's data is shown below
+      instead of being POSTed somewhere.
+    </p>
+
+    <form id="signup">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required placeholder="you@example.com" />
+
+      <label for="password">Password (min 8 chars)</label>
+      <input id="password" name="password" type="password" required minlength="8" />
+
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" name="confirm" type="password" required minlength="8" />
+
+      <div class="checkbox-row">
+        <input id="terms" name="terms" type="checkbox" required />
+        <label for="terms">I agree to the terms</label>
+      </div>
+
+      <button type="submit">Create account</button>
+    </form>
+
+    <div id="output" class="output empty">Submission payload will appear here…</div>
+
+    <script>
+      // Intercept the form submit so we can show what *would* have been sent
+      // to the server instead of actually POSTing to a nonexistent URL.
+      document.getElementById("signup").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const data = Object.fromEntries(new FormData(form).entries());
+        const out = document.getElementById("output");
+        out.classList.remove("empty");
+        out.textContent = JSON.stringify(data, null, 2);
+      });
+    </script>
+  </body>
+</html>

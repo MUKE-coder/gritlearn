@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A blog post — entirely with divs</title>
+    <style>
+      :root { --bg: #fff; --fg: #111827; --muted: #6b7280; --line: #e5e7eb; --accent: #4763e4; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; color: var(--fg); background: var(--bg); line-height: 1.6; }
+      .site-header { border-bottom: 1px solid var(--line); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+      .logo { font-weight: 700; letter-spacing: -0.02em; }
+      .menu { list-style: none; display: flex; gap: 18px; padding: 0; margin: 0; }
+      .menu a { color: var(--muted); text-decoration: none; }
+      .menu a:hover { color: var(--fg); }
+      .layout { display: grid; grid-template-columns: 1fr 280px; gap: 40px; max-width: 960px; margin: 30px auto; padding: 0 24px; }
+      .post-head { margin-bottom: 16px; }
+      .title { margin: 0; font-size: 32px; font-weight: 700; }
+      .meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      .post-foot { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+      .sidebar { background: #f9fafb; border: 1px solid var(--line); border-radius: 10px; padding: 16px; height: fit-content; position: sticky; top: 16px; }
+      .sidebar-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+      .sidebar-list { padding-left: 18px; margin: 0; list-style: disc; }
+      .sidebar-list li { margin: 6px 0; }
+      .site-footer { border-top: 1px solid var(--line); padding: 16px 24px; text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
+      @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { position: static; } }
+    </style>
+  </head>
+  <body>
+    <div class="site-header">
+      <div class="logo">GritLearn Notes</div>
+      <div>
+        <ul class="menu">
+          <li><a href="#">Home</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">About</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="post">
+        <div class="post-head">
+          <div class="title">Why analogies stick</div>
+          <div class="meta">By Jane Doe · March 12, 2026</div>
+        </div>
+
+        <p>I used to think analogies were a soft skill — a nice-to-have for explaining things to friends at parties. Then I started teaching code, and I realized analogies are the entire game.</p>
+        <p>When I explain closures with words alone, students nod. When I say "closures are a backpack the function carries with it," they laugh, and a week later they still remember.</p>
+
+        <div class="sub">
+          <div class="sub-title" style="font-size: 22px; font-weight: 700; margin-top: 16px;">The mechanism</div>
+          <p>An analogy gives an abstract idea a physical handle.</p>
+        </div>
+
+        <div class="sub">
+          <div class="sub-title" style="font-size: 22px; font-weight: 700; margin-top: 16px;">Where they go wrong</div>
+          <p>An analogy can also overpromise. Pick the analogy carefully — and tell them where it leaks.</p>
+        </div>
+
+        <div class="post-foot">
+          Filed under <a href="#">teaching</a>, <a href="#">writing</a>.
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sidebar-title">Related</div>
+        <ul class="sidebar-list">
+          <li><a href="#">The first ten lessons</a></li>
+          <li><a href="#">What "syntax" really means</a></li>
+          <li><a href="#">Boredom is a deeper problem than difficulty</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer">
+      © 2026 GritLearn Notes · <a href="#">RSS</a>
+    </div>
+  </body>
+</html>

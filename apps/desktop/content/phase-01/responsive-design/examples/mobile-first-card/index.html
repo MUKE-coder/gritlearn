@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A mobile-first responsive layout</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; margin: 0; line-height: 1.6; color: #111; background: #f9fafb; }
+
+      /* MOBILE-FIRST BASE — single column. No media query. */
+      .container { max-width: 100%; margin: 0 auto; padding: 16px; }
+      .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .card h3 { margin: 0 0 6px; font-size: 16px; }
+      .card p { margin: 0; color: #4b5563; font-size: 14px; }
+      .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: #eef2ff; color: #4763e4; }
+
+      /* TABLET — 2 columns at >= 640px */
+      @media (min-width: 640px) {
+        .container { max-width: 720px; padding: 24px; }
+        .grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+      }
+
+      /* DESKTOP — 3 columns at >= 1024px */
+      @media (min-width: 1024px) {
+        .container { max-width: 1080px; padding: 32px; }
+        .grid { grid-template-columns: repeat(3, 1fr); gap: 24px; }
+      }
+
+      .hint { padding: 14px 16px; background: #fff7ed; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; margin-bottom: 20px; font-size: 13px; color: #7c2d12; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 style="margin-top: 0;">Reflowing card grid</h1>
+      <div class="hint">
+        Resize the browser slowly. At &lt; 640px you have 1 column. At 640–1023px you have 2. At ≥ 1024px you have 3. Mobile-first — each breakpoint <em>adds</em> rules on top of the base.
+      </div>
+
+      <div class="grid">
+        <div class="card"><span class="pill">Phase 1</span><h3>Web Frontend</h3><p>HTML, CSS, JS, React, TypeScript. Instant visual feedback for beginners.</p></div>
+        <div class="card"><span class="pill">Phase 2</span><h3>Programming Foundations</h3><p>Closures, scope, modules, debugging, Git, HTTP.</p></div>
+        <div class="card"><span class="pill">Phase 3</span><h3>Next.js Full-Stack</h3><p>Server components, routing, Postgres, Prisma.</p></div>
+        <div class="card"><span class="pill">Phase 4</span><h3>Backend Express</h3><p>Node, Express, JWT, CORS, MongoDB.</p></div>
+        <div class="card"><span class="pill">Phase 5</span><h3>Go (Golang)</h3><p>Structs, interfaces, channels, GORM.</p></div>
+        <div class="card"><span class="pill">Phase 6</span><h3>Mobile (React Native)</h3><p>Expo, navigation, device features.</p></div>
+      </div>
+    </div>
+  </body>
+</html>

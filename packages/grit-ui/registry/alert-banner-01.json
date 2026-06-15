@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "alert-banner-01",
+  "type": "registry:block",
+  "title": "Alert Banner",
+  "description": "Alert/warning/success/error inline banner component",
+  "files": [
+    {
+      "path": "components/grit-ui/alert-banner-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/alert-banner-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

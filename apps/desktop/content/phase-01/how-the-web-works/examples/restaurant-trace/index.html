@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trace one HTTP request</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #0e1116;
+        color: #e6edf3;
+        max-width: 720px;
+        margin: 40px auto;
+        padding: 0 24px;
+        line-height: 1.6;
+      }
+      h1 { font-size: 28px; margin: 0 0 16px; }
+      .panel {
+        background: #161b22;
+        border: 1px solid #2b3343;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin: 16px 0;
+      }
+      button {
+        background: #6e8bff;
+        color: white;
+        border: 0;
+        padding: 10px 18px;
+        font-size: 15px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button:hover { background: #8aa0ff; }
+      pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-size: 13px; color: #aeb9c7; }
+      .label { color: #6e8bff; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Trace one HTTP request</h1>
+    <p>
+      Click the button. Your browser will run the same four-beat dance from
+      the lesson — request, kitchen, response, render — against a real
+      public API. The panel below prints what came back.
+    </p>
+
+    <button id="fetch-btn">Send a real GET request</button>
+
+    <div class="panel">
+      <div><span class="label">Status:</span> <span id="status">(not run yet)</span></div>
+      <div><span class="label">Response time:</span> <span id="time">—</span></div>
+      <div style="margin-top: 12px;"><span class="label">Body:</span></div>
+      <pre id="body">—</pre>
+    </div>
+
+    <script>
+      // We hit a tiny public endpoint that always returns a small JSON blob.
+      // No API key, no signup — just an HTTP GET against the open internet.
+      const url = "https://httpbin.org/get?from=gritlearn";
+
+      document.getElementById("fetch-btn").addEventListener("click", async () => {
+        document.getElementById("status").textContent = "sending…";
+        document.getElementById("body").textContent = "…";
+        const t0 = performance.now();
+        try {
+          const res = await fetch(url);
+          const text = await res.text();
+          document.getElementById("status").textContent = res.status + " " + res.statusText;
+          document.getElementById("time").textContent = Math.round(performance.now() - t0) + " ms";
+          document.getElementById("body").textContent = text;
+        } catch (err) {
+          document.getElementById("status").textContent = "Request failed — are you online?";
+          document.getElementById("body").textContent = String(err);
+        }
+      });
+    </script>
+  </body>
+</html>

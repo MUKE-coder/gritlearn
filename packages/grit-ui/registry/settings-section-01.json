@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "settings-section-01",
+  "type": "registry:block",
+  "title": "Settings Section",
+  "description": "Settings card with title, description, and action area",
+  "files": [
+    {
+      "path": "components/grit-ui/settings-section-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/settings-section-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

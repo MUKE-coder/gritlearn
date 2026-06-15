@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "api-key-row-01",
+  "type": "registry:block",
+  "title": "API Key Row",
+  "description": "API key row with masked key, copy, and revoke (Vercel-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/api-key-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/api-key-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

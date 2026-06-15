@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "session-row-01",
+  "type": "registry:block",
+  "title": "Session Row",
+  "description": "Active session row with device, location, and revoke (GitHub)",
+  "files": [
+    {
+      "path": "components/grit-ui/session-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/session-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

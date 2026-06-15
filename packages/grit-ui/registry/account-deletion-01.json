@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "account-deletion-01",
+  "type": "registry:block",
+  "title": "Account Deletion",
+  "description": "Confirmation dialog for irreversible account/workspace deletion",
+  "files": [
+    {
+      "path": "components/grit-ui/account-deletion-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/account-deletion-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

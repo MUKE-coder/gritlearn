@@ -1,0 +1,195 @@
+## HTML tables
+
+For about a decade in the late nineties and early two-thousands, people built entire websites out of tables — they were the only layout tool available. CSS Grid and Flexbox have taken that job over completely, but tables still have one *real* purpose, and they're brilliant at it: showing data that has rows and columns. Sports scores, financial reports, settings grids, comparison charts. If your data would make sense in a spreadsheet, an HTML table is the right tool. If it wouldn't, an HTML table is the wrong tool.
+
+<Analogy>
+A table is **a spreadsheet you've drawn on paper**.
+
+Every spreadsheet on Earth has the same shape: a grid of cells, divided into rows that run horizontally and columns that run vertically. Each column has a header at the top telling you what kind of data lives below ("Name", "Score", "Date"). Each row is one entity — one student, one purchase, one log entry. The cell at row 3 column 2 is "this entity's value for this attribute."
+
+HTML tables are exactly that shape, made of nested elements. `<table>` is the whole spreadsheet. `<tr>` is one row (a *table row*). `<td>` is one cell (a *table data*). `<th>` is a header cell — the bold one at the top of a column or the start of a row. Nothing exotic. If you can sketch a spreadsheet on a napkin, you can write the HTML for it.
+
+The rule for whether to use a table: imagine pasting the data into Excel. If it would clearly want to be a spreadsheet there, it wants to be a `<table>` here. If it'd be a paragraph or a list, it isn't tabular data and a table is wrong.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an HTML table showing the nested structure of table, tr rows, and td and th cells"
+  caption="A table contains rows; rows contain cells. Header cells (th) go in the first row; data cells (td) go in the rest."
+>
+
+```
+   <table>
+     <thead>
+       <tr>  <th>Player</th>   <th>Goals</th>   <th>Assists</th>  </tr>
+     </thead>
+     <tbody>
+       <tr>  <td>Salah</td>    <td>21</td>      <td>14</td>      </tr>
+       <tr>  <td>Núñez</td>    <td>11</td>      <td>9</td>       </tr>
+       <tr>  <td>Díaz</td>     <td>8</td>       <td>10</td>      </tr>
+     </tbody>
+   </table>
+```
+
+</Illustration>
+
+### The five tags you actually use
+
+- **`<table>`** — wraps the whole thing.
+- **`<thead>`** — wraps the header row(s). Optional but recommended.
+- **`<tbody>`** — wraps the body rows. Optional but recommended.
+- **`<tr>`** — one *table row*. Contains cells.
+- **`<th>`** — a *header cell*. Bold and centered by default; tells assistive tech that this cell labels the rest of its row or column.
+- **`<td>`** — a *table data* cell. The regular cells.
+
+You'll also occasionally meet:
+
+- **`<tfoot>`** — wraps a footer row, usually totals.
+- **`<caption>`** — a title above the table. Use it; screen readers announce it.
+- **`<colgroup>` / `<col>`** — group columns so you can style them together.
+
+### A complete tiny table
+
+```html
+<table>
+  <caption>Premier League top assist leaders, 2024</caption>
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Team</th>
+      <th>Assists</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cole Palmer</td>
+      <td>Chelsea</td>
+      <td>11</td>
+    </tr>
+    <tr>
+      <td>Mohamed Salah</td>
+      <td>Liverpool</td>
+      <td>14</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+That renders as a usable table immediately, without any CSS at all.
+
+### Spanning rows and columns: `colspan` and `rowspan`
+
+Sometimes a cell needs to take up more than one column or row:
+
+```html
+<tr>
+  <th>Name</th>
+  <th colspan="2">Score</th>     <!-- one header above 'Home' / 'Away' -->
+</tr>
+<tr>
+  <th></th>
+  <th>Home</th>
+  <th>Away</th>
+</tr>
+<tr>
+  <td>Liverpool</td>
+  <td>3</td>
+  <td>1</td>
+</tr>
+```
+
+Same idea with `rowspan` to merge cells vertically. Browsers do the geometry for you — but the math gets hairy fast, so for anything more than a couple of merges you'll want to draw the table on paper first.
+
+### What tables are *not* for
+
+Tables are not for page layout. Don't use a `<table>` to put a sidebar next to a main column. The browser will technically render it, but:
+
+- Screen readers will announce "table" to the user, who then expects rows and columns of *data*.
+- The page won't reflow nicely on mobile.
+- The HTML structure becomes unreadable and brittle.
+
+If you're laying out a page, reach for CSS — Flexbox (which we'll cover soon) or CSS Grid. Use tables for tables.
+
+### Default styling is ugly. That's normal.
+
+Out of the box, HTML tables have no borders, weird spacing, and centered headers. That's the *spec*. You'll style them with CSS later — `border-collapse: collapse`, alternating row colors, padding on every cell. The unstyled look isn't wrong, it's a blank canvas.
+
+<ExampleProject
+  src="scoreboard"
+  title="A live-feeling football scoreboard"
+  description="A scoreboard with header rows, body rows, and a footer row showing totals. Demonstrates thead/tbody/tfoot, caption, and basic CSS to make the table actually look like one."
+/>
+
+<ExampleProject
+  src="api-response-table"
+  title="Render JSON as a table"
+  description="A small page with an array of objects baked in. A tiny script generates the table rows. This is exactly how dashboards work — fetch data, render rows. We'll come back to this once we cover JS and the DOM."
+/>
+
+<Exercise
+  title="Build a personal best times table"
+  starter={`Create a table that lists your personal best times for three
+activities (running, biking, cooking — whatever). Columns:
+
+  Activity | Time | Date | Notes
+
+Requirements:
+  - Use <thead> for the header row with <th> cells.
+  - Use <tbody> for the data rows with <td> cells.
+  - Add a <caption> above the table.
+  - At the bottom, a <tfoot> row showing the total time across all
+    activities (or a "Total: 3 entries" if adding times is weird).
+  - Include enough CSS to give the table borders and padding so it
+    looks readable.`}
+>
+
+- `<table>` wraps everything; `<thead>`, `<tbody>`, and `<tfoot>` are direct children.
+- Every header cell is a `<th>`, not a `<td>`.
+- Every data cell is a `<td>`, not a `<th>`.
+- The `<caption>` is the first child inside `<table>` (correct order).
+- CSS uses `border-collapse: collapse` so adjacent borders don't double up.
+- Cells have at least 8px of padding so the text isn't squished against the borders.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When should you use a `<table>` and when should you not?
+
+**A:** Use it for *tabular data* — anything that would clearly want to be a spreadsheet. Sports stats, settings grids, financial reports, the leaderboard from a quiz. Do NOT use it for page layout (sidebars, columns, hero sections). For layout, reach for CSS Grid or Flexbox. The rule that helps: imagine pasting the content into Excel. If the columns and rows make sense in a spreadsheet, it's a table. If you'd just see a long string of text spilling into one cell, it's not.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `<th>` and `<td>`?
+
+**A:** Visually, `<th>` is bold and centered by default. Semantically — which is the bigger deal — `<th>` tells screen readers "this cell labels its column or row." When the user navigates the table, the screen reader will announce the header along with each data cell ("Player: Salah, Goals: 21"). Using `<td>` for headers loses that association and makes the table much harder to follow. Pair `<th>` with `scope="col"` or `scope="row"` on complex tables to remove ambiguity for assistive tech.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `<thead>` / `<tbody>` / `<tfoot>` give you that just rows alone don't?
+
+**A:** Two things:
+
+1. **Semantic grouping.** Screen readers can navigate "header" / "body" / "footer" as sections. A "totals" row in `<tfoot>` is clearly distinguished from a data row.
+2. **Styling and scrolling.** A common trick on long tables is `tbody { display: block; overflow-y: auto; max-height: 400px; }` to make only the body scroll while the head stays fixed. Without `<thead>` you can't do that. CSS rules like `tbody tr:nth-child(even)` for striping also become unambiguous.
+
+For a tiny table you can skip them; once it has a header *and* more than a screen's worth of rows, you'll want them.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why was it bad practice to use tables for page layout, and what replaced them?
+
+**A:** Three reasons:
+
+1. **Accessibility.** Screen readers announce "table" and the user expects data. Layout tables confuse the announcement.
+2. **Responsiveness.** Tables don't reflow gracefully on small screens. A two-column layout built with a `<table>` becomes a horizontal-scrolling mess on mobile.
+3. **Structure.** Pages built out of nested tables are unreadable to maintain — every visual region is a `<td>` and the HTML stops describing the *content*, it only describes the *grid*.
+
+**CSS Grid** and **Flexbox** replaced them. Grid does multi-row, multi-column page-level layouts that reflow responsively. Flexbox does one-axis arrangements like nav bars and toolbars. Both are easier to write, easier to read, and announce nothing weird to assistive tech.
+
+</InterviewQuestion>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "logo-cloud-01",
+  "type": "registry:block",
+  "title": "Logo Cloud",
+  "description": "Infinite-scroll marquee of customer/partner logos",
+  "files": [
+    {
+      "path": "components/grit-ui/logo-cloud-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/logo-cloud-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

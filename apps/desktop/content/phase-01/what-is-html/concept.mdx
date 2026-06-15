@@ -1,0 +1,129 @@
+## What HTML is
+
+You've now seen one HTTP round trip — request goes out, response comes back. That response is almost always **HTML**, which means everything you see on every web page started life as an HTML file the server sent you. Before you write CSS or JavaScript, before you touch React, you need to be deeply comfortable with what HTML actually *is*. The good news: it's smaller than people make it sound. The whole language fits on one page.
+
+<Analogy>
+HTML is **the skeleton of a body**.
+
+A skeleton on its own is not pretty — it has no clothes (that's CSS) and it can't move (that's JavaScript). But it decides *what kind of body you have*. Two arms. Five fingers. Vertebrae running down the back. Take the skeleton away and the muscles, skin, and clothes have nothing to hang on.
+
+HTML is exactly that for a web page. It decides what's *there* — a heading, a paragraph, a list, a form, an image — and how those pieces are nested inside each other. Style and behavior are layered on top of that scaffolding later. If you remove the HTML, there's nothing to style or animate.
+
+Every HTML element is a bone. Some bones contain other bones (a `<div>` containing paragraphs, a `<ul>` containing `<li>`s). That nesting is what gives a page its shape.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an HTML element with opening tag, content, and closing tag — the angle brackets, attributes, and text inside."
+  caption="An HTML element is an opening tag, content in the middle, and a matching closing tag. The browser turns each one into a 'box' on the page."
+>
+
+```
+   ┌────────────── opening tag ──────────────┐
+   │                                          │
+   <p class="lead">  Hello, world!  </p>
+        │       │         │            │
+        │       │     content       closing
+        │       └─ attribute (extra info)
+        └─── tag name (this one is a paragraph)
+```
+
+</Illustration>
+
+### Elements: the only building block you need
+
+Every piece of an HTML page is an **element**, and every element has the same anatomy:
+
+1. An **opening tag** like `<p>` (the `<` and `>` are called *angle brackets*).
+2. Optional **attributes** inside the opening tag, like `class="lead"`.
+3. Some **content** in between — text, or other elements.
+4. A **closing tag** like `</p>` (note the slash).
+
+A few elements have no content and so don't need a closing tag — they're called **self-closing** or **void** elements. `<img>` is the classic example: there's no text to wrap, just a reference to a picture.
+
+```html
+<h1>About me</h1>                       <!-- a top-level heading -->
+<p>I'm learning to code.</p>            <!-- a paragraph -->
+<img src="me.jpg" alt="A portrait">     <!-- void element, no closing tag -->
+```
+
+### Why "nesting" is the whole game
+
+Once you know elements are little containers, the only other rule is *which containers can hold which*. A `<p>` can hold text and small inline elements like `<em>`. A `<ul>` (unordered list) holds `<li>` (list item) elements. A `<form>` holds inputs and labels.
+
+The browser reads your HTML top-to-bottom and builds a **tree** in memory — the Document Object Model, or DOM. Every nested element becomes a child of its parent in that tree. The tree is what CSS targets and what JavaScript manipulates later. So if you mess up the nesting (close a tag in the wrong order, forget to close one at all), the tree the browser builds will look weird, and everything downstream gets weird too.
+
+Mnemonic: **what you open, you must close, in reverse order**. `<div><p></p></div>`, not `<div><p></div></p>`. This is the same rule as parentheses in math.
+
+### What HTML is *not*
+
+Three quick "not"s that save beginners a week of confusion:
+
+- HTML is **not** a programming language. It has no `if` statements, no loops, no variables. It just *labels* things. The labels are called tags.
+- HTML is **not** for styling. Don't try to make text big inside the tag — that's CSS's job. (You'll see `<font>` and similar in old tutorials; ignore them.)
+- HTML is **not** case-sensitive in browsers, but it *is* in modern toolchains. Always use lowercase: `<p>`, never `<P>`.
+
+That's it. Open tag, attributes, content, close tag, nested inside other tags. Everything in the next 40 lessons is built on top of those four ideas.
+
+<ExampleProject
+  src="hello-html"
+  title="The smallest HTML page that runs"
+  description="A 6-line HTML file with one heading and one paragraph. Open it in the preview pane, then change the text inside the tags and see the page change in real time."
+/>
+
+<ExampleProject
+  src="nested-elements"
+  title="Nest three elements"
+  description="A page with a heading, two paragraphs, and an unordered list. Comments in the source explain which element is which. Try removing one closing tag and watch the browser try to recover — it's instructive."
+/>
+
+<Exercise
+  title="Make your own About page"
+  starter={`Create an index.html file in a new folder. Add:
+  - A top-level heading with your name.
+  - A paragraph saying what you're learning.
+  - An unordered list of three things you've tried so far.
+  - A self-closing <hr> (horizontal rule) between the paragraph and the list.
+
+Open it in the preview pane and confirm everything renders.`}
+>
+
+- The file starts with literally just the elements — no boilerplate yet (the document structure lesson is next).
+- The `<h1>` text is between the opening and closing tags, not inside an attribute.
+- Each `<li>` has its own opening and closing tag — no comma-separated lists.
+- `<hr>` is written with no closing tag (it's a void element).
+- Nothing is in ALL CAPS in the source — lowercase tags only.
+- When you save, the preview pane updates to show your page.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does HTML stand for, and what is it actually used for?
+
+**A:** **H**yper**T**ext **M**arkup **L**anguage. It's a markup language — meaning it labels (or "marks up") content with tags that tell the browser what each piece is: a heading, a paragraph, a list, a link, an image. It's not a programming language. Its only job is to describe the *structure* of a document. CSS handles how that structure looks; JavaScript handles how it behaves.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between an HTML *element* and an HTML *tag*?
+
+**A:** Tags are the literal `<p>` and `</p>` markers in the source. An *element* is the whole thing together — the opening tag, the closing tag, and the content between them. Many people use the words interchangeably in conversation, but they mean different things: `<p>` is a tag; `<p>Hello</p>` is an element. Void elements (like `<img>`) are made of a single tag with no content and no closing tag.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is the DOM, and how does it relate to the HTML you wrote?
+
+**A:** When the browser receives your HTML, it parses it and builds an in-memory tree of objects — one object per element. That tree is the **D**ocument **O**bject **M**odel. CSS rules walk this tree to decide what to style. JavaScript reads and modifies the tree to make the page interactive. So your HTML file is the *recipe*; the DOM is the *cake* the browser baked from it. Most "the page didn't render right" bugs trace back to a mismatch between the HTML source you wrote and the DOM the browser actually built (often from bad nesting).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why are some HTML elements "self-closing" (like `<img>`), and which others are?
+
+**A:** Self-closing (or void) elements are ones that have no possible content — they're a single point on the page, not a container. `<img>` is just a pointer to a picture; there's nothing to wrap. The common void elements are `<img>`, `<input>`, `<br>` (line break), `<hr>` (horizontal rule), `<meta>`, and `<link>`. In HTML5 you can write them with or without a trailing slash (`<img>` or `<img />`), but most teams pick one and stay consistent. XHTML and JSX *require* the slash; vanilla HTML5 doesn't care.
+
+</InterviewQuestion>

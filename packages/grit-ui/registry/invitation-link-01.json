@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "invitation-link-01",
+  "type": "registry:block",
+  "title": "Invitation Link",
+  "description": "Workspace invite link with copy and expiry (Notion-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/invitation-link-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/invitation-link-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>An image gallery with proper alt text</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 880px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 24px; }
+      figure { margin: 0; }
+      figure img { width: 100%; height: auto; border-radius: 8px; display: block; }
+      figcaption { margin-top: 8px; font-size: 13px; color: #555; }
+      .decorative { display: block; margin: 30px auto; opacity: 0.4; }
+    </style>
+  </head>
+  <body>
+    <h1>A tiny gallery</h1>
+    <p>
+      Three photos with descriptive alt text. Hover the page in DevTools to
+      inspect each <code>&lt;img&gt;</code> and read its alt attribute.
+    </p>
+
+    <div class="grid">
+      <figure>
+        <img
+          src="https://picsum.photos/seed/forest/600/400"
+          alt="A misty pine forest at dawn, sun cutting through the trees in thin shafts"
+          width="600"
+          height="400"
+          loading="lazy"
+        />
+        <figcaption>A misty forest.</figcaption>
+      </figure>
+
+      <figure>
+        <img
+          src="https://picsum.photos/seed/coast/600/400"
+          alt="A rocky coastline at sunset, waves breaking on dark stones"
+          width="600"
+          height="400"
+          loading="lazy"
+        />
+        <figcaption>A rocky coast.</figcaption>
+      </figure>
+
+      <figure>
+        <img
+          src="https://picsum.photos/seed/desk/600/400"
+          alt="A wooden desk with a laptop, a notebook, and a coffee mug"
+          width="600"
+          height="400"
+          loading="lazy"
+        />
+        <figcaption>A coding desk.</figcaption>
+      </figure>
+    </div>
+
+    <hr style="margin: 50px 0; border: 0; border-top: 1px solid #eee;" />
+
+    <p>Below the divider is a purely decorative image with <code>alt=""</code> — screen readers will skip it entirely.</p>
+
+    <img
+      class="decorative"
+      src="https://picsum.photos/seed/abstract/120/40"
+      alt=""
+      width="120"
+      height="40"
+      aria-hidden="true"
+    />
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "error-page-01",
+  "type": "registry:block",
+  "title": "Error Page",
+  "description": "404/500 error page with back and home buttons (Vercel-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/error-page-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/error-page-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

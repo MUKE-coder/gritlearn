@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "flash-sale-timer-01",
+  "type": "registry:block",
+  "title": "Flash Sale Timer",
+  "description": "Countdown timer with urgency styling for limited offers",
+  "files": [
+    {
+      "path": "components/grit-ui/flash-sale-timer-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/flash-sale-timer-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

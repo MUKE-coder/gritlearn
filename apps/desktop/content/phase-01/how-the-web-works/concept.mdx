@@ -1,0 +1,121 @@
+## How the web works
+
+Every website you've ever opened — Instagram, your email, this very editor's docs — is one big conversation between two computers. Before you write a single line of HTML, it helps to *see* what's actually moving between them. Once that picture is sharp, every web technology after this (HTML, CSS, fetch, React, APIs) becomes a variation on the same theme instead of a brand-new mystery.
+
+<Analogy>
+Opening a web page is exactly like **ordering food at a restaurant**.
+
+- **You (the browser)** decide what you want.
+- **The waiter (the request)** carries your order to the kitchen.
+- **The kitchen (the server)** receives the order, prepares it, and sends a tray back.
+- **The dish (the response)** lands on your table. You eat it (render it on screen).
+
+Every "load the page", every "save my profile", every "send this message" follows that same four-beat pattern. There is nothing else. When something goes wrong on the web, one of those four steps is to blame — and that's already 90% of debugging.
+</Analogy>
+
+<Illustration
+  alt="Request/response diagram: browser sends a GET request to a server, server sends an HTML response back"
+  caption="Open a tab → browser sends a request → server sends a response → browser draws the page."
+>
+
+```
+   ┌──────────────────┐                      ┌──────────────────┐
+   │                  │   GET /index.html    │                  │
+   │   Your browser   │ ───────────────────► │  example.com     │
+   │   (the client)   │                      │   (the server)   │
+   │                  │ ◄─────────────────── │                  │
+   └──────────────────┘   200 OK + <html>    └──────────────────┘
+            │                                          │
+            │ Draws pixels using HTML, CSS, JS         │ Stores files,
+            │ and waits for the next request           │ talks to a DB
+            ▼                                          ▼
+```
+
+</Illustration>
+
+### Walking through one page load
+
+When you type `example.com` and hit enter, here's what really happens, in order. You do **not** need to memorize this — read it like a recipe, just so the shape feels familiar.
+
+1. **DNS lookup.** `example.com` is a friendly name, but the network only routes numbers. Your computer asks a "phone book" — the DNS — and gets back something like `93.184.216.34`.
+2. **TCP handshake.** Your browser opens a phone line to that IP. (It's literally three messages: "hi", "hi back", "ok, let's talk".)
+3. **HTTP request.** Over that line, your browser sends a short text message: `GET / HTTP/1.1\nHost: example.com`. That's the order.
+4. **The server prepares the response.** Reads files, runs code, looks things up in a database — whatever it has to. Then it bundles up an HTTP response.
+5. **HTTP response comes back.** Status code (`200 OK`, `404 Not Found`, `500 Server Error`), some headers (like `Content-Type: text/html`), and the actual content — usually HTML.
+6. **The browser parses the HTML.** Inside the HTML it finds `<link href="style.css">` and `<script src="app.js">`. Each one triggers **more** requests — same four-beat dance, repeated.
+7. **Render.** The browser turns the parsed HTML + CSS into pixels and runs the JavaScript. You see the page.
+
+That entire flow usually takes 50–300 milliseconds.
+
+### Why this matters for the rest of the course
+
+Notice that nothing in those seven steps mentioned a "language". HTML, CSS, and JS are just *the content that travels inside step 5*. React, Vue, Next.js — all of them produce HTML/CSS/JS that travels through that same pipe. Backends in Go, Node, Python, Rust — they all play the kitchen role in step 4. When we later say "the API returned 500", you'll picture the kitchen sending back a charred tray.
+
+Two more concepts worth naming early, because you'll see them everywhere:
+
+- **Frontend vs backend.** Frontend = the code that runs in your browser (the dining room). Backend = the code that runs on the server (the kitchen). A *full-stack* developer cooks AND serves.
+- **Static vs dynamic.** A static page is one the server hands back without thinking — a printed menu. A dynamic page is one the server *generates* on the fly based on who you are or what you asked — your personalized order. Both still travel through the same four-beat pipe.
+
+<ExampleProject
+  src="restaurant-trace"
+  title="Trace one HTTP request"
+  description="A tiny HTML file that, when opened, makes a real fetch to a public API and prints every step of the request/response back to the page. Reading and running it makes the four-beat pattern stop being abstract."
+/>
+
+<ExampleProject
+  src="devtools-network-tab"
+  title="See it for yourself in DevTools"
+  description="A walkthrough page that opens itself, then asks you to open the browser's Network tab and watch the request you just made appear there. Once you've seen one request in DevTools, you can debug almost anything."
+/>
+
+<Exercise
+  title="Trace a request in plain English"
+  starter={`Pick any website you use daily (gmail.com, github.com, your school's site).
+Open it in your browser. Then, in this file, write a 7-line description —
+one line per step of the page load.
+
+Don't worry about getting the details perfect; the goal is to fix the
+shape of the request/response cycle in your own words.`}
+>
+
+- Names which computer is the **client** and which is the **server**.
+- Mentions the **DNS lookup** before the request goes out.
+- Names a **request method** (almost always `GET` for opening a page).
+- Names at least one **response status code** (likely `200 OK`).
+- Mentions that the HTML the server returns triggers *more* requests (CSS, JS, images).
+- Uses **one analogy of your own** instead of the restaurant — a barista, a librarian, anything physical. Owning your own analogy is how the idea sticks.
+- Ends with a sentence about what would happen if step 4 (the server) was slow — what you'd see and where.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** In one sentence, what happens when you type a URL in the address bar and press enter?
+
+**A:** Your browser asks DNS for the server's IP address, opens a connection to it, sends an HTTP request, and renders the HTML, CSS, and JS that come back in the HTTP response. Bonus points if you mention that the returned HTML often triggers *more* requests for things like images and stylesheets — the page isn't one round-trip, it's a tree of them.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a client and a server?
+
+**A:** The client is whichever program *initiates* the conversation by sending a request — usually your browser. The server is whichever program *waits* for requests and produces responses. Same machine, same network — what matters is who spoke first. A backend service can be a "client" too when it calls another API: roles are about the conversation, not the hardware.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does HTTP status `404` actually mean, and how is it different from `500`?
+
+**A:** `404 Not Found` means the server understood the request just fine but doesn't have the resource you asked for — you asked for `/cat.jpg` and there is no cat. `500 Internal Server Error` means the server *crashed* trying to handle your request — the code that was supposed to find the cat threw an exception. `404` is your fault (wrong URL); `500` is the server's fault (broken code). That difference matters when you're debugging: a 404 means "fix the URL"; a 500 means "open the server logs."
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do modern pages make dozens of network requests instead of just one?
+
+**A:** Because separating the HTML, CSS, JavaScript, fonts, and images into separate files lets the browser cache each one independently. The HTML changes every time you visit, but the logo and the stylesheet might not change for months — caching them means the second visit only has to download the bits that actually changed. It also lets the browser fetch them in parallel. The tradeoff is the *initial* page load has more round-trips, which is why "code splitting" and "preloading" exist — they're techniques to balance the two extremes.
+
+</InterviewQuestion>

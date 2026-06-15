@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "newsletter-signup-01",
+  "type": "registry:block",
+  "title": "Newsletter Signup",
+  "description": "Newsletter card with subscriber count and success state",
+  "files": [
+    {
+      "path": "components/grit-ui/newsletter-signup-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/newsletter-signup-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

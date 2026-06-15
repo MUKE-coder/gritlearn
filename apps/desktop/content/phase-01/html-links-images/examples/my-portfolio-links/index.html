@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jane's portfolio</title>
+    <style>
+      html { scroll-behavior: smooth; }
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 30px 20px; line-height: 1.6; }
+      nav { position: sticky; top: 0; background: #fff; padding: 12px 0; border-bottom: 1px solid #eee; margin-bottom: 30px; }
+      nav ul { list-style: none; display: flex; gap: 20px; padding: 0; margin: 0; }
+      nav a { color: #4763e4; text-decoration: none; font-weight: 500; }
+      nav a:hover { text-decoration: underline; }
+      section { min-height: 60vh; padding-top: 60px; }
+      h1, h2 { margin-bottom: 12px; }
+      .external { color: #4763e4; }
+    </style>
+  </head>
+  <body>
+    <nav aria-label="Page sections">
+      <ul>
+        <li><a href="#intro">Intro</a></li>
+        <li><a href="#projects">Projects</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <section id="intro">
+      <h1>Jane Doe</h1>
+      <p>Frontend developer learning Go on the side. Based in Lisbon.</p>
+    </section>
+
+    <section id="projects">
+      <h2>Projects</h2>
+      <p>Click any link to open it in a new tab.</p>
+      <ul>
+        <li><a class="external" href="https://github.com" target="_blank" rel="noopener noreferrer">My GitHub</a></li>
+        <li><a class="external" href="https://gritlearn.dev" target="_blank" rel="noopener noreferrer">GritLearn</a></li>
+      </ul>
+    </section>
+
+    <section id="contact">
+      <h2>Contact</h2>
+      <p>
+        Email me at
+        <a href="mailto:hello@example.com">hello@example.com</a>
+        or call <a href="tel:+15551234567">+1 (555) 123-4567</a>.
+      </p>
+      <p>
+        <a href="#intro">↑ Back to top</a>
+      </p>
+    </section>
+  </body>
+</html>

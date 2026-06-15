@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "feature-grid-01",
+  "type": "registry:block",
+  "title": "Feature Grid",
+  "description": "Feature showcase section with icon cards in a responsive grid",
+  "files": [
+    {
+      "path": "components/grit-ui/feature-grid-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/feature-grid-01.tsx"
+    }
+  ],
+  "dependencies": ["lucide-react"],
+  "registryDependencies": []
+}

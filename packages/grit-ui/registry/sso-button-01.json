@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "sso-button-01",
+  "type": "registry:block",
+  "title": "SSO Button",
+  "description": "SSO provider sign-in button with org info (Okta-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/sso-button-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/sso-button-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

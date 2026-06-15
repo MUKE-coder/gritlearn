@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three ways to attach CSS</title>
+
+    <!-- WAY 3: external stylesheet. We don't have a second file here so
+         we inline the equivalent as a comment for clarity. -->
+    <link rel="stylesheet" href="external-stylesheet-would-go-here.css" />
+
+    <!-- WAY 2: internal stylesheet — a <style> block in <head>. -->
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      .row { display: grid; grid-template-columns: 1fr; gap: 20px; }
+      .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; }
+      .label { font-family: ui-monospace, monospace; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+      /* The .by-internal styles below come from this internal stylesheet. */
+      .by-internal p { color: #4763e4; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Three ways to attach CSS</h1>
+    <p>All three paragraphs below end up with the same look (blue + bold). The difference is <em>where</em> the rule lives.</p>
+
+    <div class="row">
+      <!-- WAY 1: INLINE — style attribute on the element itself. -->
+      <div class="card">
+        <div class="label">1. Inline (style attribute)</div>
+        <p style="color: #4763e4; font-weight: 600;">
+          The style lives on this element. Hard to reuse — paste it on every paragraph that needs it.
+        </p>
+      </div>
+
+      <!-- WAY 2: INTERNAL — rule in the <style> block above. -->
+      <div class="card by-internal">
+        <p>
+          The style lives in a &lt;style&gt; block in &lt;head&gt;. Reusable on this page only.
+        </p>
+      </div>
+
+      <!-- WAY 3: EXTERNAL — would normally come from a linked .css file.
+           Here we mimic by inlining; in a real project styles.css would
+           hold the rule and every page would <link> to it. -->
+      <div class="card by-external">
+        <p>
+          The style would live in a separate styles.css file. Reusable across every page that links to it. The browser caches the file. This is what every real project uses.
+        </p>
+      </div>
+    </div>
+
+    <!-- Mimicking the external stylesheet rule here only because we
+         don't have a second file in this single-file demo. -->
+    <style>
+      .by-external p { color: #4763e4; font-weight: 600; }
+    </style>
+  </body>
+</html>

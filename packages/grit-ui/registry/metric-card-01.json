@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "metric-card-01",
+  "type": "registry:block",
+  "title": "Metric Card",
+  "description": "KPI card with trend arrow and sparkline (Vercel Analytics)",
+  "files": [
+    {
+      "path": "components/grit-ui/metric-card-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/metric-card-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

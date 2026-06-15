@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Specificity fight</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      .demo { padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 10px 0; }
+      .label { font-family: ui-monospace, monospace; font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+      .rules { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; margin: 10px 0; }
+      .winner { background: #ecfdf5; border-color: #10b981; }
+
+      /* The 'fight' ⇣ */
+
+      /* Rule A: tag selector. Specificity (0,0,0,1). */
+      p#fightTarget { color: red; }   /* tag fights for: red */
+
+      /* Rule B: class selector. Specificity (0,0,1,1). */
+      .winner-by-class { color: blue; }
+
+      /* Rule C: id selector. Specificity (0,1,0,1). */
+      #fightTarget.winner-by-id { color: green; }
+    </style>
+  </head>
+  <body>
+    <h1>Three rules walk into a bar</h1>
+    <p>The same paragraph below has three CSS rules trying to color it. Specificity decides which one wins.</p>
+
+    <div class="rules">
+p                            → (0,0,0,1)  color: red
+.lead                        → (0,0,1,0)  color: blue
+#fightTarget                 → (0,1,0,0)  color: green
+    </div>
+
+    <div class="demo">
+      <div class="label">Round 1 — tag only. red wins by default.</div>
+      <p id="fightTarget">I want to be styled.</p>
+    </div>
+
+    <div class="demo">
+      <div class="label">Round 2 — add the class .winner-by-class → blue wins.</div>
+      <p id="fightTarget" class="winner-by-class">I want to be styled.</p>
+    </div>
+
+    <div class="demo winner">
+      <div class="label">Round 3 — add a more specific id rule (#fightTarget.winner-by-id) → green wins.</div>
+      <p id="fightTarget" class="winner-by-id">I want to be styled.</p>
+    </div>
+
+    <div class="demo">
+      <div class="label">Round 4 — add an inline style. Inline always wins (without !important).</div>
+      <p id="fightTarget" class="winner-by-id" style="color: orange;">I want to be styled.</p>
+    </div>
+
+    <p style="color: #6b7280; font-size: 13px;">
+      Open DevTools → click each paragraph → look at the Styles panel.
+      The browser shows every rule and crosses out the losers.
+    </p>
+  </body>
+</html>

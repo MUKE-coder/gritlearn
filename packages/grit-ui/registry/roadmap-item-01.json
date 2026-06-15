@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "roadmap-item-01",
+  "type": "registry:block",
+  "title": "Roadmap Item",
+  "description": "Public roadmap card with status badge and upvote button",
+  "files": [
+    {
+      "path": "components/grit-ui/roadmap-item-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/roadmap-item-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

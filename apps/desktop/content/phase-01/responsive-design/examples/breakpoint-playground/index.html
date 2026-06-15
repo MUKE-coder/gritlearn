@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live breakpoint indicator</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; background: #0e1116; color: #e6edf3; display: flex; align-items: center; justify-content: center; }
+      .panel { text-align: center; padding: 40px; }
+      .label {
+        font-family: ui-monospace, monospace; font-size: 11px;
+        text-transform: uppercase; letter-spacing: 0.1em; color: #6e8bff;
+      }
+      .name { font-size: clamp(40px, 12vw, 96px); font-weight: 800; letter-spacing: -0.04em; margin: 8px 0 16px; }
+      .meta { color: #aeb9c7; font-size: 14px; max-width: 360px; margin: 0 auto; }
+      .breakpoint-name::before { content: "default — XS (mobile)"; color: #58a6ff; }
+      @media (min-width: 640px)  { .breakpoint-name::before { content: "SM — 640px and up"; color: #3fb950; } }
+      @media (min-width: 768px)  { .breakpoint-name::before { content: "MD — 768px and up"; color: #f9a825; } }
+      @media (min-width: 1024px) { .breakpoint-name::before { content: "LG — 1024px and up"; color: #ff5f57; } }
+      @media (min-width: 1280px) { .breakpoint-name::before { content: "XL — 1280px and up"; color: #c084fc; } }
+      .rule { font-family: ui-monospace, monospace; font-size: 12px; color: #6e7b8e; background: #161b22; border: 1px solid #2b3343; padding: 8px 12px; border-radius: 6px; display: inline-block; margin-top: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <div class="label">Current breakpoint</div>
+      <div class="name breakpoint-name"></div>
+      <p class="meta">Resize the browser. The label below the title updates as the viewport crosses each <code>min-width</code> threshold.</p>
+      <div class="rule">@media (min-width: …)</div>
+      <p class="meta" style="margin-top: 24px; font-size: 12px;">
+        XS &lt; 640 · SM ≥ 640 · MD ≥ 768 · LG ≥ 1024 · XL ≥ 1280
+        <br />
+        (matches Tailwind's default breakpoints)
+      </p>
+    </div>
+  </body>
+</html>

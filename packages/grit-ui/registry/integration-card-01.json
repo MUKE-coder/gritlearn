@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "integration-card-01",
+  "type": "registry:block",
+  "title": "Integration Card",
+  "description": "Integration connect card with logo and status (Notion/Linear)",
+  "files": [
+    {
+      "path": "components/grit-ui/integration-card-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/integration-card-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

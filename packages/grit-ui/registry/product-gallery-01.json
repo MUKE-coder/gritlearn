@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "product-gallery-01",
+  "type": "registry:block",
+  "title": "Product Gallery",
+  "description": "Product image gallery with thumbnail strip (Shopify PDP)",
+  "files": [
+    {
+      "path": "components/grit-ui/product-gallery-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/product-gallery-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

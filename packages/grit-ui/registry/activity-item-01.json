@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "activity-item-01",
+  "type": "registry:block",
+  "title": "Activity Feed Item",
+  "description": "Activity log entry with actor, action, and target (GitHub-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/activity-item-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/activity-item-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

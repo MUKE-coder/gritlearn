@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "marketing-navbar-01",
+  "type": "registry:block",
+  "title": "Marketing Navbar",
+  "description": "Marketing site navbar with CTA button and mobile menu",
+  "files": [
+    {
+      "path": "components/grit-ui/marketing-navbar-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/marketing-navbar-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

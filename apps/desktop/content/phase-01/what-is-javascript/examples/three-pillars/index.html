@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three pillars in three files (combined here for demo)</title>
+    <style>
+      /* === This is the CSS "file" — the style layer === */
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111; background: #f9fafb; }
+      h1 { font-size: 28px; margin-bottom: 6px; }
+      .subhead { color: #6b7280; margin-top: 0; }
+      .counter {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 20px;
+      }
+      #count { font-size: 36px; font-weight: 700; min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; }
+      button.btn { padding: 8px 16px; border-radius: 8px; border: 0; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.15s; }
+      .btn-primary { background: #4763e4; color: white; }
+      .btn-primary:hover { background: #3a53c6; }
+      .btn-ghost { background: transparent; color: #4763e4; border: 1px solid #d1d5db; }
+      .btn-ghost:hover { background: #f3f4f6; }
+      .annotation { padding: 10px 14px; background: #eef2ff; border-left: 4px solid #4763e4; border-radius: 0 6px 6px 0; margin-top: 24px; font-size: 13px; color: #4338ca; }
+    </style>
+  </head>
+
+  <!-- === This is the HTML "file" — the structure layer === -->
+  <body>
+    <h1>Three pillars demo</h1>
+    <p class="subhead">HTML decides what's here. CSS decides how it looks. JavaScript decides what it does.</p>
+
+    <div class="counter">
+      <p id="count">0</p>
+      <button class="btn btn-primary" id="inc">+1</button>
+      <button class="btn btn-ghost" id="reset">Reset</button>
+    </div>
+
+    <div class="annotation">
+      Click "+1" — the JS layer increments the displayed number.
+      Click "Reset" — the JS sets it back to 0. Notice how the
+      <em>shape</em> of the page (HTML) and the <em>look</em> (CSS) are unchanged
+      throughout — only the muscle layer is moving.
+    </div>
+
+    <!-- === This is the JavaScript "file" — the behavior layer === -->
+    <script>
+      // Step 1 — Select elements from the DOM.
+      const countEl = document.getElementById("count");
+      const incBtn  = document.getElementById("inc");
+      const resetBtn = document.getElementById("reset");
+
+      // Step 2 — Hold state.
+      let count = 0;
+
+      // Step 3 — Listen for user events; respond by updating the page.
+      incBtn.addEventListener("click", () => {
+        count += 1;
+        countEl.textContent = count;
+      });
+
+      resetBtn.addEventListener("click", () => {
+        count = 0;
+        countEl.textContent = count;
+      });
+    </script>
+  </body>
+</html>

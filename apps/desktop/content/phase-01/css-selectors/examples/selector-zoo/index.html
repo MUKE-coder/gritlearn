@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The selector zoo</title>
+    <style>
+      /* Universal: applies to EVERYTHING */
+      * { box-sizing: border-box; }
+
+      /* Tag selector */
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      h2 { margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+
+      /* Class selector */
+      .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 8px 0; }
+      .ok { color: #047857; }
+
+      /* Combined classes */
+      .badge.danger { background: #fef2f2; color: #b91c1c; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+
+      /* ID selector */
+      #unique { background: #eef2ff; border-left: 4px solid #4763e4; padding-left: 12px; }
+
+      /* Descendant selector */
+      .post p { color: #374151; }
+      /* Direct-child selector */
+      ul.flat > li { list-style: square; }
+
+      /* Adjacent sibling */
+      h3 + p { font-weight: 600; }
+
+      /* General sibling */
+      h3 ~ p { line-height: 1.7; }
+
+      /* Attribute selector */
+      input[type="email"] { background: #fffbeb; }
+      a[target="_blank"]::after { content: " ↗"; color: #6b7280; }
+
+      /* Pseudo-classes */
+      li:first-child { font-weight: 700; }
+      li:nth-child(odd) { background: #fafafa; }
+      li:hover { background: #fef3c7; cursor: pointer; }
+      a:hover { text-decoration: underline; }
+      input:focus { outline: 2px solid #4763e4; }
+      input:disabled { opacity: 0.5; }
+
+      /* Pseudo-elements */
+      .pull-quote::before { content: "“ "; color: #4763e4; font-size: 1.4em; }
+      .pull-quote::after  { content: " ”"; color: #4763e4; font-size: 1.4em; }
+
+      /* :not() */
+      ul.flat li:not(.skip) { padding: 4px 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>The selector zoo</h1>
+    <p>Each section below shows one selector type at work. Open DevTools and click an element to see which rule applied.</p>
+
+    <h2>Tag + class + id</h2>
+    <div class="card ok">A <code>.card.ok</code> — two classes combined.</div>
+    <div id="unique">An element with <code>id="unique"</code>.</div>
+
+    <h2>Descendant + child</h2>
+    <article class="post">
+      <p>A &lt;p&gt; inside a .post — gets a grey color via the descendant selector <code>.post p</code>.</p>
+    </article>
+    <ul class="flat">
+      <li>Direct child — square bullet</li>
+      <li>Second item</li>
+      <li class="skip">Third item (has .skip — gets no padding)</li>
+    </ul>
+
+    <h2>Adjacent sibling</h2>
+    <h3>A heading</h3>
+    <p>This paragraph immediately follows the h3 — gets boldened by <code>h3 + p</code>.</p>
+    <p>This one only matches <code>h3 ~ p</code>, so just extra line-height.</p>
+
+    <h2>Attribute selectors</h2>
+    <form>
+      <label>Email: <input type="email" placeholder="yellow background" /></label>
+    </form>
+    <p>This <a href="https://example.com" target="_blank" rel="noopener">link opens in a new tab</a> — note the arrow appended via <code>::after</code>.</p>
+
+    <h2>Pseudo-classes on a list</h2>
+    <ul>
+      <li>First item — bolded by <code>:first-child</code></li>
+      <li>Second item — zebra stripe from <code>:nth-child(odd)</code></li>
+      <li>Hover me — turns yellow</li>
+      <li>Another item</li>
+    </ul>
+
+    <h2>Pseudo-elements</h2>
+    <p class="pull-quote">A pull quote, wrapped in fancy quotes via ::before and ::after.</p>
+
+    <h2>:disabled</h2>
+    <input type="text" value="I'm disabled" disabled />
+  </body>
+</html>

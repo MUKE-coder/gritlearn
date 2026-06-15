@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Same HTML — with and without CSS</title>
+    <style>
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 24px; }
+      .pane { padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+      .pane > .label { font-family: ui-monospace, monospace; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+      .pane.styled .label { color: #4763e4; }
+
+      /* The styled pane's CSS — about 40 lines. Edit and reload. */
+      .pane.styled .card { background: linear-gradient(135deg, #6e8bff, #4763e4); color: white; padding: 24px; border-radius: 12px; }
+      .pane.styled h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+      .pane.styled p { margin: 8px 0 0; opacity: 0.9; line-height: 1.5; }
+      .pane.styled ul { background: #f3f4f6; border-radius: 8px; padding: 14px 14px 14px 32px; margin-top: 16px; }
+      .pane.styled li { margin: 4px 0; color: #374151; }
+      .pane.styled .btn { display: inline-block; background: #111; color: white; padding: 10px 18px; border-radius: 8px; font-weight: 600; text-decoration: none; margin-top: 16px; }
+      .pane.styled .btn:hover { background: #374151; }
+    </style>
+  </head>
+  <body>
+    <h1 style="text-align: center; margin-top: 30px;">Same HTML, two outfits</h1>
+    <div class="row">
+      <div class="pane">
+        <div class="label">No CSS</div>
+        <div class="card">
+          <h1>Hello, world</h1>
+          <p>This is a plain HTML card with no styling beyond the browser's defaults.</p>
+          <ul>
+            <li>First reason to learn CSS</li>
+            <li>Second reason</li>
+            <li>Third reason</li>
+          </ul>
+          <a class="btn" href="#">Sign up</a>
+        </div>
+      </div>
+
+      <div class="pane styled">
+        <div class="label">With CSS</div>
+        <div class="card">
+          <h1>Hello, world</h1>
+          <p>This is the same HTML, dressed up with ~40 lines of CSS. Same skeleton, different outfit.</p>
+          <ul>
+            <li>First reason to learn CSS</li>
+            <li>Second reason</li>
+            <li>Third reason</li>
+          </ul>
+          <a class="btn" href="#">Sign up</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

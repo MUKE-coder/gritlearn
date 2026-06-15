@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "oauth-button-01",
+  "type": "registry:block",
+  "title": "OAuth Button",
+  "description": "OAuth provider sign-in button (GitHub, Google, Discord, X)",
+  "files": [
+    {
+      "path": "components/grit-ui/oauth-button-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/oauth-button-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

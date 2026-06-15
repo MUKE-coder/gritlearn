@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>px vs rem vs % vs vh</title>
+    <style>
+      :root {
+        /* Change ONE of these and watch the whole page restyle. */
+        --accent: #4763e4;
+        --bg: #f9fafb;
+        --text: #111827;
+        --space-2: 8px;
+        --space-4: 16px;
+        --radius: 10px;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 var(--space-4); line-height: 1.6; color: var(--text); }
+      .row { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); margin-top: 24px; }
+      .card { background: var(--bg); border: 1px solid #e5e7eb; border-radius: var(--radius); padding: var(--space-4); }
+      .card h2 { margin: 0 0 var(--space-2); font-size: 1.125rem; color: var(--accent); font-family: ui-monospace, monospace; }
+      .card p { margin: 0; font-size: 0.875rem; color: #4b5563; }
+
+      .demo { margin-top: var(--space-2); border-radius: 6px; background: linear-gradient(135deg, #6e8bff, #4763e4); color: white; padding: var(--space-4); font-size: 13px; font-family: ui-monospace, monospace; }
+      .px  .demo { width: 200px;  }   /* exact 200 actual pixels */
+      .rem .demo { width: 16rem;  }   /* 16 × root font-size (default 256px) */
+      .pc  .demo { width: 50%;    }   /* 50% of parent (.card) */
+      .vh  .demo { height: 15vh;  }   /* 15% of viewport height */
+    </style>
+  </head>
+  <body>
+    <h1>px vs rem vs % vs vh</h1>
+    <p>
+      Resize the window and watch the four boxes below. Only some of them
+      respond. In your browser's settings, change the default font size
+      from 16px to 20px — the rem box grows; the px box doesn't.
+    </p>
+
+    <div class="row">
+      <div class="card px">
+        <h2>width: 200px</h2>
+        <div class="demo">Fixed pixels. Stable, but doesn't respect user font-size.</div>
+        <p>Use when you want an exact dimension that never moves.</p>
+      </div>
+
+      <div class="card rem">
+        <h2>width: 16rem</h2>
+        <div class="demo">Scales with the root font size. The modern default for spacing.</div>
+        <p>Use for font sizes, padding, margins — anything you want to scale.</p>
+      </div>
+
+      <div class="card pc">
+        <h2>width: 50%</h2>
+        <div class="demo">Half the card. Resizes with the parent.</div>
+        <p>Use for "fill the parent" behavior.</p>
+      </div>
+
+      <div class="card vh">
+        <h2>height: 15vh</h2>
+        <div class="demo">15% of the viewport height. Resize the window vertically.</div>
+        <p>Use for full-bleed hero sections and modal overlays.</p>
+      </div>
+    </div>
+
+    <p style="margin-top: 30px; padding: var(--space-4); border-left: 4px solid var(--accent); background: #eef2ff; border-radius: 0 6px 6px 0; font-size: 13px;">
+      <strong>Try this:</strong> change <code>--accent</code> at the top of the
+      &lt;style&gt; block from <code>#4763e4</code> to <code>#dc2626</code>.
+      Every accent on the page turns red — without touching any of the
+      individual rules. That's the variable superpower.
+    </p>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "cta-banner-01",
+  "type": "registry:block",
+  "title": "CTA Banner",
+  "description": "Full-width CTA with email capture and success state",
+  "files": [
+    {
+      "path": "components/grit-ui/cta-banner-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/cta-banner-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

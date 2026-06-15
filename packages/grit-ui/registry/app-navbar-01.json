@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "app-navbar-01",
+  "type": "registry:block",
+  "title": "App Navbar",
+  "description": "App top navbar with logo, nav links, and user menu (Vercel/Linear)",
+  "files": [
+    {
+      "path": "components/grit-ui/app-navbar-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/app-navbar-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

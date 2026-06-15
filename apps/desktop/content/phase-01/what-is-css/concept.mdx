@@ -1,0 +1,200 @@
+## What CSS is
+
+HTML decides *what's there*. CSS decides *what it looks like*. Color, size, position, spacing, fonts, shadows, animations, layout — every single one of those is CSS's job. You'll spend more time tweaking CSS over the years than almost any other web language, because the look of a product is what people see first. The good news: CSS, at its core, is three things — a *selector*, a *property*, and a *value*. Master that triad and every CSS rule you'll ever write fits the same shape.
+
+<Analogy>
+CSS is **clothing for the HTML skeleton**.
+
+You've got a skeleton (HTML). It has the right number of arms and legs in the right places — but it's nude. CSS is the wardrobe department. A t-shirt for this paragraph. A suit for this section. A red shirt or a blue shirt? Tight or loose? Tucked in or loose? Each rule is one decision about how to dress the body.
+
+Two things make the analogy useful:
+
+1. **The skeleton doesn't change.** Putting a t-shirt on the skeleton doesn't add an extra rib. CSS only styles what HTML already put there. If you want a new section, you add HTML; if you want the section to look different, you write CSS.
+2. **You can change outfits.** A single body can wear a hundred different outfits. The same HTML can be styled into a corporate dashboard, a glittery pop-star landing page, or a stark portfolio. CSS is the swap-out layer.
+
+The skeleton is the *content*. The clothing is the *presentation*. Keep them separate and your code stays sane. Mix them up — using `<font>` tags or styling inside HTML attributes — and you have a body wearing its bones on the outside.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a CSS rule: a selector, then a block of property-value pairs"
+  caption="Every CSS rule has the same shape: a selector (who does this apply to?) followed by property–value pairs in curly braces."
+>
+
+```
+       selector
+          │
+          ▼
+       h1, .lead-paragraph {
+          color: #4763e4;       ←─ property: value;
+          font-size: 24px;      ←─ property: value;
+          line-height: 1.4;     ←─ property: value;
+       }
+```
+
+</Illustration>
+
+### The triad: selector, property, value
+
+Every CSS rule looks like this:
+
+```css
+selector {
+  property: value;
+  property: value;
+}
+```
+
+- **Selector**: which HTML element(s) does this rule apply to? Could be a tag name (`p`), a class (`.lead`), an id (`#header`), or a more elaborate combo. We have a whole lesson on selectors next.
+- **Property**: what aspect of those elements are you setting? `color`, `font-size`, `margin`, `background`, `display`. There are hundreds, but you'll use about thirty of them constantly.
+- **Value**: what should that property be? `red`, `24px`, `1rem`, `flex`. Each property has its own legal values.
+
+That's CSS. Everything else — Flexbox, Grid, animations, transitions, variables, media queries — is more syntax built on top of those three pieces.
+
+### Three ways to attach CSS to a page
+
+CSS can live in three places. From worst to best:
+
+#### 1. Inline (avoid)
+
+```html
+<p style="color: red; font-size: 20px;">Hello</p>
+```
+
+The `style` attribute applies styles to a single element. Hard to override, impossible to reuse, mixes content and presentation. Use only for *truly* one-off styles set by JavaScript at runtime.
+
+#### 2. Internal stylesheet
+
+```html
+<head>
+  <style>
+    p { color: red; }
+  </style>
+</head>
+```
+
+A `<style>` block in `<head>`. Better — the CSS is in one place, not scattered through the body. Fine for small single-page demos. Worse for real projects because you can't share rules across pages.
+
+#### 3. External stylesheet (preferred)
+
+```html
+<head>
+  <link rel="stylesheet" href="styles.css">
+</head>
+```
+
+```css
+/* styles.css */
+p { color: red; }
+```
+
+The CSS lives in its own file. Multiple pages can `<link>` to the same file and share styles. Browsers cache the file, so subsequent page loads don't re-download it. This is what every real project uses.
+
+### What CSS does *not* do
+
+CSS is **declarative**, not procedural. You can't say "if X happens, then Y." You can't loop. You can't react to user input by itself (you use JavaScript for that). What CSS gives you is: a way to *describe* what styles apply to which elements under which conditions (`:hover`, `@media`). The browser does the actual styling.
+
+### Common properties you'll meet first
+
+Don't memorize this list — just know it exists:
+
+- **Text**: `color`, `font-family`, `font-size`, `font-weight`, `line-height`, `text-align`.
+- **Box**: `width`, `height`, `padding`, `margin`, `border`, `border-radius`.
+- **Backgrounds**: `background-color`, `background-image`.
+- **Layout**: `display`, `flex`, `grid`, `position`, `top`/`left`/`right`/`bottom`.
+- **Effects**: `box-shadow`, `opacity`, `transform`.
+
+Almost every page you've ever loaded was styled by some combination of those ~25 properties. The first half of Phase 1 is just learning what each one does.
+
+### The cascade — why "Cascading"
+
+CSS stands for **Cascading Style Sheets**. The *cascading* part means: when multiple rules try to style the same element, CSS uses a clear priority order to decide which wins. Specificity, source order, `!important` — those are the rules of the cascade. We'll cover them properly in the selectors lesson. For now, just know: in CSS, two rules can fight, and there's always a winner.
+
+<ExampleProject
+  src="before-after-css"
+  title="The same HTML, styled and unstyled, side by side"
+  description="One HTML file rendered twice in the same page — once with no CSS, once with about 40 lines of CSS. Same skeleton, two outfits. Edit the styles and see the right column change in real time."
+/>
+
+<ExampleProject
+  src="inline-vs-stylesheet"
+  title="Three ways to attach CSS — compared"
+  description="Three versions of the same paragraph: one with inline styles, one with an internal style block, one linked to an external stylesheet. All three render identically; the difference is in maintenance, caching, and reuse. Comments explain when to reach for each."
+/>
+
+<Exercise
+  title="Dress up the About page"
+  starter={`Take the About page from earlier lessons. Create a new file
+called styles.css next to it. Link it from <head> with:
+
+  <link rel="stylesheet" href="styles.css">
+
+Then in styles.css, write rules to:
+
+  - Set the body's font-family to system-ui, sans-serif.
+  - Center the page content with max-width: 640px and margin: 0 auto.
+  - Give the page a comfortable line-height (1.6 is a good default).
+  - Style <h1> with a color other than black.
+  - Add some padding to the body so the content doesn't hug the edges.
+
+Save and reload. The page should keep all its content but suddenly
+look much more deliberate.`}
+>
+
+- A new file `styles.css` exists, separate from the HTML file.
+- The HTML file has `<link rel="stylesheet" href="styles.css">` inside its `<head>`.
+- The CSS file contains at least 5 rules covering the requirements.
+- Each rule has the form `selector { property: value; }`.
+- No inline `style="..."` attributes were added.
+- Reloading the page shows the new styling immediately.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does CSS stand for, and what does "cascading" mean?
+
+**A:** **C**ascading **S**tyle **S**heets. The "cascading" part means that when multiple style rules apply to the same element, CSS uses a deterministic priority order to decide which one wins. The order considers three things: **specificity** (how specific the selector is — `#header` beats `.box` which beats `header`), **source order** (rules later in the file beat earlier ones at equal specificity), and **`!important`** (the nuclear override). The cascade is what makes CSS predictable when you have hundreds of rules in dozens of files.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What are the three ways to attach CSS to an HTML page, and which is best?
+
+**A:**
+
+1. **Inline** — `style="..."` attribute on an element. Worst: scatter, can't reuse, hard to override.
+2. **Internal** — `<style>...</style>` in `<head>`. OK for single-page demos.
+3. **External** — `<link rel="stylesheet" href="...">` to a separate `.css` file. **Best for real projects** — sharable across pages, cacheable, separates content from presentation.
+
+The only case to prefer inline is *dynamic* styles set by JavaScript at runtime, where the value is computed per element. Static styling almost always belongs in a stylesheet.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between a CSS *selector* and a CSS *property*?
+
+**A:** They answer different questions:
+
+- The **selector** answers *which HTML elements does this rule apply to?* — like `p`, `.lead`, `#nav`, or `article > h2`.
+- The **property** answers *what aspect of those elements are we changing?* — like `color`, `font-size`, `margin`, `display`.
+
+Then a **value** is *what to set the property to* — `red`, `16px`, `4rem`, `flex`. Selector and property are the *who* and the *what*; the value is the *how much*.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why separate content (HTML) from presentation (CSS) — what concrete things break when you mix them?
+
+**A:** Mixing them — inline `style` attributes, `<font>` tags, `<b>` for "make it bold," width attributes on table cells — breaks four things:
+
+1. **Reuse.** A style defined inline can't be applied to a hundred similar elements without copy-pasting.
+2. **Caching.** Inline styles ship with every page; an external stylesheet downloads once and the browser caches it. On big sites this is a huge size win.
+3. **Theming.** Want a dark mode? With separation, swap one stylesheet. With inline styles you'd edit every element.
+4. **Maintainability.** A change like "make every primary button slightly bigger" should be one CSS edit. With inline styling it's a grep-and-replace across every file.
+
+The historical lesson: in the 1990s, table-based layout and inline styles were normal. Sites became unmaintainable mazes. CSS was invented specifically to fix that.
+
+</InterviewQuestion>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "announcement-bar-01",
+  "type": "registry:block",
+  "title": "Announcement Bar",
+  "description": "Dismissible top-of-page announcement banner (Vercel-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/announcement-bar-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/announcement-bar-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

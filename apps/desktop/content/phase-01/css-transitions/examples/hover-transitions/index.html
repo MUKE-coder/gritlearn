@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hover transitions — slam vs soft-close</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin: 16px 0 32px; }
+      .btn { padding: 14px; border: 0; border-radius: 8px; background: #4763e4; color: white; font-weight: 600; cursor: pointer; font-size: 14px; }
+      .btn:hover { background: #3a53c6; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(71, 99, 228, 0.25); }
+      .label { font-family: ui-monospace, monospace; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; }
+
+      /* THE COMPARISONS */
+      .no-trans   { transition: none; }
+      .ease       { transition: all 200ms ease; }
+      .ease-out   { transition: all 200ms ease-out; }
+      .ease-in    { transition: all 200ms ease-in; }
+      .linear     { transition: all 200ms linear; }
+      .slow       { transition: all 600ms ease; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .btn { transition: none !important; transform: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Soft-close vs slammed</h1>
+    <p>Hover each button. Same change in background + position. Only the transition differs.</p>
+
+    <p class="label">No transition (slam)</p>
+    <div class="row"><button class="btn no-trans">Instant</button></div>
+
+    <p class="label">200ms ease (CSS default)</p>
+    <div class="row"><button class="btn ease">Hover me</button></div>
+
+    <p class="label">200ms ease-out (most natural)</p>
+    <div class="row"><button class="btn ease-out">Hover me</button></div>
+
+    <p class="label">200ms ease-in (feels heavy)</p>
+    <div class="row"><button class="btn ease-in">Hover me</button></div>
+
+    <p class="label">200ms linear (robotic)</p>
+    <div class="row"><button class="btn linear">Hover me</button></div>
+
+    <p class="label">600ms ease (too slow)</p>
+    <div class="row"><button class="btn slow">Hover me</button></div>
+
+    <hr style="margin: 30px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+    <p style="font-size: 13px; color: #6b7280;">
+      The whole page is wrapped in <code>prefers-reduced-motion</code> so if you toggle "Reduce motion" in your OS settings, all the buttons snap again.
+    </p>
+  </body>
+</html>

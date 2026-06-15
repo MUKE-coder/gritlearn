@@ -1,0 +1,197 @@
+## Semantic HTML
+
+So far every page we've built was made of generic elements: lots of `<div>`s, some `<p>`s, the odd `<h1>`. That works — browsers don't care what name a tag has as long as the HTML is valid. But somewhere between the year 2000 and 2010, the web grew up and HTML5 added a small vocabulary of *semantic* elements: `<header>`, `<nav>`, `<main>`, `<aside>`, `<footer>`, `<article>`, `<section>`. Using them turns a generic page into a page whose *structure* tells a story — to screen readers, to search engines, and to the next developer who reads your code at 2am.
+
+<Analogy>
+Semantic HTML is **labeling the rooms in a house**.
+
+Imagine a house plan with every room labeled BOX 1, BOX 2, BOX 3. It's a fine layout. The walls work. You can live in it. But every time you give someone directions ("the bathroom's in BOX 4, behind BOX 2"), they have to translate. Sell the house and the listing reads "5-BOX HOME WITH BOX." Hire a contractor — they ask "which BOX gets the new floor?"
+
+Now imagine the same plan with rooms labeled KITCHEN, BATHROOM, BEDROOM, LIVING ROOM, OFFICE. Same walls, same layout, but now the *purpose* of every room is in the label. You can talk about the house. You can find the kitchen instantly. You can sell it.
+
+That's the difference between `<div>` and the semantic elements. `<div>` is BOX. `<header>` is "the part of the page that's the header." `<nav>` is "this is navigation." `<main>` is "the main content of this page." Same pixels — the browser draws everything the same — but now the meaning is encoded in the structure.
+
+Sighted users see the same page either way. Screen reader users, search-engine bots, browser reading modes, and your future self all suddenly have labels they can navigate by.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a page with semantic landmarks: header, nav, main with article and aside, and footer"
+  caption="A semantic page reads like a labeled floor plan. Each region has a name that says what it's for."
+>
+
+```
+   ┌────────────────────────────────────────────┐
+   │  <header>      ← logo, site title          │
+   │  ┌──────────────────────────────────────┐  │
+   │  │  <nav>       ← primary navigation    │  │
+   │  └──────────────────────────────────────┘  │
+   ├────────────────────────────────────────────┤
+   │  <main>                                    │
+   │  ┌───────────────────────┬──────────────┐  │
+   │  │  <article>            │  <aside>     │  │
+   │  │   the main content    │  related     │  │
+   │  │   of this page        │  links, ad   │  │
+   │  └───────────────────────┴──────────────┘  │
+   ├────────────────────────────────────────────┤
+   │  <footer>      ← copyright, contact, etc.  │
+   └────────────────────────────────────────────┘
+```
+
+</Illustration>
+
+### The landmark elements
+
+These wrap whole regions of the page. Use them once each (or in sensible places):
+
+- **`<header>`** — the introductory block at the top of the page or top of an article. Usually the site logo and title.
+- **`<nav>`** — navigation. The site's primary menu. Footer link lists also qualify.
+- **`<main>`** — the page's primary content. Use it **once** per page. Screen readers offer a "skip to main content" shortcut that targets exactly this element.
+- **`<aside>`** — content tangential to the main content. A sidebar, a "related articles" widget, a pull quote.
+- **`<footer>`** — the closing block of the page or article. Copyright, contact, secondary links.
+
+### The content elements
+
+These wrap pieces of content *inside* the landmarks:
+
+- **`<article>`** — a self-contained piece of content. A blog post, a forum reply, a product card. Should still make sense if extracted from the page.
+- **`<section>`** — a thematic grouping with its own heading. Less specific than `<article>`. Use when you have a heading + content that belongs together but isn't quite independent.
+- **`<figure>` + `<figcaption>`** — an illustration with a caption. The figure could be an image, a code block, a chart.
+- **`<time datetime="2026-06-15">`** — for dates and times. Machine-readable.
+
+### When to use `<div>` and `<span>`
+
+The non-semantic ones still have a job: when you need a *box* purely for styling, with no semantic meaning, use `<div>` (block) or `<span>` (inline). "Wrap these three paragraphs so I can put a border around them" — that's a `<div>`. "Color these two words red" — that's a `<span>`. These are the *only* cases where they're the right tool. If you find yourself reaching for `<div>` and the content has a clear role (it's a sidebar, or a header, or an article), switch to the semantic element instead.
+
+### A non-semantic vs semantic page
+
+Here's the same page written two ways:
+
+```html
+<!-- Non-semantic — everything is a div -->
+<div class="header">
+  <div class="logo">GritLearn</div>
+  <div class="menu">
+    <a href="/">Home</a> <a href="/blog">Blog</a>
+  </div>
+</div>
+<div class="content">
+  <div class="post">
+    <div class="title">My first post</div>
+    <div class="body">Lorem ipsum…</div>
+  </div>
+</div>
+<div class="footer">© 2026</div>
+```
+
+```html
+<!-- Semantic — same visible result, much clearer structure -->
+<header>
+  <h1>GritLearn</h1>
+  <nav>
+    <a href="/">Home</a> <a href="/blog">Blog</a>
+  </nav>
+</header>
+<main>
+  <article>
+    <h2>My first post</h2>
+    <p>Lorem ipsum…</p>
+  </article>
+</main>
+<footer>© 2026</footer>
+```
+
+Same pixels in the browser. But every assistive tool, every search engine, every developer who reads the source — they all get a much better picture from the second one.
+
+### Common landmark mistakes
+
+- **More than one `<main>`.** There should be exactly one.
+- **`<nav>` for every group of links.** Footer link lists *can* be `<nav>`, but a list of links in the middle of a paragraph is just a list — don't wrap it.
+- **`<section>` without a heading.** A `<section>` should have an `<h2>` (or `<h3>` etc.) describing what it is. Without one, you probably wanted a `<div>`.
+- **`<article>` for non-self-contained content.** "Today's weather widget" might be an article (it could syndicate as RSS). "Background gradient wrapper" is not.
+
+### How a screen reader uses landmarks
+
+Most screen readers offer a shortcut to list every landmark on the page — `Insert+F7` in NVDA, the rotor in VoiceOver. The user picks one and jumps to it. A page with semantic HTML becomes navigable in seconds. A page made entirely of `<div>`s is one big undifferentiated wall.
+
+<ExampleProject
+  src="blog-skeleton"
+  title="A blog post page with proper landmarks"
+  description="A complete blog-post page using header, nav, main, article, aside, and footer. Minimal CSS — the point is the structure, not the look. Open DevTools' Accessibility tab and inspect the landmarks panel."
+/>
+
+<ExampleProject
+  src="non-semantic-soup"
+  title="The same page written entirely with divs"
+  description="Identical to the blog-skeleton example to the eye, but built entirely from div and span. Compare the source side-by-side with the semantic version. Notice how much harder it is to read at a glance."
+/>
+
+<Exercise
+  title="Refactor a non-semantic page to use landmarks"
+  starter={`Start from the non-semantic-soup example. Rewrite it using
+the right semantic elements:
+
+  - The top region with the logo and menu becomes a <header>
+    containing a <nav>.
+  - The blog post becomes an <article> with its own <header>
+    (for the title + date) and a <footer> (for the author byline).
+  - The sidebar becomes an <aside>.
+  - The bottom region with copyright becomes a <footer>.
+  - The whole content area is wrapped in <main>.
+
+Compare the source before/after. Then open DevTools' Accessibility
+panel — you'll see the landmarks list go from "0 found" to a
+proper outline.`}
+>
+
+- Exactly one `<main>` element on the page.
+- Exactly one `<header>` at the top of the page (the article's inner header is separate and fine).
+- The primary site menu is wrapped in `<nav>`.
+- The blog post is an `<article>` because it would still make sense if extracted from the page.
+- The sidebar uses `<aside>`, not `<div>`.
+- The visible result looks the same — semantic HTML doesn't change appearance, just meaning.
+- The number of `<div>`s in the file goes down significantly.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `<div>` and `<section>`?
+
+**A:** `<div>` is a generic box with **no semantic meaning** — use it purely for styling or grouping when nothing else fits. `<section>` is a **thematic grouping with a heading**. If the chunk has a clear heading and represents a distinct part of the page ("Features", "Pricing", "FAQ"), use `<section>`. If it's just a wrapper for some styling, use `<div>`. A `<section>` without a heading is almost always wrong.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Can you have multiple `<header>` elements on a page?
+
+**A:** Yes — `<header>` isn't limited to the top of the page. It also marks the introductory block of any **`<article>`** or **`<section>`**. A blog post can have its own `<header>` containing the title, author, and date, while the page itself has a separate `<header>` at the top with the site logo. The element you can only have one of per page is **`<main>`**.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `<article>` and `<section>`?
+
+**A:** Both group content, but they answer different questions:
+
+- **`<article>`** — would this content still make sense if you extracted it and put it on its own? A blog post, a forum reply, a product card — yes. RSS readers literally syndicate `<article>` elements.
+- **`<section>`** — is this a thematic chunk of the page with its own heading? "Features", "About us", "Pricing" — yes. They belong to the page; they don't stand alone.
+
+A page might have one big `<article>` (the blog post) that internally contains several `<section>`s ("Introduction", "How it works", "Conclusion"). The reverse — a `<section>` containing several `<article>`s (a list of blog cards) — is also common.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do semantic elements actually matter — what concrete things break when you don't use them?
+
+**A:** Three concrete things:
+
+1. **Screen-reader navigation.** Most screen readers offer "list all landmarks" and "skip to main content" shortcuts. Without `<main>`, `<nav>`, etc., the page is one big undifferentiated wall the user has to scroll through.
+2. **Reader mode.** Browsers like Safari and Firefox extract the main content for distraction-free reading. They look for `<article>` and `<main>` first. A page with none of those often shows reader mode as "unavailable."
+3. **SEO and rich snippets.** Google's crawler uses semantic landmarks (and structured data) to understand the page's hierarchy. A page where the main content is buried in nested `<div>`s ranks worse, and rich-snippet features (article cards, breadcrumb navigation in search results) become unavailable.
+
+Plus the readability win for the next developer who opens your file. That alone is worth the switch.
+
+</InterviewQuestion>

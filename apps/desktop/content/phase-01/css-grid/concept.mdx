@@ -1,0 +1,253 @@
+## CSS Grid
+
+If Flexbox is one-dimensional — a row or a column — **CSS Grid** is the two-dimensional cousin. With Grid, you declare both *rows* and *columns* of a layout and place items into the resulting cells. Whole-page layouts (header + sidebar + main + footer), photo galleries, dashboards, calendars — anything where vertical and horizontal alignment both matter. Grid is the most powerful layout system the browser has ever shipped, and it's also surprisingly small to learn.
+
+<Analogy>
+CSS Grid is **a chessboard**.
+
+Picture a chessboard before any pieces are on it. Eight rows, eight columns, 64 cells of equal size. You set the grid up *first* — you decide its shape — and then you place pieces wherever you want. A pawn might fit in one cell. A queen might claim a column. You can even draw extra lines and number them so you can say "place this thing from row line 2 to row line 4."
+
+That's exactly how CSS Grid works. The parent (`display: grid`) is the chessboard. You declare the columns and rows you want with `grid-template-columns` and `grid-template-rows`. The children are the pieces. By default they fill cells left-to-right, top-to-bottom in order — but you can also explicitly say "this card occupies the second and third column" or "this header spans all four columns."
+
+Compared to Flexbox, the mental model is reversed. Flexbox is *content-driven* — the kids pick their size and the parent flows around them. Grid is *layout-driven* — the parent draws the grid first and the children slot in. Pick Grid when the layout itself is the load-bearing structure of the page.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a CSS Grid container with named grid lines, columns, and rows, with items placed into specific cells"
+  caption="A grid is rows × columns of cells. You declare the structure on the parent; children are placed into cells by order or explicit coordinates."
+>
+
+```
+      col 1    col 2    col 3    col 4
+   ┌────────┬────────┬────────┬────────┐
+r1 │   A    │   B    │   C    │   D    │   1fr each
+   ├────────┼────────┼────────┼────────┤
+r2 │   E              │   F    │   G    │   E spans 2 columns
+   ├────────┴────────┴────────┴────────┤
+r3 │            H (spans all 4)         │   wide footer
+   └────────────────────────────────────┘
+
+   grid-template-columns: repeat(4, 1fr);
+   grid-template-rows:    auto auto auto;
+```
+
+</Illustration>
+
+### Turn it on
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;   /* three equal columns */
+  gap: 16px;                            /* space between cells */
+}
+```
+
+Three lines and you have a three-column layout. Children fill in row by row, left to right.
+
+### The `fr` unit
+
+`fr` means "fraction of leftover space." `1fr 1fr 1fr` = three equal columns. `2fr 1fr 1fr` = first column twice as wide as each of the others. Mix `fr` with fixed sizes to get hybrid layouts:
+
+```css
+grid-template-columns: 240px 1fr 320px;
+/* fixed sidebar | flexible main | fixed aside */
+```
+
+### `repeat()` and `minmax()`
+
+Saving on typing:
+
+```css
+grid-template-columns: repeat(4, 1fr);
+/* same as 1fr 1fr 1fr 1fr */
+
+grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+/* as many ≥220px columns as fit; each fills any leftover space */
+```
+
+The second form is **the modern responsive card-grid recipe**. On a wide screen you might get five columns; on a phone you get one. No media queries needed.
+
+### Rows
+
+`grid-template-rows` works the same way. Often you'll let rows auto-size based on content (`auto`) and only declare the heights of specific rows you want fixed:
+
+```css
+grid-template-rows: 60px 1fr 40px;
+/* header | flexible body | footer */
+```
+
+### Gaps replace margins
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;          /* both row and column gap */
+  row-gap: 20px;      /* override just row */
+  column-gap: 24px;   /* override just column */
+}
+```
+
+You'll find yourself reaching for `gap` constantly — it's cleaner than margins because the outer edge doesn't get an extra margin you have to negate.
+
+### Placing items: spanning and explicit cells
+
+By default items fill cells in source order. Override with shorthand or explicit positioning:
+
+```css
+.hero {
+  grid-column: 1 / -1;       /* span ALL columns (line 1 to line -1) */
+}
+
+.featured {
+  grid-column: span 2;       /* span 2 columns from wherever you are */
+}
+
+.sidebar {
+  grid-column: 4 / 5;        /* column line 4 to line 5 (one column wide) */
+  grid-row: 1 / 3;           /* row line 1 to line 3 (two rows tall) */
+}
+```
+
+The line numbers start at 1 on the left/top. Negative numbers count from the right/bottom (`-1` = last line). `span N` means "from here, take N tracks."
+
+### Named grid areas
+
+For page-level layouts, named areas are a beautiful way to write the layout *visually*:
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  grid-template-rows: 60px 1fr 40px;
+  grid-template-areas:
+    "header  header  header"
+    "sidebar main    aside"
+    "footer  footer  footer";
+  min-height: 100vh;
+}
+
+header { grid-area: header; }
+nav.sidebar { grid-area: sidebar; }
+main { grid-area: main; }
+aside { grid-area: aside; }
+footer { grid-area: footer; }
+```
+
+You can *see* the layout shape in the CSS. The browser does the math. This is the cleanest page-level layout pattern modern CSS offers.
+
+### When to use Grid vs Flexbox
+
+- **Use Flexbox** for one-dimensional layouts: navbars, button groups, form fields stacked vertically, a row of pills.
+- **Use Grid** for two-dimensional layouts: the page's overall skeleton, dashboards, photo galleries, calendars, settings panels with labeled fields.
+
+Don't stress about getting it perfectly right; both can do most things. A common pattern is **Grid for the page** + **Flexbox inside each cell**. They compose beautifully.
+
+<ExampleProject
+  src="dashboard-grid"
+  title="A dashboard with header, sidebar, main, footer"
+  description="A full page-level layout using grid-template-areas. Resize the browser — the layout holds together. Comment out the named areas and watch the structure collapse to see why named areas are such a clean pattern."
+/>
+
+<ExampleProject
+  src="named-areas"
+  title="Responsive card grid in one line"
+  description="A grid of cards declared with repeat(auto-fit, minmax(220px, 1fr)). Resize the window — the column count adjusts automatically. No media queries. This pattern alone makes about half of all responsive layouts trivial."
+/>
+
+<Exercise
+  title="Build a three-column gallery"
+  starter={`Create a page with:
+
+  - A grid of 9 cards using display: grid.
+  - On wide screens (>= 900px): 3 columns, each 1fr.
+  - On medium (600px-900px): 2 columns.
+  - On narrow (<600px): 1 column.
+  - A 16px gap between cards.
+  - Cards have padding, border-radius, and a subtle border.
+
+Bonus: replace your media queries with a single
+repeat(auto-fit, minmax(220px, 1fr)) declaration. Compare. The
+auto-fit version is way less code and adapts to any screen
+width — not just three breakpoints.`}
+>
+
+- The container uses `display: grid` with a column declaration.
+- Cards stack to 1 column on narrow screens and reflow to 2 or 3 on wider ones.
+- `gap` is used for spacing between cards, not margins.
+- If using the auto-fit version: no media queries are needed for the column count.
+- Resizing the browser smoothly transitions between column counts.
+- Each card has rounded corners and a border (not just bare divs).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the `fr` unit in CSS Grid?
+
+**A:** `fr` stands for "fraction of available space." After fixed and content-sized tracks are accounted for, the leftover space is divided among `fr` tracks in proportion to their numbers.
+
+- `1fr 1fr 1fr` — three equal columns.
+- `2fr 1fr 1fr` — first column twice as wide as each other.
+- `200px 1fr` — fixed 200px sidebar, flexible main.
+
+Use `fr` for *flexible* tracks; use `px` / `rem` for *fixed* ones. Combining them is the whole point.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When should you use CSS Grid instead of Flexbox?
+
+**A:** Use Grid when **both rows and columns matter at the same time**. Use Flexbox when only *one* axis matters.
+
+- **Grid**: page layout (header / sidebar / main / footer), photo galleries, dashboards, calendars, settings forms. You define the structure first; items slot into cells.
+- **Flexbox**: navbar, toolbar, button group, tag row, stacked form fields. The items lay themselves out along a single axis.
+
+A common pattern is Grid for the page skeleton, Flexbox for each section inside. They compose beautifully.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `repeat(auto-fit, minmax(200px, 1fr))` do?
+
+**A:** It creates **as many equal columns as will fit** at a minimum of 200px each, with each column flexing up to share leftover space evenly.
+
+- **`repeat(auto-fit, …)`** — let the browser decide how many tracks.
+- **`minmax(200px, 1fr)`** — each track is at least 200px, at most an equal `1fr` share of available space.
+
+On a 1200px screen you'll get 5–6 columns. On a 700px screen, 3. On a phone, 1. No media queries required — the layout adapts continuously to any width. This pattern is the modern responsive card-grid in one line of CSS.
+
+`auto-fit` collapses empty tracks; `auto-fill` keeps them as gaps. `auto-fit` is what you want 95% of the time.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What are `grid-template-areas`, and what's the advantage over numeric line placement?
+
+**A:** Named areas let you describe the layout *visually* in CSS as ASCII art:
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  grid-template-areas:
+    "header  header  header"
+    "sidebar main    aside"
+    "footer  footer  footer";
+}
+header { grid-area: header; }
+aside  { grid-area: aside; }
+```
+
+Two big wins over numeric `grid-column: 2 / 4`:
+
+1. **Self-documenting.** You can *see* the layout's shape in the CSS without running it.
+2. **Reflow-friendly.** Change the layout by editing the ASCII (move "aside" to the bottom row), and every named child relocates automatically — no per-element edits.
+
+The downside: every area name must form a rectangle. You can't make L-shapes. For complex non-rectangular layouts you'd fall back to numeric placement.
+
+</InterviewQuestion>

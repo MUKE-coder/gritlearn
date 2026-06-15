@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "discount-badge-01",
+  "type": "registry:block",
+  "title": "Discount Badge",
+  "description": "Sale / percent off badge and flash sale pill",
+  "files": [
+    {
+      "path": "components/grit-ui/discount-badge-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/discount-badge-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

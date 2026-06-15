@@ -1,0 +1,248 @@
+## Responsive design & media queries
+
+Until about 2010 every page assumed a desktop screen. Then phones came and "scroll horizontally and pinch-zoom" stopped being acceptable. **Responsive design** is the idea that the same HTML adapts smoothly to any screen size — a phone, a tablet, a laptop, a 4K monitor — without separate pages or apps. **Media queries** are the CSS tool that makes it work. They're a way of saying "apply this CSS only when the screen meets these conditions" and they're one of the most important features the web has ever added.
+
+<Analogy>
+A responsive page is **water poured into different glasses**.
+
+Pour the same liter of water into a tall thin glass and it takes the glass's shape — a tall narrow column. Pour it into a wide bowl and it spreads out into a shallow disc. Pour it into a tumbler and it's somewhere in between. The water didn't change. The container did. The liquid found a way to be the same volume in whichever shape it was given.
+
+A well-built page does that. The text, images, buttons, and forms are the water. The browser window — phone, tablet, laptop — is the glass. The page reflows: a three-column desktop layout becomes a single column on phone. A navbar collapses into a hamburger. Text sizes scale. Padding tightens. None of the *content* changes; only the *arrangement*.
+
+Media queries are the rules that tell the water "when the glass is narrower than 600px, lay yourself out differently." They make the page liquid.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the same layout reflowing from desktop three-column to tablet two-column to mobile single-column"
+  caption="Same content, three glasses. Media queries decide which CSS rules apply at each width — and the layout reflows accordingly."
+>
+
+```
+   DESKTOP  ≥ 1024 px           TABLET  640–1023 px            MOBILE  < 640 px
+   ┌──────┬───────────┬────┐    ┌────────┬─────────────┐         ┌─────────────┐
+   │ NAV  │  CONTENT  │ AD │    │  NAV   │  CONTENT    │         │   NAV       │
+   │      │           │    │    │        │             │         ├─────────────┤
+   │      │           │    │    │        │             │         │  CONTENT    │
+   └──────┴───────────┴────┘    └────────┴─────────────┘         ├─────────────┤
+                                                                  │   AD        │
+                                                                  └─────────────┘
+```
+
+</Illustration>
+
+### The viewport meta tag (recap)
+
+Before any responsive CSS will work on mobile, this line must be in `<head>`:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+Without it, mobile browsers assume a 980px desktop layout and shrink-to-fit. Add it and you're in the actual phone width. Forgetting the viewport meta is the most common reason "my responsive CSS works in DevTools but breaks on real phones."
+
+### The basic media query
+
+```css
+@media (max-width: 600px) {
+  .sidebar { display: none; }
+  .grid { grid-template-columns: 1fr; }
+}
+```
+
+Read it as a conditional: *if the viewport is at most 600px wide, then apply these rules.* The rules inside `@media` only kick in when the condition is true; the browser ignores them otherwise.
+
+The two most common predicates:
+
+```css
+@media (max-width: 600px) { … }   /* phones */
+@media (min-width: 768px) { … }   /* tablet and up */
+@media (min-width: 1024px) { … }  /* small desktop and up */
+```
+
+You can combine them:
+
+```css
+@media (min-width: 600px) and (max-width: 1023px) { … }   /* tablet only */
+```
+
+### Mobile-first
+
+The recommended pattern is **mobile-first**: write your base CSS for small screens, then use `min-width` media queries to layer on bigger-screen styles.
+
+```css
+/* Mobile-first base — applies everywhere */
+.layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+/* Tablet and up */
+@media (min-width: 640px) {
+  .layout { grid-template-columns: 1fr 1fr; }
+}
+
+/* Desktop and up */
+@media (min-width: 1024px) {
+  .layout { grid-template-columns: 240px 1fr 320px; }
+}
+```
+
+Why this order? Because the base styles run on **every** device. The smallest device gets the simplest CSS. Each `min-width` query adds *more* styles for bigger screens. The progressive enhancement matches how the cascade naturally wants to work.
+
+The opposite — desktop-first with `max-width` queries undoing styles — works too, but generates more CSS, often runs the wrong rules on mobile until media queries override them, and is harder to reason about.
+
+### Common breakpoints
+
+There's no universal table — pick what your content needs. Tailwind ships:
+
+```
+sm: 640px
+md: 768px
+lg: 1024px
+xl: 1280px
+2xl: 1536px
+```
+
+…and most teams use a variant of those. Bootstrap is close. Pick a set, use it consistently. **Don't pick breakpoints based on devices** ("iPhone 15 is 393px") — pick them based on when your content stops looking right. Resize the browser until something breaks, set a breakpoint there.
+
+### Modern alternatives that often skip the media query entirely
+
+Two CSS features can replace whole media queries:
+
+#### `clamp()`
+
+Fluidly scale a value between a min and max:
+
+```css
+h1 { font-size: clamp(1.5rem, 4vw, 3rem); }
+/* never below 1.5rem, never above 3rem,
+   prefers 4% of viewport width in between */
+```
+
+The font grows with the screen, then caps at the extremes. No breakpoints involved.
+
+#### `repeat(auto-fit, minmax(...))`
+
+You saw this in the Grid lesson:
+
+```css
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+```
+
+The column count adjusts continuously to the viewport. No media queries needed for the layout itself.
+
+When you can solve a responsiveness problem with `clamp` or `auto-fit`, prefer that — it's smoother (no sudden snap at a breakpoint) and less code.
+
+### Other useful media features
+
+```css
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1116; --text: #e6edf3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+
+@media (orientation: portrait) { … }
+@media (hover: none) { … }     /* touch devices that can't hover */
+```
+
+These let you respect user preferences and device characteristics — dark mode, reduced motion, touch vs mouse. Bake them in once and your site feels considered.
+
+<ExampleProject
+  src="mobile-first-card"
+  title="A card grid that reflows at every width"
+  description="A page-level layout that starts as a single column on phones and progressively becomes 2 then 3 columns as the viewport widens. Three breakpoints, mobile-first. Resize the browser slowly and watch each one kick in."
+/>
+
+<ExampleProject
+  src="breakpoint-playground"
+  title="Live breakpoint indicator"
+  description="A page that shows in big letters which breakpoint is currently active (sm, md, lg, xl). Resize the browser and the label changes. Useful for debugging your own breakpoints during development."
+/>
+
+<Exercise
+  title="Refactor your About page to be responsive"
+  starter={`Take the About page from earlier. Apply these mobile-first
+responsive rules:
+
+  - On mobile (default): everything is a single column with 16px
+    of horizontal padding.
+  - At >= 640px (tablet): the page max-width becomes 600px and is
+    centered, with 24px of padding.
+  - At >= 1024px (desktop): max-width becomes 720px, the page gains
+    a sidebar to the right with 280px of width using display: grid.
+
+Don't set a min-width on the body — use @media (min-width: ...)
+queries to add the wider-screen styles ON TOP of the mobile-first
+base. Resize the browser through all three widths and confirm
+the page feels right at each.`}
+>
+
+- Mobile-first CSS — the default rules work without any media query.
+- Two `@media (min-width: ...)` queries (no `max-width` queries).
+- The page is single-column under 640px.
+- The page is single-column with a 600px max-width between 640–1023px.
+- The page becomes a 2-column grid (main + 280px sidebar) at ≥ 1024px.
+- The viewport meta tag is present in `<head>`.
+- Resizing the browser causes the layout to reflow at each breakpoint without horizontal scroll.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the purpose of `<meta name="viewport" content="width=device-width, initial-scale=1">`?
+
+**A:** It tells mobile browsers to render the page at the device's actual width instead of a virtual 980px desktop width. Without it, phones load the page in a "zoomed-out desktop" mode where everything looks tiny and the user has to pinch-zoom. With it, the viewport is the phone's real pixel width and responsive CSS can do its job. Every responsive page **must** include this tag in `<head>` — it's the foundation media queries build on. Forgetting it is the single most common "why doesn't my responsive CSS work on phones" cause.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `min-width` and `max-width` in a media query?
+
+**A:**
+
+- **`@media (min-width: 768px)`** — applies when the viewport is **at least** 768px wide. Used to add styles for **larger** screens. "From this size up, apply these rules."
+- **`@media (max-width: 767px)`** — applies when the viewport is **at most** 767px wide. Used to add styles for **smaller** screens. "Up to this size, apply these rules."
+
+The mobile-first convention is to use only `min-width` queries — write the small-screen styles as the default (no query) and layer larger-screen styles on top with `min-width`. It generates less CSS and matches the progressive-enhancement model.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does "mobile-first" mean, and why is it the recommended approach?
+
+**A:** Mobile-first means writing your CSS so the **default styles** (the ones outside any media query) target small screens, then layering on **`min-width` queries** to override or add styles for larger screens.
+
+Why prefer it:
+
+1. **Smaller CSS on the slowest devices.** Mobile users on flaky networks get the simplest stylesheet; desktop users get the additions.
+2. **No FOUC-style flashing.** Desktop-first CSS often runs full layout rules on mobile until a `max-width` query undoes them, sometimes producing a brief visual flash.
+3. **Mirrors the cascade.** The cascade naturally layers from general to specific. Mobile-first matches that mental model — base styles are "everywhere," each query adds specificity for bigger screens.
+4. **Performance.** Mobile-first CSS is typically smaller and gzips better because you're not duplicating styles.
+
+Practically: write your component's CSS for a phone first. Then resize the browser; the first place something looks wrong is your first breakpoint. Add a `min-width` query there.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When can you skip media queries entirely?
+
+**A:** When CSS itself can make a value fluid. Two especially useful tools:
+
+1. **`clamp(min, preferred, max)`** for fluid sizing:
+   ```css
+   h1 { font-size: clamp(1.5rem, 4vw, 3rem); }
+   ```
+   The font grows continuously with the viewport, then caps. No breakpoints; no sudden snaps.
+
+2. **`grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`** for fluid grids. The column count adjusts to fit; no media query needed.
+
+Both of these *interpolate smoothly* — the layout feels alive instead of snapping at a fixed pixel width. For layouts that genuinely need to change *shape* (e.g. a sidebar that becomes a top bar), you still need media queries — but for sizing changes, prefer `clamp` and `auto-fit`. Less code, smoother result.
+
+</InterviewQuestion>

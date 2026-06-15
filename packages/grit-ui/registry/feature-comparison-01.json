@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "feature-comparison-01",
+  "type": "registry:block",
+  "title": "Feature Comparison",
+  "description": "Feature comparison table across plans (Linear pricing-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/feature-comparison-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/feature-comparison-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

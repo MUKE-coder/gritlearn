@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "workspace-switcher-01",
+  "type": "registry:block",
+  "title": "Workspace Switcher",
+  "description": "Workspace/org switcher dropdown (Linear/Notion-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/workspace-switcher-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/workspace-switcher-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

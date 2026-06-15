@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "category-filter-01",
+  "type": "registry:block",
+  "title": "Category Filter",
+  "description": "Filter sidebar with categories, price range, and ratings",
+  "files": [
+    {
+      "path": "components/grit-ui/category-filter-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/category-filter-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "hero-split-01",
+  "type": "registry:block",
+  "title": "Split Hero",
+  "description": "Side-by-side hero with left copy + right terminal code block (Vercel-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/hero-split-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/hero-split-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

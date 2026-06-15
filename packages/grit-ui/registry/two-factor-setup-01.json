@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "two-factor-setup-01",
+  "type": "registry:block",
+  "title": "Two-Factor Setup",
+  "description": "2FA setup with QR scan, verify code, and backup codes steps",
+  "files": [
+    {
+      "path": "components/grit-ui/two-factor-setup-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/two-factor-setup-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

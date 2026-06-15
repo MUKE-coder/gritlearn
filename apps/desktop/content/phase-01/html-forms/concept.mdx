@@ -1,0 +1,221 @@
+## HTML forms and inputs
+
+Almost every interactive moment on the web flows through a form: signing up, logging in, searching, posting a comment, checking out, filing a support ticket. HTML forms are how a page collects information from a person and ships it somewhere — usually to a server. The good news is HTML gives you a *lot* of inputs out of the box, and the basics fit in a single lesson. The bad news is the same: there's a lot to remember about labels, types, and validation. We'll cover the patterns that get used 95% of the time.
+
+<Analogy>
+A form is **a paper form on a clipboard**.
+
+You've filled out hundreds of paper forms — at the doctor, at the airport, opening a bank account. Every paper form has the same shape: a sheet of paper (the form itself), a column of *labels* on the left ("First name", "Email", "Date of birth"), input *fields* next to them (blank lines, checkboxes, little boxes for digits), and one button at the bottom (Submit, Next, Send). When you hand the form in, all the answers travel together.
+
+HTML forms are the exact same arrangement made of pixels. The `<form>` element is the paper. The `<label>` and `<input>` pairs are the question-and-answer slots. The `<button type="submit">` is the line at the bottom. When the user clicks Submit, the browser bundles every field's value into a single package and sends it to the URL named in the form's `action` attribute — like dropping the paper into the receptionist's pile.
+
+The shape stays the same whether the form has two fields (login) or twenty (an immigration form). Once you learn the pattern, you've learned every form.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an HTML form element wrapping labels, inputs, and a submit button"
+  caption="A form is a container that holds labeled inputs and a submit button. Submitting bundles every input's value and sends it to the action URL."
+>
+
+```
+   <form action="/signup" method="post">
+
+     <label for="email">Email</label>
+     <input id="email" name="email" type="email" required>
+
+     <label for="password">Password</label>
+     <input id="password" name="password" type="password" required>
+
+     <button type="submit">Create account</button>
+
+   </form>
+
+     │                  │
+     │                  └── id matches label's "for" — keeps them paired
+     └── name="..." is the key the server sees
+```
+
+</Illustration>
+
+### The `<form>` element
+
+```html
+<form action="/api/auth/register" method="post">
+  …inputs…
+</form>
+```
+
+Two attributes you almost always set:
+
+- **`action`** — the URL the data is sent to when the form submits.
+- **`method`** — usually `"get"` (data appended to URL, used for searches) or `"post"` (data sent in the request body, used for everything else).
+
+If you forget `action`, the form posts back to the current page. That's sometimes intentional (one-page apps that capture submit in JavaScript) and sometimes a bug.
+
+### `<input>` — the workhorse
+
+`<input>` is the most overloaded element in HTML. It changes behavior dramatically based on its `type` attribute:
+
+```html
+<input type="text">            <!-- single-line text -->
+<input type="email">           <!-- text + email validation + email keyboard on mobile -->
+<input type="password">        <!-- text but hidden -->
+<input type="number">          <!-- numbers only -->
+<input type="date">            <!-- date picker -->
+<input type="checkbox">        <!-- on/off -->
+<input type="radio">           <!-- one-of-many -->
+<input type="file">            <!-- file upload -->
+<input type="range">           <!-- slider -->
+<input type="search">          <!-- text + clear button + search keyboard -->
+<input type="tel">             <!-- phone, opens numeric keyboard on mobile -->
+<input type="url">             <!-- URL validation -->
+<input type="submit">          <!-- equivalent to <button type="submit"> -->
+```
+
+You'll meet others, but those cover most needs. Picking the right `type` is a quality win: `type="email"` makes mobile keyboards switch to the `@` layout; `type="tel"` makes them numeric; the browser handles basic validation for free.
+
+### Labels: `<label>`
+
+```html
+<label for="email">Email address</label>
+<input id="email" type="email">
+```
+
+Every input needs a label, and the two must be associated. There are two ways to do it:
+
+**Explicit (preferred):** the label has a `for` attribute matching the input's `id`. The advantage: the label can live anywhere on the page relative to the input.
+
+**Implicit:** wrap the input inside the label.
+
+```html
+<label>
+  Email address
+  <input type="email">
+</label>
+```
+
+Both work for screen readers. Both make the label clickable to focus the input — important on mobile where the touch target on a `<input type="checkbox">` is tiny by itself.
+
+### Required form attributes you'll use a lot
+
+- **`name`** — the key the server sees. `<input name="email">` arrives as `email=...` in the submission. Required if you want the field's value to be sent.
+- **`required`** — the form won't submit until this field has a value.
+- **`placeholder`** — gray ghost text that disappears when the user types. Not a substitute for a label.
+- **`minlength`/`maxlength`** — character limits.
+- **`min`/`max`** — numeric or date limits.
+- **`pattern`** — a regex the value must match. Heavy artillery; use sparingly.
+
+### Other useful elements
+
+- **`<textarea>`** — multi-line text. Doesn't take a `value` attribute; the content goes between the opening and closing tags.
+- **`<select>`** with **`<option>`** children — drop-down. Each option has a `value`.
+- **`<button>`** — `type="submit"` (the default) submits, `type="reset"` clears the form, `type="button"` does nothing (used for JS-controlled buttons).
+- **`<fieldset>`** with **`<legend>`** — groups related inputs with a visible label. Useful for accessibility on long forms.
+
+### A complete tiny form
+
+```html
+<form action="/api/contact" method="post">
+  <label for="name">Your name</label>
+  <input id="name" name="name" type="text" required>
+
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required placeholder="you@example.com">
+
+  <label for="message">Message</label>
+  <textarea id="message" name="message" rows="5" required></textarea>
+
+  <button type="submit">Send</button>
+</form>
+```
+
+That's a fully functional contact form. With CSS it can look like anything. With JavaScript you can intercept the submit and send it via `fetch` instead of the browser's default form-post. Without either, it still works — that's the point.
+
+<ExampleProject
+  src="signup-form"
+  title="A signup form that actually works"
+  description="Email, password, password confirmation, terms checkbox, submit. Uses required and type='email' for free browser validation. Submitting writes the data to the page so you can see exactly what would be sent."
+/>
+
+<ExampleProject
+  src="all-input-types"
+  title="Every common input type, side by side"
+  description="A reference page with text, email, password, number, date, range, checkbox, radio, select, and textarea. Try each one — the mobile keyboard changes by type, dates open a picker, range gives a slider. Notice how the browser handles validation."
+/>
+
+<Exercise
+  title="Build a contact form"
+  starter={`Create a contact.html with a form that asks for:
+
+  - Full name (text, required, minlength of 2)
+  - Email (type="email", required)
+  - A "how did you hear about us?" <select> with options:
+    Search, Friend, Twitter, Other
+  - A subject (text, required, maxlength of 100)
+  - A message (textarea, required, with 6 rows)
+  - A submit button labeled "Send message"
+
+Every input needs a matching <label>. Use the form's action and
+method attributes (action="#" and method="post" are fine for now —
+we don't have a server). When you submit, the page reloads with
+the values in the URL? No — POST data goes in the body, so the
+URL stays clean.`}
+>
+
+- Every `<input>` and `<select>` and `<textarea>` has a `name` attribute (otherwise the server gets nothing for that field).
+- Every input has a matching `<label>` — either via `for="..."` or by wrapping.
+- `required` is on the fields the exercise asks for.
+- The email field uses `type="email"`, not `type="text"`.
+- The `<select>` has at least one `<option>` for each value listed.
+- The submit button is a `<button type="submit">` or `<input type="submit">`.
+- The form has both `action` and `method`.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why use `<label>` on a form input instead of just placing text next to it?
+
+**A:** Three reasons:
+
+1. **Accessibility**: screen readers read the label when the input is focused. Plain text next to an input isn't associated with it.
+2. **Click target**: clicking the label focuses the input. Hugely useful on mobile for tiny checkboxes and radios.
+3. **Form validation tooling**: assistive tech and validation messages use the label text to describe the field.
+
+The two ways to associate a label: `<label for="id">` matching the input's `id`, or wrap the input inside the label. Both work.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `GET` and `POST`?
+
+**A:**
+
+- **GET** — the form data is appended to the URL as query parameters: `?email=jane@x.com&password=...`. The URL is visible, bookmarkable, logged by every proxy in between. Use for *idempotent reads* like searches, where re-running the request is safe.
+- **POST** — the form data is sent in the request body. Not visible in the URL. Use for *changes*: creating an account, posting a comment, submitting a payment.
+
+Putting a password in a GET puts it in browser history and server logs — never do that.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does the `name` attribute on an input actually do?
+
+**A:** It's the **key** the server sees when the form is submitted. `<input name="email" value="hi@x.com">` arrives at the server as `email=hi@x.com`. If you omit `name`, the field is *not sent at all* — no key, no value. That's a common mystery: a field that visibly captures input but never reaches the server because somebody forgot the `name`. `id` is for matching with `<label for="...">` and for CSS/JS; `name` is for the submission. They're often the same string but they serve different purposes.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why pick the right `type` on an input — `email`, `tel`, `number`, `date` — instead of just using `type="text"` everywhere?
+
+**A:** Two big wins:
+
+1. **Mobile keyboards adapt.** `type="email"` shows the `@` key. `type="tel"` shows the numeric keypad. `type="date"` opens the native date picker. `type="number"` shows numbers. Users type faster and make fewer mistakes.
+2. **Built-in validation.** The browser refuses to submit a form with an invalid email format, an out-of-range number, or a bad URL — without you writing any code. Pair with `required`/`min`/`max`/`pattern` and you cover most basic validation for free.
+
+The tradeoff: `type="number"` strips leading zeros (bad for ZIP codes, phone numbers). `type="email"` is permissive — it accepts addresses that aren't deliverable. Use the type that matches the *semantic intent*; treat it as a free first line of defense, not the only one.
+
+</InterviewQuestion>

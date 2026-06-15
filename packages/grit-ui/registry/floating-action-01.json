@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "floating-action-01",
+  "type": "registry:block",
+  "title": "Floating Action Button",
+  "description": "Fixed floating action button (Notion new page-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/floating-action-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/floating-action-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

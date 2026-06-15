@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "file-upload-zone-01",
+  "type": "registry:block",
+  "title": "File Upload Zone",
+  "description": "Drag-and-drop file upload zone (Linear attachments-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/file-upload-zone-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/file-upload-zone-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

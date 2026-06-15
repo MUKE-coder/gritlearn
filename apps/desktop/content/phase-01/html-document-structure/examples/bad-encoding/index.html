@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Try switching this between utf-8 and iso-8859-1 (latin1) and
+         watch the accented words / emoji below break or come back. -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Encoding demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+      tr td { padding: 8px 12px; border-bottom: 1px solid #ddd; vertical-align: top; }
+      .label { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    </style>
+  </head>
+  <body>
+    <h1>What UTF-8 prevents</h1>
+    <p>
+      The table below contains text that uses characters outside basic
+      ASCII. With UTF-8, they render fine. Without it (try
+      <code>iso-8859-1</code>), the emoji and Japanese characters break.
+    </p>
+    <table>
+      <tr><td class="label">French</td><td>«&nbsp;Bonjour, comment ça va&nbsp;?&nbsp;»</td></tr>
+      <tr><td class="label">Spanish</td><td>¡Hola! ¿Qué tal?</td></tr>
+      <tr><td class="label">Japanese</td><td>こんにちは</td></tr>
+      <tr><td class="label">Emoji</td><td>📚 🧠 ✨ 🚀</td></tr>
+    </table>
+  </body>
+</html>

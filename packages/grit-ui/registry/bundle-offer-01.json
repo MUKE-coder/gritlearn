@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "bundle-offer-01",
+  "type": "registry:block",
+  "title": "Bundle Offer",
+  "description": "Frequently bought together bundle card (Amazon-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/bundle-offer-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/bundle-offer-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,310 @@
+## Tailwind layout, spacing, and responsive utilities
+
+You've seen the *concept* of Tailwind. This lesson is the vocabulary — the specific utilities you'll use for spacing, sizing, layout, and responsive behavior. Don't try to memorize the table all at once. Read it through, recognize the pattern, and bookmark tailwindcss.com/docs for the day-to-day lookup. After a week of writing real components, you'll know about thirty utilities cold and the rest in muscle memory.
+
+<Analogy>
+Tailwind utilities are **labeled drawers in a kitchen**.
+
+A well-organized kitchen has drawers labeled "knives," "wooden spoons," "measuring cups." When you need a measuring cup, you don't search — you pull the drawer. The labels are a shared vocabulary: every cook knows what's in each drawer because the labels follow the same pattern.
+
+Tailwind's class names are those labels. Spacing utilities all start with `p-` (padding) or `m-` (margin), followed by a number from the spacing scale. Layout utilities follow a similar pattern: `flex`, `grid`, `inline-block`. Responsive prefixes are stacked on the front: `md:flex` means "at md and up, switch to flex."
+
+Once you internalize the labeling system, you stop *reading* class names and start *seeing* them. `p-4 mt-2 text-sm text-gray-500` is recognized as "1rem padding, 0.5rem top margin, 14px font, muted text" the same way a chef recognizes their kitchen.
+</Analogy>
+
+<Illustration
+  alt="Diagram of Tailwind spacing scale showing the relationship between class numbers and CSS rem values"
+  caption="The spacing scale is the most-memorized table in Tailwind. p-4 / m-4 / gap-4 all mean 1rem (16px). The numbers are consistent: 1 = 0.25rem, 4 = 1rem, 8 = 2rem."
+>
+
+```
+   SPACING SCALE         CSS              PIXELS (at 16px root)
+   ──────────────        ──────────       ────────────
+   0                     0                0
+   1                     0.25rem          4 px
+   2                     0.5rem           8 px
+   3                     0.75rem          12 px
+   4                     1rem             16 px   ← THE everyday default
+   5                     1.25rem          20 px
+   6                     1.5rem           24 px
+   8                     2rem             32 px
+   10                    2.5rem           40 px
+   12                    3rem             48 px
+   16                    4rem             64 px
+   24                    6rem             96 px
+```
+
+</Illustration>
+
+### Spacing: padding, margin, gap
+
+Same scale, three properties:
+
+| Class | Meaning |
+|---|---|
+| `p-4` | padding all sides, 1rem |
+| `px-6 py-4` | x: 1.5rem, y: 1rem |
+| `pt-2` | padding-top, 0.5rem |
+| `m-4` | margin all sides |
+| `mx-auto` | horizontal margin auto — **the centering recipe** |
+| `mt-8` | margin-top, 2rem |
+| `gap-4` | gap (in flex/grid containers), 1rem |
+| `space-y-4` | vertical space between **children** of this element |
+
+`space-y-*` and `space-x-*` are useful when you want a consistent gap between siblings without making the parent flex/grid:
+
+```html
+<div class="space-y-4">
+  <p>First paragraph.</p>
+  <p>Second paragraph, 1rem below the first.</p>
+  <p>Third paragraph, 1rem below the second.</p>
+</div>
+```
+
+### Sizing: width, height, max
+
+| Class | Meaning |
+|---|---|
+| `w-full` | 100% width |
+| `w-1/2` | 50% width |
+| `w-64` | 16rem (256px) — spacing scale × 4 |
+| `w-screen` | 100vw |
+| `max-w-md` | max-width: 28rem (~448px) |
+| `max-w-prose` | a comfortable reading measure (~65ch) |
+| `h-screen` | 100vh — full viewport height |
+| `min-h-screen` | minimum 100vh — typical for page layouts |
+| `aspect-square` | aspect-ratio: 1 / 1 |
+| `aspect-video` | aspect-ratio: 16 / 9 |
+
+For `max-w-*` Tailwind uses **named sizes** instead of the spacing scale: `xs sm md lg xl 2xl 3xl ... 7xl prose screen-md ...`. The common ones — `max-w-md` (~28rem), `max-w-lg` (~32rem), `max-w-xl` (~36rem), `max-w-3xl` (~48rem) — cover most content.
+
+### Layout: display + flex + grid
+
+| Class | CSS |
+|---|---|
+| `flex` | `display: flex` |
+| `inline-flex` | `display: inline-flex` |
+| `flex-col` | `flex-direction: column` |
+| `flex-wrap` | `flex-wrap: wrap` |
+| `items-center` | `align-items: center` |
+| `justify-between` | `justify-content: space-between` |
+| `grid` | `display: grid` |
+| `grid-cols-3` | `grid-template-columns: repeat(3, minmax(0, 1fr))` |
+| `col-span-2` | `grid-column: span 2 / span 2` |
+
+A common navbar:
+
+```html
+<header class="flex items-center justify-between px-6 py-3">
+  <div class="font-bold">Brand</div>
+  <nav class="flex gap-6">
+    <a href="#">Home</a>
+    <a href="#">Blog</a>
+  </nav>
+</header>
+```
+
+A common 3-column responsive card grid (the same idea as the CSS Grid lesson, in fewer characters):
+
+```html
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <Card /> <Card /> <Card /> <Card /> <Card /> <Card />
+</div>
+```
+
+### Responsive prefixes: the breakpoints
+
+Same prefix table as the CSS lesson:
+
+```
+sm:   640px  and up
+md:   768px  and up
+lg:   1024px and up
+xl:   1280px and up
+2xl:  1536px and up
+```
+
+You **stack them on the front of any utility**:
+
+```html
+<div class="text-base md:text-lg lg:text-xl">
+  Bigger text as screen widens
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+  Cards reflow from 1 column to 2 to 3
+</div>
+
+<aside class="hidden lg:block">
+  Hidden on mobile, visible from lg up
+</aside>
+```
+
+The **default** (no prefix) is mobile. Each prefix overrides the previous at that breakpoint and above. **Always write mobile-first** — the base class applies everywhere; the prefixed ones layer on top.
+
+### State prefixes: `hover:`, `focus:`, `disabled:`, `dark:`
+
+```html
+<button class="
+  bg-blue-600 text-white
+  hover:bg-blue-700
+  focus:ring-2 focus:ring-blue-400
+  disabled:bg-gray-300 disabled:cursor-not-allowed
+">
+  Save
+</button>
+
+<div class="bg-white text-black dark:bg-gray-900 dark:text-white">
+  Adapts to user's OS dark mode setting
+</div>
+```
+
+You can **stack prefixes**: `md:hover:bg-blue-700` means "at md and up, on hover, change background." The most-specific prefix wins per the cascade.
+
+### Colors
+
+```
+bg-white, bg-black, bg-transparent
+bg-red-500    text-red-500   border-red-500
+bg-blue-50    →  almost-white tint
+bg-blue-500   →  base color
+bg-blue-900   →  almost-black
+```
+
+The number scale (50, 100, 200 … 900, 950) is consistent across every color. The base color is 500; lower numbers are lighter, higher numbers are darker. `bg-gray-50` is a very light gray; `bg-gray-900` is nearly black.
+
+### Text
+
+| Class | Meaning |
+|---|---|
+| `text-sm` | 0.875rem (14px) |
+| `text-base` | 1rem (16px) |
+| `text-lg` | 1.125rem |
+| `text-2xl` | 1.5rem |
+| `text-4xl` | 2.25rem |
+| `font-medium` | font-weight: 500 |
+| `font-bold` | font-weight: 700 |
+| `text-center` | text-align: center |
+| `leading-relaxed` | line-height: 1.625 |
+| `tracking-wide` | letter-spacing: 0.025em |
+| `text-gray-600` | color from the palette |
+
+### Borders, shadows, rounded corners
+
+| Class | CSS |
+|---|---|
+| `border` | 1px solid currentColor (default gray) |
+| `border-2` | 2px |
+| `border-gray-200` | border color |
+| `rounded` | 0.25rem corners |
+| `rounded-lg` | 0.5rem |
+| `rounded-full` | 9999px (pills, avatars) |
+| `shadow` | small shadow |
+| `shadow-md` | medium shadow |
+| `shadow-lg` / `shadow-xl` | progressively heavier |
+
+That set covers most components.
+
+<ExampleProject
+  src="responsive-utilities"
+  title="One layout, three viewports"
+  description="A page-level layout demonstrating mobile-first responsive prefixes. Resize the browser through the sm, md, and lg breakpoints — watch the navbar collapse, the grid recolumn, and certain elements show/hide. Every change is one prefixed Tailwind class."
+/>
+
+<ExampleProject
+  src="spacing-and-sizing"
+  title="The spacing scale, visualized"
+  description="A page showing every step of the Tailwind spacing scale rendered as colored bars (p-1, p-2, p-4, p-8, ...). The same scale is then applied to gap-* and to max-w-* sizes so you build the muscle memory for the scale visually."
+/>
+
+<Exercise
+  title="Build a responsive feature page in pure Tailwind"
+  starter={`Create a page that has:
+
+  - A sticky navbar at the top with a brand on the left and 4 nav
+    links on the right. The links are hidden on mobile and visible
+    from md and up.
+
+  - A hero with a centered heading, sub-paragraph, and two buttons
+    (primary + ghost). Use text-4xl on mobile and lg:text-6xl on
+    desktop.
+
+  - A 3-column responsive feature grid below the hero — 1 column
+    on mobile, 2 at sm, 3 at lg. Each card has padding, a border,
+    rounded corners, and a hover shadow.
+
+  - A footer at the bottom with a centered copyright line.
+
+Use the Tailwind CDN. Aim for 60-80 lines of HTML total, with
+no <style> block at all.`}
+>
+
+- The page uses zero custom CSS — the `<style>` block is absent or empty.
+- The nav-link list has `hidden md:flex` so it shows only on medium and up.
+- The hero heading uses both a base text size (`text-4xl`) and a `lg:` prefix (`lg:text-6xl`).
+- The feature grid uses `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` to step up column counts.
+- Cards use `hover:shadow-lg transition-shadow` (or similar) for hover affordance.
+- Resizing the browser through all the breakpoints reflows the page smoothly.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the spacing scale in Tailwind, and how do you read `p-4`?
+
+**A:** Tailwind has a numeric spacing scale where the number is `n × 0.25rem`:
+
+- `p-1` = 0.25rem = 4px
+- `p-2` = 0.5rem = 8px
+- `p-4` = 1rem = 16px (the most common default)
+- `p-8` = 2rem = 32px
+
+So `p-4` is "padding 1rem on all four sides." The same scale powers `m-*`, `gap-*`, `space-x/y-*`, and `top-*`/`left-*` positions. Memorizing 1 / 2 / 4 / 6 / 8 / 12 / 16 covers 95% of day-to-day use.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `mx-auto` do?
+
+**A:** It sets `margin-left: auto; margin-right: auto`. Combined with a `max-width`, it **centers a block element horizontally** in its parent. The standard "centered page" recipe:
+
+```html
+<div class="max-w-3xl mx-auto px-4">
+  …page content, centered, with breathing room on small screens
+</div>
+```
+
+`mx-auto` alone does nothing if the element is already 100% wide (auto margin can't grow when there's no leftover space). It needs a constrained width to take effect.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How does Tailwind handle responsive design?
+
+**A:** With **prefixes** on any utility class. The prefixes map to `min-width` media queries:
+
+- `sm:` → 640px and up
+- `md:` → 768px and up
+- `lg:` → 1024px and up
+- `xl:` → 1280px and up
+- `2xl:` → 1536px and up
+
+You write **mobile-first** — the unprefixed class is the default for all screens; prefixed classes override it at that breakpoint and above. So `class="text-base md:text-lg lg:text-xl"` means "16px on mobile, 18px from 768px, 20px from 1024px." Multiple prefixes stack: `md:hover:bg-blue-700` is "at md+ on hover."
+
+The big advantage over raw media queries: the responsive behavior lives **inline next to the markup** instead of in a separate `@media` block at the bottom of the stylesheet. Easier to reason about per-component.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does Tailwind ship a tiny production CSS file even though it has thousands of utility classes?
+
+**A:** Because Tailwind's build step does **content-driven tree-shaking** (often called "JIT" or just-in-time compilation). At build time, Tailwind scans every file in your project (HTML, JSX, Vue, etc.) and **only generates CSS for the classes it actually finds in your markup**. Unused utilities never reach production.
+
+A real-world Tailwind project usually ships 5–30KB of CSS gzipped, regardless of how many classes Tailwind theoretically supports, because the build only emits the ~200–500 classes you actually used. Compare to a hand-rolled CSS codebase, which often grows to 100–300KB and never shrinks.
+
+The tradeoff is that you must use class names that the scanner can recognize — dynamic concatenation like `bg-${color}-500` won't work (the scanner can't see the final string). The convention is to use full class names or safelisting for runtime-determined cases.
+
+</InterviewQuestion>

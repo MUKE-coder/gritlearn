@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Premier League scoreboard</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      caption { text-align: left; font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+      thead th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5563; }
+      tbody tr:nth-child(even) { background: #fafafa; }
+      tfoot td { font-weight: 600; background: #fffbeb; border-top: 2px solid #f59e0b; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <h1>Premier League scoreboard</h1>
+    <p style="color: #555; font-size: 14px;">Top assist leaders so far this season.</p>
+
+    <table>
+      <caption>Top assist leaders, current season</caption>
+      <thead>
+        <tr>
+          <th scope="col">Player</th>
+          <th scope="col">Team</th>
+          <th scope="col" class="num">Goals</th>
+          <th scope="col" class="num">Assists</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Mohamed Salah</td><td>Liverpool</td><td class="num">21</td><td class="num">14</td></tr>
+        <tr><td>Cole Palmer</td><td>Chelsea</td><td class="num">19</td><td class="num">11</td></tr>
+        <tr><td>Bukayo Saka</td><td>Arsenal</td><td class="num">12</td><td class="num">10</td></tr>
+        <tr><td>Luis Díaz</td><td>Liverpool</td><td class="num">8</td><td class="num">10</td></tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Totals</td>
+          <td class="num">60</td>
+          <td class="num">45</td>
+        </tr>
+      </tfoot>
+    </table>
+  </body>
+</html>

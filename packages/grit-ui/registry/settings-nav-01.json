@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "settings-nav-01",
+  "type": "registry:block",
+  "title": "Settings Nav",
+  "description": "Settings sidebar with grouped navigation sections (Vercel/GitHub-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/settings-nav-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/settings-nav-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

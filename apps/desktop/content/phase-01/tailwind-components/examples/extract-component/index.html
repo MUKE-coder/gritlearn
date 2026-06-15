@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The button — written three ways</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style type="text/tailwindcss">
+      @layer components {
+        /* Pattern 2 — @apply variant of the same button */
+        .btn-primary {
+          @apply inline-flex items-center gap-2 px-4 py-2
+                 bg-blue-600 hover:bg-blue-700
+                 text-white rounded-lg font-semibold text-sm
+                 transition-colors;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 p-6">
+    <div class="max-w-3xl mx-auto space-y-10">
+      <header>
+        <h1 class="text-2xl font-bold">The button — three ways</h1>
+        <p class="mt-2 text-sm text-gray-600">All three render identically. The difference is <em>where the classes live</em>.</p>
+      </header>
+
+      <!-- 1. RAW REPETITION (the problem) -->
+      <section class="bg-white border border-gray-200 rounded-xl p-5">
+        <p class="text-xs uppercase tracking-wider text-red-600 font-semibold mb-2">1. Raw repetition (the problem)</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors">Save</button>
+          <button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors">Send</button>
+          <button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors">Submit</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 font-mono">12 classes repeated 3 times in the source</p>
+      </section>
+
+      <!-- 2. EXTRACT VIA JS RENDER FUNCTION (closest to a real component) -->
+      <section class="bg-white border border-gray-200 rounded-xl p-5">
+        <p class="text-xs uppercase tracking-wider text-blue-600 font-semibold mb-2">2. Component-style extraction (the React/Vue answer)</p>
+        <p class="text-xs text-gray-500 font-mono mb-3">
+          // In real React you'd export &lt;Button&gt;. Here we mimic with a
+          // tiny render function — same idea: the classes live in ONE place.
+        </p>
+        <div id="component-row" class="flex flex-wrap gap-2"></div>
+        <p class="text-xs text-gray-500 mt-3 font-mono">Each call site is just the label.</p>
+      </section>
+
+      <!-- 3. @APPLY -->
+      <section class="bg-white border border-gray-200 rounded-xl p-5">
+        <p class="text-xs uppercase tracking-wider text-emerald-600 font-semibold mb-2">3. @apply class (the framework-agnostic answer)</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn-primary">Save</button>
+          <button class="btn-primary">Send</button>
+          <button class="btn-primary">Submit</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 font-mono">.btn-primary defined once via @apply (see &lt;style&gt; in &lt;head&gt;)</p>
+      </section>
+
+      <p class="text-xs text-gray-500 italic">Click any button — all three feel identical. The pattern picks itself based on what framework you're in.</p>
+    </div>
+
+    <script>
+      // Pattern 2 — the closest thing to a React Button in plain HTML/JS
+      function Button(label) {
+        return `<button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors">${label}</button>`;
+      }
+      document.getElementById("component-row").innerHTML = [
+        Button("Save"),
+        Button("Send"),
+        Button("Submit"),
+      ].join("");
+    </script>
+  </body>
+</html>

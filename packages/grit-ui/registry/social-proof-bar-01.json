@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "social-proof-bar-01",
+  "type": "registry:block",
+  "title": "Social Proof Bar",
+  "description": "Avatar stack with member count and star rating trust bar",
+  "files": [
+    {
+      "path": "components/grit-ui/social-proof-bar-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/social-proof-bar-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

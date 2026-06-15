@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "team-member-row-01",
+  "type": "registry:block",
+  "title": "Team Member Row",
+  "description": "Team roster row with avatar, role badge, and actions",
+  "files": [
+    {
+      "path": "components/grit-ui/team-member-row-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/team-member-row-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

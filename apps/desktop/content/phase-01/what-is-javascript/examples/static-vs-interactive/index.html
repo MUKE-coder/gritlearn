@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTML+CSS vs +JavaScript</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+      .pane { padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px; background: white; }
+      .pane h2 { margin: 0 0 6px; font-size: 14px; font-family: ui-monospace, monospace; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; }
+      details summary { cursor: pointer; color: #4763e4; font-weight: 600; padding: 6px 0; }
+      details[open] summary { color: #1d4ed8; }
+      details > p { margin: 8px 0 0; color: #4b5563; font-size: 14px; }
+      .toggle { color: #4763e4; font-weight: 600; cursor: pointer; user-select: none; }
+      .toggle::before { content: "▶ "; transition: transform 0.2s; display: inline-block; }
+      .toggle.open::before { transform: rotate(90deg); }
+      .hidden { display: none; }
+      .info { padding: 10px 14px; background: #eef2ff; border-left: 4px solid #4763e4; border-radius: 0 6px 6px 0; margin-top: 10px; font-size: 12px; color: #4338ca; }
+
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>The "show more" problem, two ways</h1>
+    <p>Both panes hide a paragraph behind a click. Compare the source — the CSS version uses a checkbox; the JS version uses 4 lines of script.</p>
+
+    <div class="row">
+
+      <!-- LEFT: CSS-only via <details> (the closest CSS gets) -->
+      <div class="pane">
+        <h2>CSS only (with &lt;details&gt;)</h2>
+        <details>
+          <summary>Show more</summary>
+          <p>Some hidden text that appears when you click. The <code>&lt;details&gt;</code> element is the only "interactive disclosure" CSS gives you without JavaScript. Limited to this exact open/close pattern; can't be styled freely; can't trigger anything else.</p>
+        </details>
+        <div class="info">No JavaScript. But you can't add more behavior — like "expand and scroll into view" or "also load the comments."</div>
+      </div>
+
+      <!-- RIGHT: JS version -->
+      <div class="pane">
+        <h2>+ JavaScript (4 lines)</h2>
+        <span id="js-toggle" class="toggle">Show more</span>
+        <p id="js-content" class="hidden">Some hidden text that appears when you click. Now we can attach <em>any</em> additional behavior — log analytics, animate, fetch more data, update other elements on the page.</p>
+        <div class="info">The JS version's behavior is unlimited. That's the muscle layer at work.</div>
+      </div>
+
+    </div>
+
+    <script>
+      // 4 lines — the entire JS for the right pane:
+      const toggle = document.getElementById("js-toggle");
+      const content = document.getElementById("js-content");
+      toggle.addEventListener("click", () => {
+        content.classList.toggle("hidden");
+        toggle.classList.toggle("open");
+      });
+    </script>
+  </body>
+</html>

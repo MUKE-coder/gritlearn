@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "cart-summary-01",
+  "type": "registry:block",
+  "title": "Cart Summary",
+  "description": "Order summary card with subtotal, tax, and checkout (Shopify)",
+  "files": [
+    {
+      "path": "components/grit-ui/cart-summary-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/cart-summary-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

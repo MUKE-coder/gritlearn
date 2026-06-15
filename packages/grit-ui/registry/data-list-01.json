@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "data-list-01",
+  "type": "registry:block",
+  "title": "Data List",
+  "description": "Key-value data list / details panel (Stripe details-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/data-list-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/data-list-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

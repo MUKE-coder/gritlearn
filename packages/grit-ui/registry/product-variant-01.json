@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "product-variant-01",
+  "type": "registry:block",
+  "title": "Product Variant Selector",
+  "description": "Color swatch and size variant selectors (Shopify PDP)",
+  "files": [
+    {
+      "path": "components/grit-ui/product-variant-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/product-variant-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

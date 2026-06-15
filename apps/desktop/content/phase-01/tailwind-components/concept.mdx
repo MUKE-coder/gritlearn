@@ -1,0 +1,305 @@
+## Tailwind components and reuse patterns
+
+You've got the utility vocabulary. The next question, the moment you write your fourth button with twelve classes on it, is: **how do I not repeat all twelve classes everywhere?** The standard answer is *components*: extract the markup once and reuse it. There are three ways to do that, and which one you reach for depends on the framework you're using and how much variation the component needs.
+
+<Analogy>
+Reuse patterns are **the way a cook captures a recipe they keep making**.
+
+Imagine you've been making the same omelet every Sunday for three months. The first time, you wrote down each step on the back of a receipt. The second time, you re-wrote them. By the fifth time, you've memorized the steps but still write them out because you'll forget one. Eventually you do one of three things:
+
+1. **Write a recipe card** that lives in your kitchen drawer. Every Sunday, you grab the card and follow it. The steps stay the same; you've just stopped re-deriving them. ← **React/Vue/Astro component**.
+2. **Memorize a shorthand.** "The Sunday omelet" — three words, your hands know the rest. You don't need a written recipe anymore. ← **CSS class** that bundles the utilities (`@apply`).
+3. **Define a kitchen rule.** "Every breakfast egg dish uses these three pans and this seasoning." You codify the *base* recipe once; specific dishes layer on top. ← **Variants in a CVA-style helper**.
+
+All three are valid. None are "the right way." The right way is the one that matches how much *variation* the recipe needs. If you always make the omelet identically, a recipe card or shorthand is fine. If half the family wants vegan, half wants ham, you'll want variants. Pick the tool to fit the shape of the duplication you're seeing.
+</Analogy>
+
+<Illustration
+  alt="Diagram of three reuse patterns: framework component, utility class with apply, and variant function"
+  caption="Three answers to 'don't repeat the same 12 classes everywhere': extract a component, bundle utilities into a class, or use a variant function."
+>
+
+```
+   THE PROBLEM
+   ───────────
+   <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">Save</button>
+   <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">Send</button>
+   <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">Submit</button>
+                ↑ 12 classes repeated 3 times. What do we do?
+
+
+   THREE ANSWERS
+   ─────────────
+   1. COMPONENT       <Button>Save</Button>       ← preferred in React/Vue
+   2. @apply CLASS    <button class="btn-primary">Save</button>   ← framework-agnostic
+   3. VARIANTS        <Button variant="primary" size="md">Save</Button>   ← scales to many sizes/states
+```
+
+</Illustration>
+
+### Option 1 — Extract a component (the React/Vue/Astro answer)
+
+In any component-based framework, the natural answer is to wrap the markup once:
+
+```tsx
+// Button.tsx
+export function Button({ children, ...props }) {
+  return (
+    <button
+      className="inline-flex items-center gap-2 px-4 py-2
+                 bg-blue-600 hover:bg-blue-700
+                 text-white rounded-lg font-semibold text-sm
+                 transition-colors"
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+```
+
+Then everywhere else:
+
+```tsx
+<Button onClick={save}>Save</Button>
+<Button onClick={send}>Send</Button>
+```
+
+**This is the answer for 90% of cases in modern apps.** React, Vue, Astro, and SvelteKit all give you cheap component extraction. The classes live in *one file*; changing the button's look means editing one place; the call sites are tiny.
+
+The Tailwind team explicitly recommends this: **don't fight your framework's component system; use it.**
+
+### Option 2 — `@apply` to bundle utilities into a class
+
+When you're not in a component framework (a vanilla HTML page, a plain CMS template), or when you want a "design token" without a component, Tailwind's `@apply` directive lets you bundle utilities into a single named class:
+
+```css
+/* styles.css */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2
+           bg-blue-600 hover:bg-blue-700
+           text-white rounded-lg font-semibold text-sm
+           transition-colors;
+  }
+}
+```
+
+```html
+<button class="btn-primary">Save</button>
+<button class="btn-primary">Send</button>
+```
+
+**Use `@apply` sparingly.** It turns a multi-class soup into a custom class, which moves you back toward the "name everything" world Tailwind is trying to leave. The official guidance: prefer extracting a component first. Use `@apply` for true cross-cutting concerns (a `.prose` long-form text class, for instance) or for inputs in form libraries that need a specific class name.
+
+### Option 3 — Variant helpers (CVA / clsx) for components with many states
+
+For a button that has 4 variants (primary, secondary, danger, ghost) and 3 sizes, hand-listing every combination becomes painful. Two helpers solve this:
+
+#### `clsx` (or `classnames`) for conditional classes
+
+```tsx
+import clsx from "clsx";
+
+<button className={clsx(
+  "px-4 py-2 rounded-lg font-semibold transition-colors",
+  variant === "primary" && "bg-blue-600 hover:bg-blue-700 text-white",
+  variant === "danger"  && "bg-red-600 hover:bg-red-700 text-white",
+  disabled && "opacity-50 cursor-not-allowed"
+)}>
+  {children}
+</button>
+```
+
+`clsx` joins truthy strings with spaces and skips falsy values. Tiny library, huge readability win over template-literal soup.
+
+#### `cva` (class-variance-authority) for full variant systems
+
+```tsx
+import { cva } from "class-variance-authority";
+
+const buttonStyles = cva(
+  "inline-flex items-center gap-2 rounded-lg font-semibold transition-colors",
+  {
+    variants: {
+      variant: {
+        primary: "bg-blue-600 hover:bg-blue-700 text-white",
+        ghost:   "bg-transparent hover:bg-gray-100 text-gray-900",
+        danger:  "bg-red-600 hover:bg-red-700 text-white",
+      },
+      size: {
+        sm: "px-3 py-1.5 text-xs",
+        md: "px-4 py-2 text-sm",
+        lg: "px-6 py-3 text-base",
+      },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
+
+<button className={buttonStyles({ variant: "danger", size: "lg" })}>Delete</button>
+```
+
+`cva` turns the "variants × sizes" combinatorial mess into a clean lookup. Used by shadcn/ui, the Vercel design system, and most modern React component libraries. **You don't need this for a small project.** You'll absolutely want it the moment you build a real button or input component with multiple variants.
+
+### A common pattern: small components, no `@apply`, occasional `cva`
+
+Real teams typically settle on a stack like this:
+
+- **Most components** are React/Vue components with their utility classes inline (Option 1).
+- **A handful of design tokens** — `.prose`, `.card`, `.input` — use `@apply` (Option 2). Rare.
+- **Polymorphic primitives** — buttons, badges, inputs with many variants — use `cva` (Option 3).
+
+You don't pick one at the start. You start with Option 1 (just extract the component) and reach for Options 2 or 3 when the duplication or variation pressure justifies it.
+
+### `tailwind.config.js` — the design tokens
+
+One last reuse pattern: extending Tailwind's defaults with your brand's design tokens. In your `tailwind.config.js`:
+
+```js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50:  "#eef2ff",
+          500: "#4763e4",
+          900: "#1e1b4b",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+      },
+      maxWidth: {
+        prose: "65ch",
+      },
+    },
+  },
+};
+```
+
+Then every utility extends naturally: `bg-brand-500`, `text-brand-50`, `font-sans`. Your design tokens become first-class Tailwind utilities; every dev on the project uses the same scale automatically.
+
+<ExampleProject
+  src="extract-component"
+  title="The button: written three ways"
+  description="A single page that demonstrates the same button extracted via three patterns — raw repeated classes, a tiny JS render function (the closest plain-HTML equivalent of a component), and a CSS @apply class. Compare the three approaches side by side."
+/>
+
+<ExampleProject
+  src="apply-vs-component"
+  title="When to reach for what"
+  description="A page with a real React-style 'Card' component pseudo-code and the equivalent @apply class for a CMS template. Annotated to explain why each pattern fits each context."
+/>
+
+<Exercise
+  title="Extract three button variants"
+  starter={`Imagine you're styling a small admin dashboard. You need:
+
+  - A primary button (filled blue).
+  - A secondary button (white with a border).
+  - A danger button (filled red).
+
+All three share padding (px-4 py-2), rounded-lg, font-semibold,
+text-sm. They differ in color.
+
+Pick ONE of the three reuse patterns and apply it:
+
+  - If you're in a React-like environment, write a <Button> with
+    a variant prop.
+  - If you're in plain HTML, use @apply (or one custom .btn-base
+    class + variant classes).
+  - If you want to try cva, install class-variance-authority
+    and write a buttonStyles helper.
+
+Show each variant rendered on the page. Click each — they should
+all be visually distinct but feel like the same component.`}
+>
+
+- All three variants share their *shared* classes via the chosen pattern, not via copy-paste.
+- The three variants are visually distinct (color differs).
+- Each variant is reachable by a single short call (`<Button variant="primary">` or `class="btn-primary"`).
+- Hover and focus states work on all three.
+- If using `@apply`: there's at most one `.btn-base` plus three variant classes; the variants don't redeclare the shared properties.
+- If using a component: the classes are written *once* in the component file; call sites pass a `variant` prop.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does Tailwind's `@apply` directive do?
+
+**A:** It lets you write a custom CSS class that bundles a set of Tailwind utilities:
+
+```css
+.btn-primary {
+  @apply px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold;
+}
+```
+
+At build time, Tailwind expands `@apply` into the corresponding CSS properties. The result is the same as writing the long-form CSS by hand, but you get to keep using Tailwind's design tokens and breakpoint prefixes.
+
+**When to use it:** when a class name is genuinely the right interface — a `.prose` for long-form content, an `.input` for form libraries that expect a specific class. **When to avoid it:** for ordinary component reuse — the Tailwind docs explicitly recommend extracting a framework component first.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's `clsx` and why is it commonly used in Tailwind codebases?
+
+**A:** `clsx` (and the older `classnames`) is a tiny utility for **conditionally joining class names** in JSX/Vue templates. Instead of writing:
+
+```jsx
+<button className={`px-4 py-2 ${primary ? 'bg-blue-600' : 'bg-gray-200'}`}>
+```
+
+you write:
+
+```jsx
+<button className={clsx('px-4 py-2', primary && 'bg-blue-600', !primary && 'bg-gray-200')}>
+```
+
+`clsx` evaluates each argument: strings get included, truthy expressions get included, falsy values get skipped. It cleans up the template-literal soup that conditional classes otherwise produce. Tiny (~200 bytes), zero dependencies, used by almost every modern React/Vue component library.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When would you reach for `@apply` versus extracting a React component?
+
+**A:**
+
+- **Extract a React component** when you can. It's the framework's intended reuse mechanism: props for variation, slots/children for content, full power over markup and behavior. The Tailwind team explicitly recommends this as the default. 90% of the time, this is the answer.
+- **Use `@apply`** when a *class name* is the right interface:
+  - Long-form content: `.prose` for markdown body styling.
+  - Form library inputs that expect a class hook.
+  - CMS templates where you can't easily run a JS component framework.
+  - Cross-framework design tokens (a `.btn-primary` that works in your React app *and* in a static Astro page).
+
+The rule: components for *structure* reuse, `@apply` for *class-name* design tokens. Don't use `@apply` to just hide your utility soup — that defeats Tailwind's core benefit (locality + tree-shaking).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's `class-variance-authority` (cva) and when does it earn its keep?
+
+**A:** `cva` is a TypeScript-friendly helper for components with many **variants** (e.g. button with `primary | secondary | danger` and `sm | md | lg`). It lets you declare the variants as a config object:
+
+```ts
+const button = cva("rounded-lg font-semibold", {
+  variants: {
+    variant: { primary: "bg-blue-600 text-white", danger: "bg-red-600 text-white" },
+    size:    { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm" },
+  },
+  defaultVariants: { variant: "primary", size: "md" },
+});
+
+button({ variant: "danger", size: "sm" })  // → returns the class string
+```
+
+It earns its keep when you have **3 or more variants × 2 or more orthogonal axes** (variant × size, variant × intent, etc.). Without it, you'd build conditional class soup with `clsx` — readable for two variants, painful for ten. With it, the variant matrix is one config object that's also TypeScript-typed for autocomplete. Used by **shadcn/ui** and most modern React UI libraries.
+
+Below 3 variants, it's overkill — plain `clsx` is fine. For one-off components with a single look, no helper needed at all.
+
+</InterviewQuestion>

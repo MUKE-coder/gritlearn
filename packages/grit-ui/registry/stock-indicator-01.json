@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "stock-indicator-01",
+  "type": "registry:block",
+  "title": "Stock Indicator",
+  "description": "In stock / low stock / out of stock indicator (Shopify)",
+  "files": [
+    {
+      "path": "components/grit-ui/stock-indicator-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/stock-indicator-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

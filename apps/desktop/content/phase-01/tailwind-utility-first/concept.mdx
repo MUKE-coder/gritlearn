@@ -1,0 +1,212 @@
+## Tailwind CSS — utility-first styling
+
+You've now spent eight or nine lessons writing real CSS. You know how the box model works, what `flex` does, when to reach for Grid. Everything from here on is about **how teams actually style apps in 2026** — and the dominant answer, by a wide margin, is **Tailwind CSS**. Tailwind isn't a new language. It's a giant library of tiny, single-purpose CSS classes you compose like LEGO bricks. Once it clicks, you write CSS *in your HTML*, never name another class, and ship designs three times faster.
+
+<Analogy>
+Tailwind is **a giant bin of pre-cut LEGO pieces**.
+
+When you build with raw LEGO, you reach into a tub of mixed bricks and snap them together. Each brick does one tiny thing — a single 2×2 red square, a 1×4 white slope, a green flat tile. You don't melt down a custom brick for each model; you assemble what's there.
+
+Traditional CSS is the opposite — you write a `.card { … }` rule that's a custom-poured chunk of plastic specific to one purpose. Every new component needs its own custom pour, named, filed, and maintained. Reuse means re-pouring or copying.
+
+Tailwind hands you the LEGO bin. There's already a class for "padding 16px" (`p-4`), one for "rounded corners" (`rounded-lg`), one for "white background" (`bg-white`), one for "shadow" (`shadow`). You don't *create* styles — you *snap together* the ones you need:
+
+```html
+<div class="p-4 rounded-lg bg-white shadow">A card</div>
+```
+
+The whole vocabulary fits in one website (tailwindcss.com/docs) and the muscle memory comes fast. Once you have it, building a feature stops being "name and write CSS for fifteen components" and becomes "compose utilities directly in the markup." Components that should be extracted get extracted; everything else stays inline.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing custom CSS class to Tailwind utility classes for the same button"
+  caption="Same button, two approaches. Tailwind composes single-purpose utilities directly in markup; traditional CSS pours one named rule per component."
+>
+
+```
+   TRADITIONAL CSS                       TAILWIND
+
+   <button class="btn-primary">Save     <button class="px-4 py-2
+   </button>                                          bg-blue-600 text-white
+                                                      rounded-lg font-semibold
+   .btn-primary {                                     hover:bg-blue-700">
+     padding: 8px 16px;                    Save
+     background: #2563eb;                </button>
+     color: white;
+     border-radius: 8px;
+     font-weight: 600;                  ← no .btn-primary needed;
+   }                                      every style is right there in
+   .btn-primary:hover {                   the markup, broken into atoms
+     background: #1d4ed8;
+   }
+```
+
+</Illustration>
+
+### How it works
+
+Each Tailwind class maps to one CSS declaration (or a tightly-related group). A few examples:
+
+| Class | CSS it generates |
+|---|---|
+| `p-4` | `padding: 1rem;` |
+| `px-4` | `padding-left: 1rem; padding-right: 1rem;` |
+| `mt-2` | `margin-top: 0.5rem;` |
+| `text-lg` | `font-size: 1.125rem;` |
+| `font-bold` | `font-weight: 700;` |
+| `bg-blue-600` | `background-color: #2563eb;` |
+| `text-white` | `color: #fff;` |
+| `rounded-lg` | `border-radius: 0.5rem;` |
+| `flex` | `display: flex;` |
+| `gap-4` | `gap: 1rem;` |
+| `hover:bg-blue-700` | `&:hover { background-color: #1d4ed8; }` |
+
+A component is a soup of these:
+
+```html
+<button
+  class="inline-flex items-center gap-2 px-4 py-2
+         bg-blue-600 text-white rounded-lg
+         font-semibold text-sm
+         hover:bg-blue-700 transition-colors">
+  Save
+</button>
+```
+
+Read left to right: layout (`inline-flex items-center gap-2`), spacing (`px-4 py-2`), color (`bg-blue-600 text-white`), shape (`rounded-lg`), text (`font-semibold text-sm`), interaction (`hover:bg-blue-700 transition-colors`).
+
+### Why teams adopt it
+
+Three real reasons:
+
+1. **No naming.** You never have to think of a class name for a tiny div again. `class="mt-2 text-sm text-gray-500"` is its own meaning.
+2. **Speed.** Once you have the muscle memory, you don't switch files to write styles — they live next to the markup that uses them.
+3. **It scales without breaking.** Two devs working on the same page won't collide on the same `.card` selector. Refactoring is local: edit the markup, delete the styles automatically (they're inline).
+
+### What it gives up
+
+- **HTML looks busy.** A button with 12 classes on it. The first time you see it, it's intimidating. You get used to it quickly, but it's a real cost.
+- **You depend on Tailwind.** You're learning Tailwind's class names, not raw CSS for every property. That's fine — the underlying CSS is exactly what you already learned — but you'll need to know what `p-4` means, not just `padding`.
+
+The Tailwind team's answer to "isn't this just inline styles?" is **no**, because:
+
+- Utilities are constrained to a design system (only the colors and sizes you've defined; not arbitrary `style="color: #abcd00"`).
+- They support pseudo-classes (`hover:`, `focus:`, `disabled:`), media queries (`md:`, `lg:`), and dark mode (`dark:`).
+- They compile down to a tiny stylesheet at build time — only the utilities you actually used ship to the browser.
+
+### A minimal setup
+
+In a Next.js or Vite project, Tailwind is one command and one config file:
+
+```bash
+npm install -D tailwindcss
+npx tailwindcss init
+```
+
+Then add `@tailwind base; @tailwind components; @tailwind utilities;` to your stylesheet. Modern stacks (Next.js, Vite, Astro) ship a `--with-tailwind` flag that does all this. **For B-level project work, the framework's `create` command sets it up.** For a single HTML file experiment, you can drop the CDN script:
+
+```html
+<script src="https://cdn.tailwindcss.com"></script>
+```
+
+(That CDN is a *playground tool* — not for production. Production builds use the CLI.)
+
+<ExampleProject
+  src="css-vs-tailwind"
+  title="Same card, two styling approaches"
+  description="A signup card built twice on the same page — once with a hand-written CSS class, once with Tailwind utility classes. Identical look. Compare the file size, the locality of the styles, and what happens when you tweak one."
+/>
+
+<ExampleProject
+  src="card-component"
+  title="A full product card in pure utilities"
+  description="A nicely-designed e-commerce product card using nothing but Tailwind. Demonstrates rich layouts (image + content + buttons), hover states, and responsive behavior — all without writing a single .class rule."
+/>
+
+<Exercise
+  title="Rewrite your last project in Tailwind"
+  starter={`Take the responsive card grid you built in the last lesson.
+Replace every CSS rule with Tailwind classes. The HTML structure
+stays the same; you just delete the <style> block and add classes
+to elements.
+
+A few hints:
+
+  - Container max-width + center → max-w-5xl mx-auto px-4
+  - The grid → grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4
+  - Each card → bg-white border border-gray-200 rounded-lg p-4
+  - A heading → text-base font-semibold mb-2
+  - A muted paragraph → text-sm text-gray-600
+
+Use the Tailwind CDN for now (one <script> in <head>). The visible
+result should be identical. The code should be shorter and the
+<style> block should be empty.`}
+>
+
+- The `<style>` block is empty or removed.
+- Every visible style is expressed via a Tailwind class.
+- The grid uses `grid` + `grid-cols-N` + `sm:`/`md:`/`lg:` modifiers, not custom CSS.
+- Cards use `rounded-lg`, `border`, `p-4` — not custom class names.
+- Resizing the browser still reflows correctly (the responsive prefixes still work).
+- The total HTML+CSS line count is noticeably smaller than before.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does "utility-first CSS" mean?
+
+**A:** It means styling by composing small, single-purpose CSS classes ("utilities") directly in your HTML, rather than writing custom CSS rules for each component. A traditional approach is:
+
+```css
+.btn { padding: 8px 16px; background: blue; color: white; }
+```
+
+A utility-first approach replaces that with `class="px-4 py-2 bg-blue-600 text-white"` — every visual concern is its own class, and you compose them per element. The advantage is no class-naming burden, no separate stylesheet to switch to, and no risk of duplicating styles across components. The cost is busier-looking markup. Tailwind CSS is the most popular utility-first framework.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `p-4` and `px-4` in Tailwind?
+
+**A:**
+
+- **`p-4`** — padding on **all four sides** (`padding: 1rem`).
+- **`px-4`** — padding on **x-axis only** (left + right): `padding-left: 1rem; padding-right: 1rem`.
+- **`py-4`** — padding on **y-axis only** (top + bottom).
+- **`pt-4` / `pr-4` / `pb-4` / `pl-4`** — padding on one specific side.
+
+Same pattern applies to `m-*` (margin), `gap-*`, `space-x/y-*` and most other directional properties. The numbers come from Tailwind's spacing scale: `1` = 0.25rem, `2` = 0.5rem, `4` = 1rem, `8` = 2rem.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** "Isn't Tailwind just inline styles with extra steps?" — how would you respond?
+
+**A:** Three real differences:
+
+1. **Constrained by a design system.** Inline styles let anyone write `style="color: #abcd00"` — arbitrary, ungoverned. Tailwind's classes draw from a finite scale of colors, spacing values, and font sizes you (or the framework) defined. The whole app stays visually coherent.
+2. **Pseudo-classes and media queries.** You can't write `:hover` or `@media` rules in inline styles. Tailwind's prefixes (`hover:`, `focus:`, `md:`, `lg:`, `dark:`) generate the equivalent CSS. That alone makes inline styles non-starters for real apps.
+3. **Build-time tree-shaking.** Tailwind scans your markup and only ships the classes you actually use. The production CSS is often tiny (10–30 KB) compared to ad-hoc inline styles which ship in every HTML response.
+
+The visual "look" is similar (styles co-located with markup) but the engineering properties are fundamentally different — Tailwind composes design tokens with full CSS power, while inline styles are arbitrary one-offs with no system.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does the `hover:bg-blue-700` class actually compile to?
+
+**A:** It compiles to a CSS rule with the `:hover` pseudo-class applied:
+
+```css
+.hover\:bg-blue-700:hover {
+  background-color: #1d4ed8;
+}
+```
+
+Tailwind escapes the colon in the class name (`\:`) because CSS class names can't contain a colon literally; the escape lets the *class name* contain `hover:` while the *selector* targets `:hover`. The pattern generalizes to every state Tailwind supports — `focus:`, `disabled:`, `active:`, `group-hover:`, `dark:`, `md:`, `lg:`, etc. — and they all stack: `md:hover:bg-blue-700` means "on screens ≥ 768px AND when hovered."
+
+</InterviewQuestion>

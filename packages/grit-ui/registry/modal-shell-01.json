@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "modal-shell-01",
+  "type": "registry:block",
+  "title": "Modal Shell",
+  "description": "Modal dialog shell with Escape key close and backdrop",
+  "files": [
+    {
+      "path": "components/grit-ui/modal-shell-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/modal-shell-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

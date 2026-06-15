@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "code-block-01",
+  "type": "registry:block",
+  "title": "Code Block",
+  "description": "Code display with language badge, copy button, line numbers (Vercel docs)",
+  "files": [
+    {
+      "path": "components/grit-ui/code-block-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/code-block-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

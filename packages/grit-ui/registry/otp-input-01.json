@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "otp-input-01",
+  "type": "registry:block",
+  "title": "OTP Input",
+  "description": "6-digit OTP input with auto-advance, paste, and resend timer",
+  "files": [
+    {
+      "path": "components/grit-ui/otp-input-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/otp-input-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

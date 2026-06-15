@@ -1,0 +1,242 @@
+## CSS colors, units, and variables
+
+Every CSS property that takes a size or a color comes back to a small set of choices. How do you describe red? How do you say "16 pixels"? Or "the same width as the parent"? Or "a quarter of the screen"? Modern CSS gives you several ways to answer each of those, and each way has a job. Once you've memorized the three or four most useful units and the three color formats, you'll spend a lot less time fighting your stylesheet.
+
+<Analogy>
+Colors and units are **paint chips and rulers**.
+
+When a painter walks into a room, they bring two things: a fan of paint chips and a tape measure. The chips let them describe colors precisely — not "blueish," but "**Pantone 285 C**" or "**#4763E4**" — so two painters can talk about the same color without seeing it. The tape measure lets them describe distances — "twenty-four inches off the floor" or "half the wall's width." Without precise names and units, every conversation about the room becomes a guess.
+
+CSS gives you the same toolkit. Colors have at least three precise spellings (`red`, `#ff0000`, `rgb(255, 0, 0)`) so designers, developers, and Figma can all talk about the same color. Lengths have absolute units (pixels), relative units (em, rem, %), and viewport units (vw, vh) so you can say "32px exactly" *or* "1.5 times the parent's font size" *or* "10% of the window height." Pick the right one for the situation and your stylesheet stays sane as the screen size, font size, and zoom level change.
+
+CSS variables (`--accent: #4763e4`) are the labels on the painter's mixing tray. Instead of writing `#4763e4` in fifty places, you label it once as `--accent` and reference it. When the brand color changes, you change one variable.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing color formats and CSS unit categories"
+  caption="Three ways to spell a color, three families of units to measure length. Pick the right tool for the job."
+>
+
+```
+   COLORS
+   ──────
+   red                ←  named (149 of these exist; useful for sketches)
+   #ff0000            ←  hex (6 or 3 chars; the common pro format)
+   rgb(255, 0, 0)     ←  rgb (great for opacity: rgba(255,0,0,0.5))
+   hsl(0, 100%, 50%)  ←  hsl (great for tweaks: hue + saturation + lightness)
+
+   LENGTHS
+   ───────
+   ABSOLUTE     RELATIVE             VIEWPORT
+   px           em   — parent's font  vw — 1% of viewport width
+                rem  — root's font    vh — 1% of viewport height
+                %    — parent's size  dvh — DYNAMIC viewport height
+                                          (handles mobile bars)
+```
+
+</Illustration>
+
+### Colors: three spellings, one job
+
+```css
+.btn { color: red; }                  /* named */
+.btn { color: #ff0000; }              /* hex */
+.btn { color: rgb(255, 0, 0); }       /* rgb */
+.btn { color: hsl(0, 100%, 50%); }    /* hsl */
+```
+
+- **Named colors** (`red`, `tomato`, `papayawhip`) — there are about 150. Handy for prototypes, mostly useless professionally because designers think in hex.
+- **Hex** (`#4763E4`) — the standard. Six hex digits = two each for red, green, blue (`#RRGGBB`). Three-digit shorthand exists for repeating digits (`#fff` = `#ffffff`).
+- **`rgb()` / `rgba()`** — same channels written as decimal numbers. Useful when you need opacity: `rgba(0, 0, 0, 0.5)` = half-transparent black. Modern CSS prefers the space-separated form `rgb(0 0 0 / 50%)`.
+- **`hsl()` / `hsla()`** — **H**ue (0-360°), **S**aturation (0-100%), **L**ightness (0-100%). Easier to *tweak* than hex: bump the lightness and you get a darker shade of the same color, no math required.
+
+For brand colors, use hex. For tweaking shades and overlays, switch to hsl temporarily. Both spell the same colors; they're just different lenses on the same RGB cube.
+
+### Lengths: absolute, relative, viewport
+
+#### Absolute
+
+**`px`** — pixels. Always the same physical size on screen (modulo browser zoom). Use for things that should be *exactly* one size: a 1px border, a 16px icon. Beware of using `px` for *font size* — it doesn't scale when the user bumps their default font size up.
+
+#### Relative
+
+**`em`** — relative to the *current element's font size*. So `padding: 1em` on a 16px-font element = 16px of padding. Confusingly, `font-size: 1.2em` on a 16px-font *parent* element gives the child a 19.2px font. Nested `em`s compound — a recipe for surprises.
+
+**`rem`** — relative to the *root element's* font size. The "root em." If `<html>` is at the default 16px, `1rem = 16px`. Doesn't compound — `rem` always means the same thing site-wide. **The modern default for font sizes and spacing.**
+
+**`%`** — relative to the *parent's* size. `width: 50%` = half the parent. Doesn't work the same on every property — `padding: 5%` means 5% of the parent's *width*, even for vertical padding. Mind the trap.
+
+#### Viewport
+
+**`vw`** and **`vh`** — percent of the viewport (browser window). `100vh` = the full window height. Useful for hero sections, sticky elements, modals. **`dvh`** is the new "dynamic" version that adjusts when the mobile browser's address bar shows or hides.
+
+### A practical mix
+
+```css
+:root {
+  --accent: #4763e4;
+  --max-width: 720px;
+  font-size: 16px;        /* the root size; all rem values derive from this */
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1rem;          /* 16px — scales with root font size */
+}
+
+h1 {
+  font-size: 2.25rem;     /* 36px */
+  color: var(--accent);
+}
+
+.hero {
+  min-height: 60vh;       /* always 60% of the viewport height */
+}
+
+.btn {
+  border: 1px solid var(--accent);  /* 1 actual pixel, not 1rem */
+  padding: 0.5rem 1rem;
+}
+```
+
+Notice the pattern: `px` for things that should be exact (borders, hairlines), `rem` for sizing that should scale with the root font, `vh/vw` for things that should track the viewport, `%` for "fill the parent."
+
+### CSS variables (custom properties)
+
+A CSS variable is a value you name with two leading dashes:
+
+```css
+:root {
+  --accent: #4763e4;
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-4: 16px;
+}
+
+.btn {
+  background: var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+}
+```
+
+Two superpowers:
+
+1. **Change once, change everywhere.** Update `--accent` and every button, link, and headline updates with it.
+2. **They cascade.** You can override a variable on a single element and only that subtree sees the new value:
+
+```css
+.dark-mode {
+  --accent: #8aa0ff;       /* lighter accent inside .dark-mode */
+}
+```
+
+The `:root { ... }` selector targets the `<html>` element — that's where you usually declare globals. The `--name` syntax is required; `var(--name)` reads the value.
+
+### `calc()` for arithmetic
+
+CSS can do math:
+
+```css
+.col-3 { width: calc(100% / 3); }
+.gutter { padding: calc(1rem - 1px); }
+.fluid { font-size: calc(1rem + 1vw); }
+```
+
+`calc()` is most useful when you need to mix units (e.g. `100% - 32px`) — something multiplication and division alone can't express.
+
+<ExampleProject
+  src="color-formats"
+  title="Three ways to spell every color"
+  description="A palette of brand swatches showing the same color in named/hex/rgb/hsl form. An hsl slider lets you tweak the lightness and watch the shade lighten or darken in real time — much harder with hex."
+/>
+
+<ExampleProject
+  src="units-and-variables"
+  title="px vs rem vs % vs vh, side by side"
+  description="Four cards declaring the same height in different units. Resize the window and bump the browser's default font size to see how each card reacts. Demonstrates exactly when to reach for each unit. CSS variables are used for spacing and color so you can change one line and watch the whole page restyle."
+/>
+
+<Exercise
+  title="Build a dark-mode toggle with CSS variables"
+  starter={`Create a page that uses CSS variables for at least four things:
+background color, text color, accent color, and a border radius.
+All your styling should reference those variables (no raw hex values
+in the rules below :root).
+
+Then create a class .dark that overrides each variable to a darker
+palette. Add a checkbox to your HTML. Use this one-line JavaScript
+to toggle the class on the <html> element:
+
+  document.querySelector('input[type="checkbox"]').onchange = e =>
+    document.documentElement.classList.toggle('dark', e.target.checked);
+
+Toggle the checkbox. The whole page should swap palettes without
+you having to write a single duplicate CSS rule.`}
+>
+
+- `:root` declares at least four `--variable-name: value;` lines.
+- Every rule that uses color or radius references the variables with `var(...)`.
+- The `.dark` selector overrides the same variable names with darker values.
+- Toggling the checkbox flips the page between light and dark.
+- No CSS rule below `:root` contains a raw hex code (everything goes through a variable).
+- Bonus: try `--space-1`, `--space-2`, `--space-4` for spacing and use those instead of magic numbers.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `em` and `rem`?
+
+**A:** Both are relative units, but to different things:
+
+- **`em`** is relative to **the current element's** computed `font-size`. So `padding: 1em` inside an element with `font-size: 20px` produces 20px of padding. Nested `em`s compound — a 1.2em font inside a 1.2em parent inside a 1.2em grandparent = 1.728× the root size.
+- **`rem`** ("root em") is relative to the **root element's** font size only. It never compounds. Predictable across the whole site.
+
+For font sizes, padding, and margins, use `rem` by default. Reserve `em` for things that should genuinely scale with their immediate container — like `letter-spacing: 0.05em` on a heading.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a hex color, and what does `#4763e4` actually mean?
+
+**A:** A hex color is a hexadecimal (base-16) encoding of three numbers: red, green, blue. Each pair of digits is one channel from `00` (0) to `ff` (255).
+
+- `47` = red channel ≈ 71
+- `63` = green channel ≈ 99
+- `e4` = blue channel ≈ 228
+
+So `#4763e4` is the same color as `rgb(71, 99, 228)` — a medium blue with a bit of red. Three-digit hex (`#fff`) is a shorthand where each digit is duplicated: `#fff` = `#ffffff`. Hex is the lingua franca because it's compact and unambiguous; designers, devs, and Figma all speak it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use `vh` / `vw` vs `%`?
+
+**A:**
+
+- **`vh` / `vw`** are percentages of the **viewport** (browser window). `100vh` is always the full window height, regardless of how deeply nested your element is.
+- **`%`** is a percentage of the **parent's** size. Inside a 600px-wide container, `50%` is 300px. Inside a 1200px-wide container, `50%` is 600px.
+
+Use `vh/vw` for things that should track the *window*: full-screen hero sections, modal overlays, sticky headers. Use `%` for things that should fill their parent: a sidebar that takes 30% of the wrapper, a button that takes 100% of its column. Mixing them carelessly (e.g. `width: 50vw` inside a 600px max-width container) is a common cause of "why is my element wider than its parent?" bugs.
+
+One modern improvement worth knowing: **`dvh`** (dynamic viewport height). On mobile, browser address bars hide as you scroll, changing the available height. `100vh` traditionally uses the *maximum* viewport, which causes a jump. `100dvh` uses the *current* viewport, which feels right. Use `dvh` for mobile hero sections.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What are CSS custom properties (variables) good for, and how do they differ from Sass/Less variables?
+
+**A:** CSS custom properties are values declared with `--name: value;` and read with `var(--name)`. They're live in the browser at runtime, which gives them two superpowers Sass/Less variables can't match:
+
+1. **Dynamic at runtime.** JavaScript can change them with `element.style.setProperty('--accent', '#f00')` and the page restyles instantly. Sass variables are baked at compile time.
+2. **They cascade.** Declaring `--accent: red;` on a parent and `--accent: blue;` on a child means anything inside the child sees blue; anything outside sees red. Sass variables have a single global value per scope.
+
+This is what makes dark mode, theme switchers, and per-component overrides trivial in modern CSS — flip a class on the root, the cascade does the rest. Sass/Less are still useful for compile-time helpers (mixins, math, file structure), but for **theme-style values**, native CSS variables are the right tool.
+
+</InterviewQuestion>

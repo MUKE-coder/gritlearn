@@ -1,0 +1,241 @@
+## The box model
+
+Every visible element in HTML is, secretly, a rectangle. The browser draws it as a box, even if its border is invisible and its content is a single character. That box has four nested layers — **content**, **padding**, **border**, **margin** — and every CSS layout rule eventually boils down to manipulating those four. Once you have a mental picture of the box, the rest of CSS layout makes sense. Without it, every spacing bug feels like a mystery.
+
+<Analogy>
+The box model is **a framed picture on a wall**.
+
+Imagine a framed photo hanging in a gallery:
+
+- **The photo itself** is the **content** — the actual image (or in HTML, the text and child elements).
+- **The matte** — the cream-colored cardboard between the photo and the frame — is the **padding**. It's *inside* the frame, hugging the photo, giving it room to breathe.
+- **The frame** — the wooden or metal border — is the **border**. Visible, physical, defines the edge of the picture.
+- **The empty space** between this picture and the next picture on the wall is the **margin**. It's *outside* the frame and pushes other pictures away.
+
+So inside out: content → padding → border → margin. The four layers always exist, even when their value is zero. A button on a page is a tiny framed picture. So is a paragraph. So is the whole page.
+
+The trick is understanding that *padding* lives **inside** the visual edge (the matte is part of the framed picture) while *margin* lives **outside** (it's empty wall space). Confuse the two and your spacing will fight you for weeks.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the CSS box model showing content, padding, border, and margin from inside to outside"
+  caption="Every box has four concentric layers. Content lives in the middle; margin is the empty space outside the border, pushing other boxes away."
+>
+
+```
+   ┌─────────────── margin (outside) ────────────────┐
+   │                                                  │
+   │   ┌───────────── border ─────────────────┐      │
+   │   │                                       │      │
+   │   │   ┌──────── padding ──────────┐      │      │
+   │   │   │                            │      │      │
+   │   │   │      content (text)        │      │      │
+   │   │   │                            │      │      │
+   │   │   └────────────────────────────┘      │      │
+   │   │                                       │      │
+   │   └───────────────────────────────────────┘      │
+   │                                                  │
+   └──────────────────────────────────────────────────┘
+```
+
+</Illustration>
+
+### The four layers, in CSS
+
+```css
+.card {
+  /* CONTENT — set the size of the content area */
+  width: 320px;
+  height: 200px;
+
+  /* PADDING — space INSIDE the border, around the content */
+  padding: 16px;            /* all four sides */
+  padding-top: 24px;        /* override just one side */
+
+  /* BORDER — the visible edge of the box */
+  border: 2px solid #4763e4;
+
+  /* MARGIN — space OUTSIDE the border, pushing other boxes away */
+  margin: 20px;             /* all four sides */
+  margin-bottom: 40px;
+}
+```
+
+Each layer has *four sides* (top, right, bottom, left) so each property has long-hand forms (`padding-top`, `padding-right`, etc.) and short-hand forms.
+
+### Shorthand: the order is clockwise from the top
+
+```css
+padding: 10px;                    /* all 4 sides:  10  10  10  10  */
+padding: 10px 20px;               /* vertical horizontal:  10  20  10  20  */
+padding: 10px 20px 30px;          /* top horizontal bottom:  10  20  30  20  */
+padding: 10px 20px 30px 40px;     /* top right bottom left  */
+```
+
+Same shorthand applies to `margin` and `border-width`.
+
+### The gotcha: `width` doesn't include padding or border (by default)
+
+Here's the trap that catches every beginner:
+
+```css
+.card {
+  width: 300px;
+  padding: 20px;
+  border: 2px solid black;
+}
+```
+
+You'd think the card takes up 300px on the page. It doesn't. By default, `width` sets the **content** area only. The actual rendered width is:
+
+```
+300 (content)
+ + 20 + 20  (left padding + right padding)
+ +  2 +  2  (left border + right border)
+= 344 pixels
+```
+
+This is called the **content-box** model, and it's the historical default. Every CSS framework — Tailwind, Bootstrap, you name it — flips this off because nobody wants to do that math constantly.
+
+### The fix: `box-sizing: border-box`
+
+```css
+* {
+  box-sizing: border-box;
+}
+
+.card {
+  width: 300px;
+  padding: 20px;
+  border: 2px solid black;
+  /* Rendered width: 300px. Padding and border are INCLUDED in the 300. */
+}
+```
+
+`box-sizing: border-box` tells the browser "include padding and border in the width calculation." Now `width: 300px` really means 300px on the page, period. The content area is whatever's left after padding and border are subtracted.
+
+Set this rule at the top of every stylesheet you write. It is, no exaggeration, one of the single most useful one-liners in CSS:
+
+```css
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+```
+
+### Margin collapse: the one weird trick
+
+When two *vertical* margins meet between two block-level elements, they don't add up — they **collapse** into one margin, the size of the larger of the two.
+
+```html
+<p style="margin-bottom: 30px;">First paragraph.</p>
+<p style="margin-top: 20px;">Second paragraph.</p>
+```
+
+You'd think the gap is 50px (30 + 20). It's actually **30** — the larger of the two. This is by design (it makes typography look nicer) but it surprises everyone. Margin collapse only happens vertically, only between block-level elements, and only in normal flow. It doesn't happen with padding, doesn't happen with horizontal margins, and Flexbox/Grid containers don't have it.
+
+### Visualizing the box: DevTools is your friend
+
+Open DevTools, inspect any element, and look at the **Computed** tab. There's a little diagram showing margin → border → padding → content with the actual pixel values on each side. The Layout tab in Firefox is even better. Spend 30 seconds with the diagram open the next time you have a spacing bug; it'll save you 30 minutes of staring at the source.
+
+<ExampleProject
+  src="box-model-anatomy"
+  title="A single box, every layer labeled"
+  description="One large card on the page with content, padding, border, and margin all visible (the margin is shown with a dashed outline). Adjust the CSS variables at the top and watch each layer change independently. The most direct way to internalize the model."
+/>
+
+<ExampleProject
+  src="border-box-rescue"
+  title="content-box vs border-box, side by side"
+  description="Two cards declared with the same width: 300px and padding: 20px. The left card uses the default content-box and is wider than 300px. The right card uses border-box and is exactly 300px. Demonstrates why every project sets border-box at the top of its stylesheet."
+/>
+
+<Exercise
+  title="Lay out three cards with proper spacing"
+  starter={`Create a page with a row of three "feature cards." Each card
+has:
+
+  - A title (h3) and a short paragraph.
+  - Width 300px, padding 20px, border 1px solid #e5e7eb,
+    border-radius 8px.
+  - A 16px gap between adjacent cards (use margin-right on the
+    first two — or skip ahead and use display: flex; gap: 16px;).
+
+Now switch box-sizing on .card between border-box and content-box
+(or default). Notice the total width changes.
+
+Add box-sizing: border-box; at the top of your CSS so * uses it.
+Confirm the row width is now exactly 300 + 300 + 300 + 16 + 16
+= 932px.`}
+>
+
+- The page sets `*, *::before, *::after { box-sizing: border-box; }`.
+- Each `.card` has `width`, `padding`, `border`, and `border-radius` declared.
+- The visible width of a `.card` matches the declared `width` (because of border-box).
+- Inter-card spacing is **outside** the cards (margin/gap), not padding inside.
+- DevTools' Computed tab on a card shows the box-model diagram with the values you set.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What are the four parts of the CSS box model, from inside out?
+
+**A:** **Content**, **padding**, **border**, **margin**.
+
+- **Content** — the text or child elements themselves.
+- **Padding** — space between the content and the border, *inside* the visible edge.
+- **Border** — the visible edge of the box.
+- **Margin** — space *outside* the border, between this box and its neighbors.
+
+Padding hugs the content from the inside; margin pushes neighbors away from the outside. Mixing the two up is the single most common cause of mysterious spacing bugs.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `padding` and `margin`?
+
+**A:** Both add space, but on opposite sides of the border:
+
+- **Padding** is **inside** the border. If the box has a background color, padding gets that color too. Padding makes the *box bigger from the inside*.
+- **Margin** is **outside** the border. It's pure empty space between this box and the next one. Margin makes *space around the box*.
+
+Rule of thumb: if you want a button to be roomy around its text, use padding. If you want to space two buttons apart, use margin (or `gap` in a flex container).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `box-sizing: border-box` do, and why does almost every project use it?
+
+**A:** It changes which parts the `width` and `height` properties include.
+
+- **Default (`content-box`)**: `width: 300px` sets the *content area* to 300px. Padding and border add to that, so the rendered width is `300 + padding + border`. A card with `width: 300px; padding: 20px; border: 2px solid;` is actually 344px wide.
+- **`border-box`**: `width: 300px` sets the *total* rendered width, including padding and border. The content area shrinks to whatever's left.
+
+Almost every project sets `*, *::before, *::after { box-sizing: border-box; }` at the top of its stylesheet because it makes layout math trivial — `width: 300px` really means 300px. CSS frameworks (Tailwind, Bootstrap) do this by default; you should too.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is margin collapse, and where does it happen?
+
+**A:** When two vertical margins meet between two block-level elements in normal flow, they **collapse** — they don't add together, they merge into one margin equal to the **larger** of the two. So a 30px bottom margin and a 20px top margin produce a 30px gap, not 50px.
+
+It happens in three cases:
+
+1. **Adjacent siblings**: the bottom margin of one block element meets the top margin of the next.
+2. **Empty blocks**: an empty `<div>` with `margin-top: 20px` and `margin-bottom: 30px` collapses to a single 30px margin.
+3. **Parent and first/last child**: the top margin of the first child can collapse with the parent's top margin (and same for last child / bottom).
+
+It does NOT happen with:
+
+- Horizontal margins.
+- Margins inside Flexbox or Grid containers.
+- Boxes with `overflow` set (anything but `visible`).
+- Floated or absolutely-positioned boxes.
+
+Margin collapse exists because it makes consecutive paragraphs look right typographically — but it confuses beginners constantly. When in doubt, use `padding` on the parent or `gap` on a flex/grid container instead of margin.
+
+</InterviewQuestion>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>justify-content and align-items playground</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; line-height: 1.6; }
+      h2 { margin-top: 30px; font-family: ui-monospace, monospace; font-size: 16px; color: #4763e4; }
+      .controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+      .controls button { padding: 6px 10px; border: 1px solid #d1d5db; background: white; border-radius: 6px; font-size: 12px; font-family: ui-monospace, monospace; cursor: pointer; }
+      .controls button.active { background: #4763e4; color: white; border-color: #4763e4; }
+      .stage {
+        display: flex;
+        gap: 8px;
+        min-height: 140px;
+        background: #f3f4f6;
+        border: 2px dashed #d1d5db;
+        border-radius: 10px;
+        padding: 12px;
+        transition: all 0.15s;
+      }
+      .stage .item {
+        background: linear-gradient(135deg, #6e8bff, #4763e4);
+        color: white;
+        font-weight: 700;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+      }
+      .stage .item.tall  { width: 60px; height: 100px; }
+      .stage .item.med   { width: 80px; height: 70px;  }
+      .stage .item.short { width: 50px; height: 40px;  }
+    </style>
+  </head>
+  <body>
+    <h1>justify-content + align-items, live</h1>
+
+    <h2>justify-content (main axis)</h2>
+    <div class="controls" data-prop="justify-content" data-stage="s1">
+      <button data-val="flex-start" class="active">flex-start</button>
+      <button data-val="center">center</button>
+      <button data-val="flex-end">flex-end</button>
+      <button data-val="space-between">space-between</button>
+      <button data-val="space-around">space-around</button>
+      <button data-val="space-evenly">space-evenly</button>
+    </div>
+    <div class="stage" id="s1">
+      <div class="item tall">A</div>
+      <div class="item med">B</div>
+      <div class="item short">C</div>
+    </div>
+
+    <h2>align-items (cross axis)</h2>
+    <div class="controls" data-prop="align-items" data-stage="s2">
+      <button data-val="stretch" class="active">stretch</button>
+      <button data-val="flex-start">flex-start</button>
+      <button data-val="center">center</button>
+      <button data-val="flex-end">flex-end</button>
+      <button data-val="baseline">baseline</button>
+    </div>
+    <div class="stage" id="s2">
+      <div class="item tall">A</div>
+      <div class="item med">B</div>
+      <div class="item short">C</div>
+    </div>
+
+    <p style="margin-top: 30px; font-size: 13px; color: #6b7280;">
+      Click a button to change the value. Notice how <em>justify</em> spreads items along the horizontal axis while <em>align</em> shifts them vertically.
+    </p>
+
+    <script>
+      document.querySelectorAll(".controls").forEach((bar) => {
+        const prop = bar.dataset.prop;
+        const stage = document.getElementById(bar.dataset.stage);
+        bar.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            bar.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            stage.style[prop === "justify-content" ? "justifyContent" : "alignItems"] = btn.dataset.val;
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "trial-countdown-01",
+  "type": "registry:block",
+  "title": "Trial Countdown",
+  "description": "Trial expiry countdown with days remaining and urgency styling",
+  "files": [
+    {
+      "path": "components/grit-ui/trial-countdown-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/trial-countdown-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "tab-nav-01",
+  "type": "registry:block",
+  "title": "Tab Nav",
+  "description": "Tab navigation bar with badges (GitHub repo tabs-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/tab-nav-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/tab-nav-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

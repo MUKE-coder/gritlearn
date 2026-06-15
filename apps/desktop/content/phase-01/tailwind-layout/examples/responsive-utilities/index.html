@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>One layout, three viewports</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-50 text-gray-900 min-h-screen">
+
+    <!-- Navbar — links hidden on mobile, shown at md+ -->
+    <header class="bg-white border-b border-gray-200">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
+        <div class="font-bold tracking-tight">GritLearn</div>
+        <nav class="hidden md:flex gap-6 text-sm text-gray-600">
+          <a href="#" class="hover:text-gray-900">Features</a>
+          <a href="#" class="hover:text-gray-900">Pricing</a>
+          <a href="#" class="hover:text-gray-900">Docs</a>
+          <a href="#" class="hover:text-gray-900">Blog</a>
+        </nav>
+        <button class="md:hidden text-gray-600 text-2xl leading-none">≡</button>
+      </div>
+    </header>
+
+    <!-- Hero — text size steps up with the viewport -->
+    <section class="max-w-3xl mx-auto px-4 sm:px-6 text-center py-12 md:py-20">
+      <h1 class="text-3xl sm:text-4xl lg:text-6xl font-bold tracking-tight">
+        Code you can <span class="text-blue-600">finally see</span>
+      </h1>
+      <p class="mt-4 text-base sm:text-lg text-gray-600 max-w-xl mx-auto">
+        Resize the browser slowly. Notice the navbar links appear, the heading grows, and the feature grid recolumns at each breakpoint.
+      </p>
+      <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="#" class="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Sign up free</a>
+        <a href="#" class="px-5 py-2.5 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-100">Download</a>
+      </div>
+    </section>
+
+    <!-- Feature grid — 1 col mobile, 2 at sm, 3 at lg -->
+    <section class="max-w-5xl mx-auto px-4 sm:px-6 pb-16">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">Analogy-first</h3>
+          <p class="mt-1 text-sm text-gray-600">A physical handle on every idea.</p>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">Real examples</h3>
+          <p class="mt-1 text-sm text-gray-600">Runnable projects, not screenshots.</p>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">Works offline</h3>
+          <p class="mt-1 text-sm text-gray-600">Curriculum lives in the binary.</p>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">Interview prep</h3>
+          <p class="mt-1 text-sm text-gray-600">Four questions per concept.</p>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">Native editor</h3>
+          <p class="mt-1 text-sm text-gray-600">Monaco — same as VS Code.</p>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow">
+          <div class="text-xs uppercase tracking-wider text-blue-600 font-semibold">Feature</div>
+          <h3 class="mt-1 text-base font-semibold">One sequenced path</h3>
+          <p class="mt-1 text-sm text-gray-600">HTML to desktop apps in 10 phases.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="border-t border-gray-200 py-6 text-center text-xs text-gray-500">
+      © 2026 GritLearn
+    </footer>
+
+  </body>
+</html>

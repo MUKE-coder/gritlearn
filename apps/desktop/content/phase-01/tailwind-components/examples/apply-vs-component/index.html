@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>When to reach for what</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-50 p-6">
+    <div class="max-w-4xl mx-auto space-y-10">
+
+      <header>
+        <h1 class="text-2xl font-bold">When to reach for what</h1>
+        <p class="mt-2 text-sm text-gray-600">Two reuse patterns for the same kind of UI element, side by side, with notes on when each fits.</p>
+      </header>
+
+      <div class="grid md:grid-cols-2 gap-6">
+
+        <section class="bg-white border border-gray-200 rounded-xl p-5">
+          <p class="text-xs uppercase tracking-wider text-blue-600 font-semibold mb-2">Component (React / Vue / Astro)</p>
+          <pre class="bg-gray-100 rounded-md p-3 text-xs font-mono overflow-x-auto">// Card.tsx
+export function Card({ title, body, footer }) {
+  return (
+    &lt;div className="bg-white border border-gray-200
+                    rounded-xl p-5 shadow-sm
+                    hover:shadow-md transition-shadow"&gt;
+      &lt;h3 className="font-semibold mb-1"&gt;{title}&lt;/h3&gt;
+      &lt;p className="text-sm text-gray-600"&gt;{body}&lt;/p&gt;
+      {footer &amp;&amp; (
+        &lt;footer className="mt-3 pt-3 border-t
+                           border-gray-100 text-xs"&gt;
+          {footer}
+        &lt;/footer&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</pre>
+          <p class="text-sm text-gray-700 mt-3">Best when you have:</p>
+          <ul class="text-sm text-gray-600 mt-1 list-disc pl-5 space-y-1">
+            <li>A component framework (React, Vue, Svelte, Astro)</li>
+            <li>Variation via props (title, icon, variant)</li>
+            <li>Behavior (onClick, hover state, animations)</li>
+            <li>Markup that's more than one element</li>
+          </ul>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-xl p-5">
+          <p class="text-xs uppercase tracking-wider text-emerald-600 font-semibold mb-2">@apply class (CMS templates, plain HTML)</p>
+          <pre class="bg-gray-100 rounded-md p-3 text-xs font-mono overflow-x-auto">/* tokens.css */
+@layer components {
+  .card {
+    @apply bg-white border border-gray-200
+           rounded-xl p-5 shadow-sm
+           hover:shadow-md transition-shadow;
+  }
+  .card-title {
+    @apply font-semibold mb-1;
+  }
+  .card-body {
+    @apply text-sm text-gray-600;
+  }
+}
+
+&lt;!-- in your CMS template --&gt;
+&lt;div class="card"&gt;
+  &lt;h3 class="card-title"&gt;Title&lt;/h3&gt;
+  &lt;p class="card-body"&gt;Body&lt;/p&gt;
+&lt;/div&gt;</pre>
+          <p class="text-sm text-gray-700 mt-3">Best when you have:</p>
+          <ul class="text-sm text-gray-600 mt-1 list-disc pl-5 space-y-1">
+            <li>No JS component framework (raw HTML, CMS templates)</li>
+            <li>A long-form content class (.prose, .article)</li>
+            <li>Cross-framework tokens (used in React app AND in a static page)</li>
+            <li>Genuinely "the class name IS the interface"</li>
+          </ul>
+        </section>
+
+      </div>
+
+      <p class="text-sm text-gray-500 italic">In a modern React/Next.js app, the component is the answer 90% of the time. Reach for @apply only when the class name itself is the interface you want.</p>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Heading hierarchy: right vs wrong</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; }
+      .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+      .col { border: 1px solid #ccc; border-radius: 8px; padding: 20px; }
+      .right { border-color: #2e7d32; }
+      .wrong { border-color: #c62828; }
+      .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+      .right .label { color: #2e7d32; }
+      .wrong .label { color: #c62828; }
+      /* Fake hierarchy via CSS on the bad column */
+      .wrong .fakeh2 { font-size: 24px; font-weight: 700; margin: 16px 0 8px; }
+      .wrong .fakeh3 { font-size: 18px; font-weight: 700; margin: 12px 0 6px; }
+      .note { background: #fff8e1; border-left: 4px solid #f9a825; padding: 12px 16px; font-size: 13px; margin-top: 24px; border-radius: 0 8px 8px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="columns">
+      <section class="col right">
+        <p class="label">✓ Right — semantic headings</p>
+        <h1>The chocolate cake</h1>
+        <p>A short recipe.</p>
+        <h2>Ingredients</h2>
+        <ul><li>Flour</li><li>Cocoa</li><li>Eggs</li></ul>
+        <h2>Steps</h2>
+        <h3>Mixing</h3>
+        <p>Combine the dry ingredients first.</p>
+        <h3>Baking</h3>
+        <p>180°C for 35 minutes.</p>
+      </section>
+
+      <section class="col wrong">
+        <p class="label">✗ Wrong — h1 everywhere, fake hierarchy with CSS</p>
+        <h1>The chocolate cake</h1>
+        <p>A short recipe.</p>
+        <h1 class="fakeh2">Ingredients</h1>
+        <ul><li>Flour</li><li>Cocoa</li><li>Eggs</li></ul>
+        <h1 class="fakeh2">Steps</h1>
+        <h1 class="fakeh3">Mixing</h1>
+        <p>Combine the dry ingredients first.</p>
+        <h1 class="fakeh3">Baking</h1>
+        <p>180°C for 35 minutes.</p>
+      </section>
+    </div>
+    <div class="note">
+      Both panels look almost identical. But a screen-reader user pressing
+      "next heading" gets a sane outline from the left panel and an
+      impossible "five h1s in a row" from the right.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,242 @@
+## Flexbox
+
+For about fifteen years, "put two things next to each other in CSS" was one of the hardest questions in web development. Floats, inline-block, negative margins, clearfix — every solution had a footnote and a sharp edge. **Flexbox** ended all of it. Flexbox is a single-axis layout system: rows or columns of things, sized and aligned with sane, intuitive properties. If your layout is "a strip of stuff" — a nav bar, a toolbar, a row of cards, a stack of form fields — Flexbox is the answer.
+
+<Analogy>
+Flexbox is **arranging items on a shelf row**.
+
+Picture a single shelf in a closet. You're loading it with shoes, boxes, books — items of varying widths. The shelf decides where each item goes based on a few rules: how wide is each item? Should they spread out evenly? Cluster left, cluster right, or center? If they don't all fit, should they shrink? Wrap to a second row?
+
+That's exactly how Flexbox thinks. The parent (`display: flex`) is the shelf — it commands the layout. The children (the flex items) are the boxes and books — they line up along one axis (left to right, by default), each taking the space it asks for, and the shelf rules decide how to deal with leftover gaps or overflow.
+
+Two axes show up a lot:
+
+- The **main axis** is the direction items flow — horizontal by default (a row).
+- The **cross axis** is perpendicular — vertical, in that case.
+
+Properties starting with `justify-` work on the main axis. Properties starting with `align-` work on the cross axis. Once you've memorized that one rule, half of Flexbox makes sense.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a flex container with main axis horizontal, justify-content controlling main axis distribution, align-items controlling cross axis alignment"
+  caption="A flex parent has a main axis (row by default) and a cross axis. justify-* controls main-axis layout; align-* controls cross-axis layout."
+>
+
+```
+                main axis  →
+   ┌────────────────────────────────────────────────────┐
+   │   ┌───┐  ┌───┐  ┌────────┐  ┌─────┐               │
+   │   │ A │  │ B │  │   C    │  │  D  │               │
+   │   └───┘  └───┘  └────────┘  └─────┘               │  ↑ cross axis
+   └────────────────────────────────────────────────────┘
+
+   justify-content: flex-start | center | space-between | space-around | space-evenly
+   align-items:     stretch    | center | flex-start    | flex-end
+```
+
+</Illustration>
+
+### Turn it on
+
+```css
+.row {
+  display: flex;       /* a horizontal row by default */
+  gap: 12px;           /* space BETWEEN items (modern; replaces margins) */
+}
+```
+
+That single property makes every direct child a flex item. They line up in a row, left to right, each taking the width its content needs.
+
+### The big four properties on the parent
+
+#### `flex-direction`
+
+Which way does the main axis run?
+
+```css
+.row    { flex-direction: row; }          /* default: left → right */
+.col    { flex-direction: column; }       /*       top → bottom    */
+.row-r  { flex-direction: row-reverse; }
+```
+
+`column` is the magic switch for stacked layouts (form fields, sidebars).
+
+#### `justify-content` — main-axis distribution
+
+Where do items go *along* the main axis?
+
+```css
+justify-content: flex-start;     /* cluster at the start (default) */
+justify-content: center;         /* cluster in the middle */
+justify-content: flex-end;       /* cluster at the end */
+justify-content: space-between;  /* outer items pinned, gaps spread evenly */
+justify-content: space-around;   /* equal space around each item */
+justify-content: space-evenly;   /* equal space between AND at the ends */
+```
+
+#### `align-items` — cross-axis alignment
+
+How are items aligned *perpendicular* to the main axis?
+
+```css
+align-items: stretch;       /* default: fill the container's cross-size */
+align-items: center;        /* vertically centered (in a row) */
+align-items: flex-start;    /* top-aligned (in a row) */
+align-items: flex-end;      /* bottom-aligned (in a row) */
+```
+
+This is the answer to "how do I vertically center a thing in CSS?" — `display: flex; align-items: center;` on the parent. Twenty years of impossible problem solved in two lines.
+
+#### `flex-wrap`
+
+What if items don't fit on one row?
+
+```css
+flex-wrap: nowrap;        /* default: cram them into one row */
+flex-wrap: wrap;          /* wrap to a new row when they don't fit */
+```
+
+For card grids that should wrap on small screens, `flex-wrap: wrap` is exactly the rule.
+
+### Properties on the children
+
+The kids get their own three.
+
+#### `flex-grow`
+
+How greedily does this item claim leftover space along the main axis?
+
+```css
+.item-a { flex-grow: 0; }   /* default: don't grow */
+.item-b { flex-grow: 1; }   /* take all leftover space */
+.item-c { flex-grow: 2; }   /* take twice as much as flex-grow: 1 siblings */
+```
+
+#### `flex-shrink`
+
+How much does this item shrink when there's not enough space? Default 1; set to 0 to forbid shrinking.
+
+#### `flex-basis`
+
+The item's *starting* size before growing or shrinking. Often you'll set width and let it work, but `flex-basis: 200px` means "start at 200px, then grow/shrink from there."
+
+The shorthand **`flex: 1`** is the most common form — same as `flex: 1 1 0` — "grow, shrink, start from zero." Use it when you want columns to share space evenly.
+
+### Centering anything
+
+Put any element inside a flex container with these three lines:
+
+```css
+.wrapper {
+  display: flex;
+  justify-content: center;   /* horizontal */
+  align-items: center;       /* vertical */
+  min-height: 100vh;         /* take the full window so vertical centering is meaningful */
+}
+```
+
+That's the modern "perfect centering" recipe. No magic numbers. No transforms. No hacks.
+
+### When Flexbox is the wrong tool
+
+Flexbox is **one-dimensional**. If your layout needs *both* row alignment and column alignment at the same time — a dashboard, a calendar, a real grid — reach for CSS Grid, which is the next lesson. As a rule:
+
+- "A strip of things in a line" → Flexbox.
+- "A 2D arrangement where rows and columns both matter" → Grid.
+
+Many pages use both — Grid for the page-level layout, Flexbox for individual rows inside each grid area.
+
+<ExampleProject
+  src="flex-toolbar"
+  title="A navbar that just works"
+  description="A classic horizontal navbar with a logo on the left, links in the middle, and a Sign Up button on the right. One line: display: flex; justify-content: space-between. Try resizing the window — the layout stays sane down to mobile."
+/>
+
+<ExampleProject
+  src="justify-and-align"
+  title="justify-content and align-items playground"
+  description="Two flex containers with buttons that flip each property through every value. Watch the items rearrange. This is the most direct way to internalize the difference between 'main axis' and 'cross axis'."
+/>
+
+<Exercise
+  title="Build a centered card on a full-screen background"
+  starter={`Create a page with:
+
+  - A body that uses display: flex to vertically AND horizontally
+    center its single child.
+  - The body should fill the viewport (min-height: 100vh).
+  - The child is a card with a heading, paragraph, and a button —
+    each stacked vertically (flex-direction: column).
+  - Inside the card, use gap: 12px to space the three children.
+
+When done, the card sits exactly in the middle of the viewport on
+any screen size. Resize the window — it stays centered.`}
+>
+
+- The body uses `display: flex` with `justify-content: center` and `align-items: center`.
+- `min-height: 100vh` on the body so vertical centering has space to work in.
+- The card uses `display: flex; flex-direction: column;` to stack its children.
+- The card uses `gap` (not margins) to space its inner elements.
+- Resizing the browser keeps the card centered without any media queries.
+- No `position: absolute` or transforms anywhere.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `justify-content` and `align-items`?
+
+**A:** They control different axes of a flex container:
+
+- **`justify-content`** controls layout along the **main axis** — the direction items flow. In a default row, that's horizontal. In a `flex-direction: column`, it's vertical.
+- **`align-items`** controls alignment along the **cross axis** — perpendicular to the main axis. In a default row, that's vertical. In a `column`, it's horizontal.
+
+Mnemonic: `justify` is the *flow* direction (where items line up); `align` is *across* the flow.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How do you vertically center an element with Flexbox?
+
+**A:** Put it inside a flex container with two rules:
+
+```css
+.parent {
+  display: flex;
+  align-items: center;
+  /* + justify-content: center; for horizontal too */
+  min-height: 100vh;   /* or any height tall enough to center within */
+}
+```
+
+The single most-asked CSS question for two decades, solved in two lines. The `min-height` matters — there's no "vertical center" without a vertical box to be inside.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `flex: 1` mean as shorthand?
+
+**A:** `flex: 1` is shorthand for `flex-grow: 1; flex-shrink: 1; flex-basis: 0`.
+
+- **`flex-grow: 1`** — grow to fill leftover main-axis space.
+- **`flex-shrink: 1`** — shrink if there's not enough space.
+- **`flex-basis: 0`** — start at zero size, before grow/shrink kicks in.
+
+The effect: every child with `flex: 1` ends up the same width (or height, in a column) because they all start at zero and divide the available space evenly. If one child has `flex: 2`, it gets twice the share. This is the most useful single rule in Flexbox — it makes "three equal columns" trivial.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use Flexbox vs CSS Grid?
+
+**A:** Both are layout systems, but they're optimized for different shapes:
+
+- **Flexbox** is **one-dimensional** — a strip of items along a single axis. Best for: navbars, toolbars, tag rows, form fields stacked vertically. Items size themselves and the parent distributes leftover space.
+- **CSS Grid** is **two-dimensional** — a grid where rows and columns both matter. Best for: page layouts (header / sidebar / main / footer), dashboards, photo galleries, calendars. You define rows and columns explicitly, then place items into cells.
+
+Rule of thumb: if the layout is *content-driven* (items lay themselves out, parent flows around them), use Flexbox. If the layout is *layout-driven* (you've predetermined the rows/columns, then drop content in), use Grid. Most real pages use both — Grid for the page skeleton, Flexbox for individual sections.
+
+</InterviewQuestion>

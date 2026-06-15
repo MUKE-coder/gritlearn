@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "profile-avatar-01",
+  "type": "registry:block",
+  "title": "Profile Avatar",
+  "description": "User avatar with image upload/preview and initials fallback",
+  "files": [
+    {
+      "path": "components/grit-ui/profile-avatar-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/profile-avatar-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

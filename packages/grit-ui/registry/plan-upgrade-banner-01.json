@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plan-upgrade-banner-01",
+  "type": "registry:block",
+  "title": "Plan Upgrade Banner",
+  "description": "Upgrade prompt banner with feature callout (Intercom-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/plan-upgrade-banner-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/plan-upgrade-banner-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

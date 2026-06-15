@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "marketing-footer-01",
+  "type": "registry:block",
+  "title": "Marketing Footer",
+  "description": "Footer with 4 column links and copyright (Vercel-style)",
+  "files": [
+    {
+      "path": "components/grit-ui/marketing-footer-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/marketing-footer-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

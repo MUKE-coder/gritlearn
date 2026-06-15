@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "wishlist-button-01",
+  "type": "registry:block",
+  "title": "Wishlist Button",
+  "description": "Heart toggle button for wishlist / save for later",
+  "files": [
+    {
+      "path": "components/grit-ui/wishlist-button-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/wishlist-button-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

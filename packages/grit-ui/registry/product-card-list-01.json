@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "product-card-list-01",
+  "type": "registry:block",
+  "title": "Product List Row",
+  "description": "Product list row with image, rating, price, and stock (Shopify)",
+  "files": [
+    {
+      "path": "components/grit-ui/product-card-list-01.tsx",
+      "type": "registry:component",
+      "target": "components/grit-ui/product-card-list-01.tsx"
+    }
+  ],
+  "dependencies": [],
+  "registryDependencies": []
+}

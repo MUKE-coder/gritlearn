@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Same card, two ways</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* HAND-WRITTEN CSS for the left card */
+      body { font-family: system-ui, sans-serif; background: #f3f4f6; }
+      .signup-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        max-width: 360px;
+      }
+      .signup-card__heading {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 6px;
+        color: #111;
+      }
+      .signup-card__body {
+        font-size: 14px;
+        color: #4b5563;
+        margin: 0 0 16px;
+      }
+      .signup-card__input {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+      .signup-card__btn {
+        width: 100%;
+        padding: 10px 0;
+        background: #2563eb;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signup-card__btn:hover { background: #1d4ed8; }
+    </style>
+  </head>
+  <body class="p-8">
+    <h1 class="text-2xl font-bold mb-2">Same card, two ways</h1>
+    <p class="text-sm text-gray-600 mb-6">Both cards render identically. Compare the source.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+      <!-- LEFT: Hand-written CSS -->
+      <div>
+        <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">Hand-written CSS</p>
+        <div class="signup-card">
+          <h2 class="signup-card__heading">Sign up</h2>
+          <p class="signup-card__body">Create an account in 30 seconds.</p>
+          <input class="signup-card__input" type="email" placeholder="you@example.com" />
+          <button class="signup-card__btn">Create account</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 font-mono">
+          5 named classes · ~35 lines of CSS
+        </p>
+      </div>
+
+      <!-- RIGHT: Tailwind utilities -->
+      <div>
+        <p class="text-xs uppercase tracking-wider text-blue-600 font-semibold mb-2">Tailwind utilities</p>
+        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm max-w-sm">
+          <h2 class="text-lg font-bold mb-1.5 text-gray-900">Sign up</h2>
+          <p class="text-sm text-gray-600 mb-4">Create an account in 30 seconds.</p>
+          <input
+            type="email"
+            placeholder="you@example.com"
+            class="block w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg mb-3"
+          />
+          <button class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
+            Create account
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 font-mono">
+          0 named classes · 0 lines of custom CSS
+        </p>
+      </div>
+
+    </div>
+  </body>
+</html>
