@@ -1,0 +1,434 @@
+## TS basic types and inference
+
+TypeScript has a small core vocabulary you'll write a hundred times a day — `string`, `number`, `boolean`, arrays, objects — and a feature that quietly does most of the work for you: **type inference**. You write the explicit type at the boundaries (function parameters, return values, public APIs); TypeScript figures out the rest from how you use it. Knowing what to declare and what to let the editor figure out is the entire daily experience.
+
+<Analogy>
+TypeScript's basic types are **kitchen containers labeled with what's inside**.
+
+A working kitchen has flour bins, sugar jars, salt shakers, knife blocks. Each container is labeled — not because the cook is forgetful, but because **the next cook needs to know what's in there without opening it**. A jar labeled "sugar" doesn't get accidentally filled with salt; a knife block labeled "10-inch chef's knife" doesn't end up holding a spatula.
+
+The basic TypeScript types are these labels:
+
+- **`string`** — a jar for text. "hello", names, anything wrapped in quotes.
+- **`number`** — a jar for numeric values. Integers, decimals, even `NaN`.
+- **`boolean`** — a tiny two-slot tray: `true` or `false`. Nothing else.
+- **`Array<T>`** or **`T[]`** — a stackable rack. The label says what kind of thing goes in: `string[]`, `number[]`, `User[]`.
+- **`object` / a custom type** — a labeled compartment with named slots: `{ name: string, age: number }`.
+
+The magic ingredient TypeScript brings on top: **inference**. If you put text in an unlabeled jar, TypeScript *watches you do it* and writes the label for you.
+
+```ts
+let greeting = "Hello";
+// greeting is automatically typed as `string`
+```
+
+You didn't write `: string`. TypeScript saw a string literal go in, and labeled the variable on your behalf. From now on, anything you try to do with `greeting` is checked against "things you can do to a string." Assign a number to it later? Red squiggle.
+
+The everyday rhythm becomes:
+- **Declare** explicitly at function parameters and return values. The signature is the contract; spell it out so reviewers don't have to read the body.
+- **Let inference handle** local variables, intermediate values, the things only the next 10 lines of code touch.
+
+Over-declaring is noisy. Under-declaring (at the boundaries) makes the code unreadable. The middle path: contracts loud, internals quiet.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the core TypeScript types and how inference fills in the rest"
+  caption="The core vocabulary plus inference covers ~90% of daily TypeScript."
+>
+
+```
+EXPLICIT TYPES                          INFERRED TYPES
+
+Function signatures, public APIs        Local variables, intermediates
+
+function format(                        let count = 0;
+  name: string,            ← explicit       └─→ inferred as number
+  age:  number,            ← explicit
+): string {                ← explicit   const users = ["Ada", "Lin"];
+  let upper = name.toUpperCase();              └─→ inferred as string[]
+  //  ↑ inferred from the call
+  return upper + ":" + age;             const map = { en: "Hello", es: "Hola" };
+}                                              └─→ inferred as { en: string; es: string }
+
+  THE RULE OF THUMB
+  ─────────────────────────────────────────
+  ▸ Annotate function inputs + outputs.
+  ▸ Let TS infer everything in between.
+```
+
+</Illustration>
+
+### The primitives
+
+```ts
+let name:     string  = "Ada";
+let age:      number  = 32;
+let active:   boolean = true;
+let nothing:  null    = null;
+let missing:  undefined = undefined;
+```
+
+Five types cover most data:
+
+- **`string`** — text. Single or double quotes, backticks for interpolation. `"Ada"`, `'Ada'`, `` `Hi ${name}` ``.
+- **`number`** — integers and decimals. There is **no separate int / float** in JavaScript or TypeScript. `42`, `3.14`, `-7`, `0.0001`. Also covers special values like `NaN`, `Infinity`.
+- **`boolean`** — `true` or `false`. Nothing else.
+- **`null`** — the explicit "nothing here" value. You assigned nothing.
+- **`undefined`** — the implicit "nothing here" value. No one assigned anything.
+
+A note on `null` vs `undefined`: practically, most modern codebases use `undefined` for "missing" and treat `null` as a deliberate "explicitly cleared." Don't worry too much on day one — TypeScript with `strict` will catch the cases where it matters.
+
+### Inference: TypeScript writes the label for you
+
+Most of the time, you don't write `: string`. You write:
+
+```ts
+let greeting = "Hello";
+let count = 0;
+let active = true;
+```
+
+TypeScript reads the literal on the right and **infers** the type. Hover any variable in your editor; the type is shown.
+
+The win is leverage: refactor the right-hand side from `"Hello"` to `42`, and TypeScript automatically re-infers `greeting` as `number` and re-checks everywhere it's used. No annotations to update.
+
+### When to annotate explicitly
+
+Three cases. The rest of the time, let inference do its thing.
+
+1. **Function parameters.** Inference can't read your mind.
+
+   ```ts
+   function double(n: number): number {
+     return n * 2;
+   }
+   ```
+
+2. **Function return types.** Optional but recommended for public APIs — it documents the function and catches bugs where the body changes but the signature shouldn't:
+
+   ```ts
+   function findUser(id: number): User | undefined {
+     return users.find(u => u.id === id);
+   }
+   ```
+
+3. **Variables initialized to `null` or `undefined`.** Without an annotation, TypeScript can't guess what'll go in later:
+
+   ```ts
+   let current: User | null = null;
+   // later
+   current = fetchUser();
+   ```
+
+### Arrays
+
+Two equivalent syntaxes:
+
+```ts
+let names:  string[]     = ["Ada", "Lin"];
+let scores: Array<number> = [1, 2, 3];
+```
+
+`string[]` is the everyday shorthand. `Array<string>` is the same thing, sometimes preferred when the inner type is complex:
+
+```ts
+let fns: Array<() => Promise<User>> = [];   // reads better than (() => Promise<User>)[]
+```
+
+Mixed arrays use a **union**:
+
+```ts
+let mixed: (string | number)[] = ["hi", 42, "bye"];
+```
+
+Empty arrays need a hint, because there's no element to infer from:
+
+```ts
+const collected = [];          // inferred as any[] — bad
+const collected: User[] = [];  // explicit — good
+```
+
+### Tuples — arrays with fixed positions
+
+A tuple is an array where each position has a specific type:
+
+```ts
+let pair: [string, number] = ["Ada", 32];
+
+pair[0].toUpperCase();   // ✓ (it's a string)
+pair[1].toFixed(2);      // ✓ (it's a number)
+
+pair = [32, "Ada"];      // ✗ wrong order
+```
+
+Common use: returning multiple values from a function (like React's `useState` returns `[value, setter]`).
+
+### Objects with a type literal
+
+```ts
+let user: { name: string; age: number } = {
+  name: "Ada",
+  age: 32,
+};
+```
+
+That `{ name: string; age: number }` written inline is a **type literal**. You'll usually pull it out into a named `type` for reuse — covered in the next concept.
+
+Optional fields use `?`:
+
+```ts
+let user: { name: string; nickname?: string } = { name: "Ada" };
+//                          ↑ optional — undefined or absent both fine
+```
+
+Readonly fields can't be reassigned after creation:
+
+```ts
+let point: { readonly x: number; readonly y: number } = { x: 0, y: 0 };
+point.x = 5;   // ✗ Cannot assign to 'x' — it's read-only.
+```
+
+### Literal types — specific string or number values
+
+A literal type narrows a string or number down to a single value:
+
+```ts
+let mode: "dark" | "light" = "dark";
+mode = "auto";   // ✗ Type '"auto"' is not assignable to '"dark" | "light"'.
+```
+
+This is one of TypeScript's most useful features. Instead of `mode: string` (which allows anything), you tell the type system the only allowed values. The editor autocompletes them; the build rejects the typos.
+
+```ts
+function setVariant(v: "primary" | "ghost" | "danger") { /* ... */ }
+
+setVariant("primary");   // ✓
+setVariant("Primary");   // ✗ casing matters
+setVariant("badge");     // ✗ not in the allowed set
+```
+
+### `any`, `unknown`, `never` — the three escape hatches
+
+- **`any`** — opt out of type checking. Covered last concept. Use sparingly.
+- **`unknown`** — "I don't know yet, force me to narrow." Safer than `any`:
+
+  ```ts
+  function handle(input: unknown) {
+    if (typeof input === "string") {
+      console.log(input.toUpperCase());   // ✓ narrowed to string
+    }
+    input.toUpperCase();                  // ✗ unknown — must narrow first
+  }
+  ```
+
+- **`never`** — "this can't happen." Used in exhaustiveness checks:
+
+  ```ts
+  type Mode = "dark" | "light";
+  function describe(m: Mode): string {
+    switch (m) {
+      case "dark":  return "Dark mode";
+      case "light": return "Light mode";
+      default:
+        const exhaustive: never = m;     // catches if someone adds "auto" later
+        return exhaustive;
+    }
+  }
+  ```
+
+You'll meet `never` a lot less than `any` or `unknown`. Recognize it; don't sweat it.
+
+### Function types
+
+When a function is passed around as a value (callbacks, event handlers, hook deps), you sometimes type the function itself:
+
+```ts
+type Comparer = (a: number, b: number) => number;
+
+function sortBy(arr: number[], cmp: Comparer): number[] {
+  return [...arr].sort(cmp);
+}
+
+sortBy([3, 1, 2], (a, b) => a - b);
+```
+
+The arrow syntax `(args) => returnType` is the type-level description.
+
+### What to do when TypeScript can't infer
+
+Sometimes inference fails because the runtime is too dynamic:
+
+```ts
+const raw = JSON.parse(localStorage.getItem("user") ?? "{}");
+// raw is `any` — JSON.parse returns any
+```
+
+Either narrow with a type guard:
+
+```ts
+if (typeof raw === "object" && raw !== null && "name" in raw) {
+  // raw is now narrowed
+}
+```
+
+Or validate at the edge with Zod (the right answer for trusted data). The wrong answer: spread `any` and hope.
+
+<ExampleProject
+  src="primitives"
+  title="The five primitives, each with one operation"
+  description="A tiny page that defines one variable of each primitive type and runs one type-appropriate operation on it (toUpperCase on a string, toFixed on a number, etc.). Demonstrates the editor's autocomplete behavior on each type."
+/>
+
+<ExampleProject
+  src="union-and-arrays"
+  title="Arrays, unions, and a literal-typed mode switch"
+  description="Renders a list of users typed as User[], filters by a 'mode' that's typed as a literal union '\"all\" | \"active\" | \"pending\"', and toggles between them. The literal union is what unlocks autocomplete + zero typos on the mode strings."
+/>
+
+<Exercise
+  title="Type a small playlist module"
+  starter={`Build a playlist module entirely in TypeScript:
+
+  1. Declare a Track type:
+       { title: string; artist: string; durationSec: number; favorite?: boolean }
+  2. Declare a Playlist type:
+       { name: string; tracks: Track[] }
+  3. Write a function totalDuration(p: Playlist): number that returns
+     the sum of all track durations.
+  4. Write a function favorites(p: Playlist): Track[] that returns
+     only the tracks marked favorite.
+  5. Write a function setMode(mode: "shuffle" | "repeat" | "off"): void
+     that just console.logs the mode — exercise the literal union.
+  6. Create one Playlist with 3 tracks (two favorited) and call all three
+     functions on it.
+
+Don't use 'any'. Let TypeScript infer everything inside function bodies;
+only annotate parameters and return values.`}
+>
+
+- Two `type` declarations: `Track` and `Playlist`, with the correct fields and `favorite` optional.
+- `totalDuration` takes a `Playlist` and returns a `number`. Body uses `reduce` or a loop.
+- `favorites` takes a `Playlist` and returns `Track[]`. Body uses `filter`.
+- `setMode` parameter is a **literal union** of three exact strings — autocompletes in the editor.
+- The sample Playlist has the correct shape: name string, tracks array with all required fields populated.
+- All three functions can be called without TypeScript complaining.
+- No `any` appears anywhere in the file.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `any` and `unknown` in TypeScript?
+
+**A:** **`any` turns checking off; `unknown` turns it on at the next step.**
+
+```ts
+const a: any = JSON.parse(input);
+a.foo.bar.baz;          // ✓ allowed. and probably wrong.
+
+const u: unknown = JSON.parse(input);
+u.foo;                  // ✗ Object is of type 'unknown'.
+
+if (typeof u === "object" && u !== null && "foo" in u) {
+  u.foo;                // ✓ now narrowed
+}
+```
+
+`any` says "I'm opting out — anything goes." Useful for prototyping; dangerous in shipped code because you lose every benefit of TypeScript.
+
+`unknown` says "I don't know yet — force me to narrow before using." The compiler requires a runtime check (`typeof`, `instanceof`, `in`, or a custom type guard) before you can do anything with it. Same idea as `any` (unknown shape) without the safety hole.
+
+Rule of thumb: in new code, write `unknown` where you used to write `any`. The compiler will tell you exactly where you have to add a check — and those are exactly the spots that needed one anyway.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When do you write `: string` explicitly versus let TypeScript infer the type?
+
+**A:** **Annotate at the contract; let inference handle the internals.**
+
+Annotate:
+- **Function parameters** — TypeScript can't read the function's mind. `function double(n: number)` is the contract for everyone calling it.
+- **Function return types** for public/exported functions — documents the signature and catches bugs where the body changes but the signature shouldn't.
+- **Variables initialized to `null` or `undefined`** — without a hint, the inferred type is `null` or `undefined`, which is rarely what you want long-term.
+
+Let inference handle:
+- **Local variables initialized to a real value.** `let count = 0` already infers `number` correctly.
+- **Intermediate results.** `const upper = name.toUpperCase()` infers `string` from the call.
+- **Array literals with at least one element.** `const ids = [1, 2, 3]` infers `number[]`.
+
+Over-annotating produces visual noise that hides the real types and adds maintenance cost — refactor `0` to `0n` (BigInt) and you have to update an annotation too. Under-annotating at the boundaries makes your function signatures unreadable. The middle path: signatures loud, bodies quiet.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `type Mode = "dark" | "light"` give you that `type Mode = string` doesn't?
+
+**A:** **Exhaustiveness + autocomplete + typo protection.**
+
+```ts
+type Mode = "dark" | "light";
+function apply(m: Mode) { /* ... */ }
+
+apply("dark");      // ✓
+apply("Dark");      // ✗ casing matters
+apply("auto");      // ✗ not in the union
+```
+
+With `string`, `apply("auto")` would type-check. Customer support gets the "why doesn't auto mode work?" tickets and you find the typo three weeks later. With the literal union:
+
+- **Autocomplete.** The editor offers `"dark"` and `"light"` when you start typing.
+- **Typos caught.** Wrong casing, wrong word, all rejected at build time.
+- **Exhaustiveness checks** in switches:
+
+  ```ts
+  switch (m) {
+    case "dark":  return styleDark();
+    case "light": return styleLight();
+    default:
+      const _: never = m;   // if you later add "auto", this errors until you handle it
+  }
+  ```
+
+The `never` trick is huge: add a new value to `Mode`, and every `switch` that used to be exhaustive starts failing — pointing you straight at the code that needs updating.
+
+Use literal unions instead of `string` whenever you know the legal values up front. It's the smallest change with the biggest dividend.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between a tuple and an array in TypeScript?
+
+**A:** **An array is a list of things of a single type; a tuple is a fixed-length list of specific types per position.**
+
+```ts
+// Array — any number of strings, all positions interchangeable
+let names: string[] = ["Ada", "Lin", "Sam"];
+
+// Tuple — exactly two elements, first a string, second a number
+let pair:  [string, number] = ["Ada", 32];
+
+names[5];          // type: string  (or undefined if out of bounds — strict null checks)
+pair[0];           // type: string
+pair[1];           // type: number
+pair[2];           // ✗ tuple has length 2
+```
+
+When to reach for tuples:
+
+- **Returning multiple values from a function.** React's `useState` returns `[value, setter]` — a tuple, so destructuring with `const [count, setCount]` gives you exact types for each.
+- **Modeling small fixed records** where named fields would be overkill. `[lat, lon]`, `[r, g, b]`.
+
+Tuples can also have **optional** and **rest** elements:
+
+```ts
+let event: [string, number, string?]            = ["click", 1697123456];
+let argv:  [string, ...string[]]                = ["node", "script.js", "--flag"];
+```
+
+Use tuples sparingly — named-field objects (`{ value, setter }`) are clearer for anything more than 2-3 positions. But within React's hooks pattern, tuples are everywhere.
+
+</InterviewQuestion>

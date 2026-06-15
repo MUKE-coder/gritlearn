@@ -1,0 +1,53 @@
+<!--
+  Same bug, two outcomes.
+
+  In plain JS this page "works" — the typo (user.nmae) silently produces
+  the string "Hi undefined" and the bug ships. In a real app the same
+  shape would show up in an empty greeting, a confused customer support
+  ticket, and a stack trace three days later.
+
+  In a TypeScript project the editor would have drawn a red squiggle
+  under .nmae the instant you typed it, with the message
+    "Property 'nmae' does not exist on type 'User'. Did you mean 'name'?"
+  No build → no shipped bug.
+
+  Open the page, open devtools (F12), see "Hi undefined" in the heading.
+  Then fix the typo and watch it become "Hi Ada".
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Runtime vs. compile-time error</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.75rem; }
+      pre { background: #f4f4f6; padding: 0.75rem 1rem; border-radius: 6px; overflow-x: auto; }
+      .note { color: #555; font-size: 0.9rem; margin-top: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1 id="greeting">…loading…</h1>
+    <pre id="source"></pre>
+    <p class="note">
+      Open devtools. Look at the heading. In plain JavaScript, the typo
+      (<code>user.nmae</code>) produces "Hi undefined" with no warning.
+      In a TypeScript project, the editor would have caught it as you typed.
+    </p>
+
+    <script>
+      // Plain JavaScript — no type info, no safety net.
+      const user = { name: "Ada" };
+
+      // BUG: 'nmae' instead of 'name'. JavaScript does NOT complain.
+      // It silently returns undefined and the page ships broken.
+      const greeting = "Hi " + user.nmae;
+
+      document.getElementById("greeting").textContent = greeting;
+      document.getElementById("source").textContent =
+        "const user = { name: 'Ada' };\n" +
+        "// typo here ↓\n" +
+        "'Hi ' + user.nmae   // → 'Hi undefined'";
+    </script>
+  </body>
+</html>

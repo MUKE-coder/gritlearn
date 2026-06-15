@@ -1,0 +1,431 @@
+## TS interfaces and types
+
+When the same object shape shows up in three places — a function argument, a state variable, an API response — you stop writing it inline and give it a name. TypeScript has two ways to do that: `type` and `interface`. They overlap heavily, with small differences that matter at the edges. Most modern codebases pick one and stay consistent.
+
+<Analogy>
+Naming a shape with `type` or `interface` is **printing a blueprint** instead of sketching the same diagram on every napkin.
+
+You're a furniture maker. The first chair you build, you sketch the dimensions on a scrap of paper as you go. The second chair, you sketch it again. By the fourth chair, you give in and draw a **blueprint** — once, properly — and pin it on the wall. Every chair after that, you point at the blueprint: *"that one."* Same dimensions, same joinery, same finish, every time. If you change the blueprint, every future chair changes with it. If a customer asks "what's your standard chair?", you hand them the blueprint, not a description.
+
+TypeScript's `type` and `interface` are these blueprints. Both produce a name you can reference:
+
+```ts
+type User = { id: number; name: string; email: string };
+// or
+interface User { id: number; name: string; email: string }
+```
+
+Now anywhere a `User` shape goes — function parameters, state variables, array elements, API responses — you write `User` instead of repeating the inline shape. One place to change. One name to reuse. One source of truth for what "User" means in your codebase.
+
+The two ways are almost interchangeable. Two real differences:
+
+- **`interface` is open for extension.** You (or a library) can re-open an `interface` to add more fields later. Useful for declaration merging — augmenting third-party libraries.
+- **`type` is more flexible.** It can represent unions (`type Mode = "dark" | "light"`), intersections, mapped types, and computed types. `interface` can't.
+
+The default daily choice in most codebases:
+- **Use `type` everywhere** — simpler mental model, handles every case.
+- Pick `interface` when you need its specific capabilities (declaration merging, or matching a team convention).
+
+The team's existing code decides for you on day one. The bigger win is consistency.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the same shape declared as type and interface, both used interchangeably"
+  caption="Same shape, two syntaxes. The everyday cases are interchangeable."
+>
+
+```
+WITH type                              WITH interface
+
+type User = {                          interface User {
+  id:    number;                         id:    number;
+  name:  string;                         name:  string;
+  email: string;                         email: string;
+};                                     }
+
+function sendTo(user: User) {…}        function sendTo(user: User) {…}
+const ada: User = {…};                 const ada: User = {…};
+
+  Both can:                              Only type can:           Only interface can:
+  ─────────                              ──────────────           ────────────────────
+  • describe object shapes               • be a union              • be re-opened
+  • be extended (extends / &)            • be a tuple              • merge declarations
+  • be used in generics                  • be a computed type        with same name
+```
+
+</Illustration>
+
+### `type` — the everyday default
+
+```ts
+type User = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+function welcome(user: User): string {
+  return `Hi ${user.name}`;
+}
+
+const ada: User = { id: 1, name: "Ada", email: "ada@a.com" };
+```
+
+You'll write `type` declarations every day. The shape goes between the `=` and the `;`. Use it for objects, unions, primitives — anything you want to name.
+
+### `interface` — same idea, different syntax
+
+```ts
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+```
+
+Drop the `=` and the `;`. Otherwise identical. In a fresh codebase, the two are interchangeable for declaring object shapes — pick one, stay consistent.
+
+### Optional and readonly fields
+
+Both `type` and `interface` support the same field modifiers:
+
+```ts
+type User = {
+  id: number;
+  name: string;
+  email?: string;          // optional — can be undefined or absent
+  readonly createdAt: Date;  // can't be reassigned after creation
+};
+```
+
+```ts
+const ada: User = { id: 1, name: "Ada", createdAt: new Date() };
+ada.createdAt = new Date();    // ✗ Cannot assign to 'createdAt' — it's read-only.
+```
+
+`readonly` is especially valuable for fields that come from the database or external sources — flagging them prevents accidental mutation.
+
+### Extending — adding fields to an existing shape
+
+You often have a "base" shape and a "more specific" version. Both syntaxes support this:
+
+#### `type` with intersection (`&`)
+
+```ts
+type Person = {
+  name: string;
+  email: string;
+};
+
+type Employee = Person & {
+  department: string;
+  salary: number;
+};
+```
+
+An `Employee` is everything in `Person` plus the new fields. The `&` is **intersection** — combine these two shapes into one.
+
+#### `interface` with `extends`
+
+```ts
+interface Person {
+  name: string;
+  email: string;
+}
+
+interface Employee extends Person {
+  department: string;
+  salary: number;
+}
+```
+
+Same result, different keyword. `extends` reads more like classical inheritance; some teams prefer it for that reason.
+
+#### Multiple inheritance
+
+```ts
+type Animal = { name: string };
+type Domestic = { ownerName: string };
+type Pet = Animal & Domestic & { species: string };
+
+interface Pet2 extends Animal, Domestic { species: string }
+```
+
+`&` chains naturally. `extends` takes a comma-separated list.
+
+### Unions — only `type` can do this
+
+The biggest functional gap between the two:
+
+```ts
+type Mode = "dark" | "light";              // ✓
+type Result = User | null;                 // ✓
+type Value = string | number | boolean;    // ✓
+
+interface Mode = "dark" | "light";         // ✗ not legal
+```
+
+Unions are how you model "one of several distinct shapes." Use `type` whenever you need them.
+
+A particularly useful pattern — **discriminated unions** — uses a literal field to tell the variants apart:
+
+```ts
+type Shape =
+  | { kind: "circle";    radius: number }
+  | { kind: "square";    side: number }
+  | { kind: "triangle";  base: number; height: number };
+
+function area(s: Shape): number {
+  switch (s.kind) {
+    case "circle":   return Math.PI * s.radius ** 2;
+    case "square":   return s.side ** 2;
+    case "triangle": return 0.5 * s.base * s.height;
+  }
+}
+```
+
+The `kind` field narrows the type inside each case. Inside `case "circle"`, TypeScript *knows* `s` has `.radius` — it's not on the other variants. This pattern is everywhere in React (Redux actions, useReducer, event payloads).
+
+### Declaration merging — only `interface` can do this
+
+Two `interface`s with the same name in the same scope **merge** into one combined declaration:
+
+```ts
+interface Window {
+  myCustomAPI: () => void;
+}
+interface Window {
+  anotherAPI: (x: number) => string;
+}
+
+// Window now has both myCustomAPI AND anotherAPI
+```
+
+The same trick with `type` is an error (duplicate identifier). Declaration merging is how libraries let you augment their types — e.g. adding properties to `Window`, or extending Express's `Request` object. You'll meet this rarely as a consumer, occasionally as a library author.
+
+### When to use which — the team's rule beats the language's
+
+Pick a default and stick to it:
+
+- **Default: `type`.** Handles every case (object shapes, unions, tuples, intersections, mapped types). Slightly more flexible. The mental model is simpler — one tool.
+- **Default: `interface`.** Reads cleaner to people coming from Java / C#. Supports declaration merging if you're augmenting libraries. Some style guides require it for classes' shapes.
+
+Teams pick one. Consistency wins over either choice. If your codebase already mixes them, follow the local convention in each file rather than introducing a third style.
+
+### `type` aliases for primitives and tuples
+
+`type` isn't just for objects:
+
+```ts
+type ID = number;                          // alias for number
+type Coords = [number, number];             // alias for a tuple
+type Callback<T> = (value: T) => void;      // alias for a generic function
+```
+
+These are handy when a primitive has semantic meaning beyond "it's a number" — `UserId`, `Timestamp`, `Cents`. You write `UserId` everywhere; if you later need to change `UserId` from `number` to `string`, you change it in one place.
+
+### Generics — parameterized shapes
+
+Both `type` and `interface` can take type parameters — like function parameters, but for types:
+
+```ts
+type Box<T> = { value: T };
+
+const numBox: Box<number> = { value: 42 };
+const strBox: Box<string> = { value: "hi" };
+```
+
+You'll meet generics seriously when you write reusable utilities. On day one, you'll *use* them more than declare them — `Array<T>`, `Promise<T>`, `Map<K, V>`, React's `useState<T>` are all generic.
+
+### A practical example — modeling an API response
+
+The everyday use case:
+
+```ts
+type ApiError = { code: string; message: string };
+
+type ApiResponse<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ApiError };
+
+async function fetchUser(id: number): Promise<ApiResponse<User>> {
+  try {
+    const res = await fetch(`/api/users/${id}`);
+    if (!res.ok) return { ok: false, error: { code: "404", message: "Not found" } };
+    return { ok: true, data: await res.json() };
+  } catch (e) {
+    return { ok: false, error: { code: "NET", message: String(e) } };
+  }
+}
+
+const r = await fetchUser(1);
+if (r.ok) {
+  r.data.name;        // ✓ TypeScript knows .data is a User here
+} else {
+  r.error.message;    // ✓ TypeScript knows .error is an ApiError here
+}
+```
+
+Three TypeScript features compounded: a generic (`<T>`), a discriminated union (`ok: true | false`), and narrowing inside an `if`. This is the shape you'll write for every API call in a serious codebase.
+
+<ExampleProject
+  src="interface-vs-type"
+  title="Side-by-side: the same shape declared both ways"
+  description="Two files defining the same User shape — one with `type`, one with `interface` — and exercising the bits where they differ. Lets you see at a glance where the choice actually matters and where it doesn't."
+/>
+
+<ExampleProject
+  src="extending-interfaces"
+  title="Extending a base shape: Person → Employee"
+  description="A base Person shape is extended into Employee and Customer. Both `type & ...` and `interface extends ...` are shown so you can see the syntactic gap. The functions consuming Person still work for both — that's the point of inheritance."
+/>
+
+<Exercise
+  title="Model a small messaging app's data"
+  starter={`Using TypeScript, model the data layer for a tiny messaging app:
+
+  1. A User type with: id (number), name (string), avatarUrl (string), online (boolean).
+  2. A Message type with: id, authorId, body, createdAt (Date), edited (optional boolean).
+  3. A Channel type with: id, name, members (User[]), messages (Message[]).
+  4. A discriminated union Notification:
+     - { kind: "mention",   channelId: number, messageId: number, userId: number }
+     - { kind: "reaction",  messageId: number, emoji: string, userId: number }
+     - { kind: "joinedChannel", channelId: number, userId: number }
+  5. Write a function describe(n: Notification): string that produces a
+     human-readable description for each notification kind. Use a switch
+     on n.kind. TypeScript should narrow inside each case.
+  6. Create one sample object of each type and call describe on three
+     different notifications.
+
+You decide whether to use type or interface. Be consistent within the file.
+Don't use any.`}
+>
+
+- Four named declarations (User, Message, Channel, Notification) — all with the correct field shapes.
+- `Notification` is a **discriminated union** with `kind` as the discriminator and three variants.
+- `Message.edited` is optional (`?`).
+- `describe` is a function with `n: Notification` parameter and returns `string`. Inside the switch, each case accesses fields specific to that variant (`channelId`, `emoji`, etc.) and TypeScript does not complain.
+- Three `describe(...)` calls produce three distinct strings.
+- The file uses **either `type` or `interface` consistently** — not a mix.
+- `any` does not appear in the file.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the practical difference between `type` and `interface` in TypeScript?
+
+**A:** For describing an object shape, **almost none**. Both let you name a shape, reuse it, and extend it. The team's existing convention should decide which to use day to day.
+
+Two cases where they genuinely differ:
+
+1. **`type` handles non-object shapes; `interface` doesn't.**
+
+   ```ts
+   type Mode = "dark" | "light";          // ✓
+   type Pair = [string, number];          // ✓
+   interface Mode = "dark" | "light";     // ✗ syntactically illegal
+   ```
+
+   Union types, tuple types, primitive aliases, mapped types — `type` only.
+
+2. **`interface` merges; `type` errors.**
+
+   ```ts
+   interface Window { customA: () => void; }
+   interface Window { customB: () => void; }
+   // ✓ Window now has both
+   ```
+
+   Two `type` declarations with the same name are an error. This **declaration merging** matters when augmenting third-party libraries (extending `Window`, adding fields to Express's `Request`, etc.).
+
+In a new codebase: most teams default to `type` because it handles every case with one mental model. Some teams prefer `interface` for cleaner OO-style reading and the merging escape hatch. Either is fine; consistency matters more than the choice.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `User & { admin: boolean }` mean in TypeScript?
+
+**A:** It's an **intersection type**: a value that satisfies both `User` and `{ admin: boolean }`. In plain English: "everything `User` has, plus `admin: boolean`."
+
+```ts
+type User = { id: number; name: string };
+type AdminUser = User & { admin: boolean };
+
+const ada: AdminUser = {
+  id: 1,
+  name: "Ada",
+  admin: true,    // required by the second part of the intersection
+};
+```
+
+If `User` has 3 fields and `{ admin: boolean }` has 1 field, `AdminUser` has 4 fields total — all required. Missing any of them is an error.
+
+This is `type`'s equivalent of `interface extends`. The interface-flavored version is:
+
+```ts
+interface AdminUser extends User { admin: boolean }
+```
+
+Same shape, different syntax. Intersection chains naturally — `A & B & C` gives you all three at once — while `extends` takes a comma-separated list (`interface X extends A, B, C`). Intersections also work on inline shapes without giving the base shape a name, which is occasionally handy:
+
+```ts
+function audit(u: User & { auditedAt: Date }) { /* ... */ }
+```
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a discriminated union, and why is it useful?
+
+**A:** A **discriminated union** is a union of object types where each variant has a literal-typed field — the **discriminator** — that tells TypeScript which variant you're holding. Inside an `if` or `switch` on that field, TypeScript **narrows** the type to the matching variant.
+
+```ts
+type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; side: number };
+
+function area(s: Shape): number {
+  switch (s.kind) {
+    case "circle": return Math.PI * s.radius ** 2;  // .side would error here
+    case "square": return s.side ** 2;              // .radius would error here
+  }
+}
+```
+
+The wins:
+
+1. **Type-safe variants in one union.** You don't need separate functions per shape; the switch handles all of them.
+2. **Exhaustiveness checks.** Add a `default: const _: never = s;` line — if you later add `{ kind: "triangle"; ... }` to the union, every switch using it errors until you handle the new variant. The compiler points you at every spot that needs updating.
+3. **Real-world fit.** It models exactly how messy data looks: API responses (`{ ok: true; data } | { ok: false; error }`), Redux actions (each action has a `type` field), event payloads, parser results.
+
+The pattern needs only two things: a literal-typed field present in every variant, and a switch (or chain of ifs) on that field. Once you see it, you'll spot opportunities everywhere — anywhere you have "two or three related shapes that share a context."
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When would you reach for `interface` in a codebase that defaults to `type`?
+
+**A:** Three legitimate reasons:
+
+1. **You need declaration merging.** Augmenting a third-party type (adding fields to `Window`, extending Express's `Request`, declaring module-level globals) requires `interface`. Two interfaces with the same name in the same scope merge; two `type` aliases with the same name error.
+
+   ```ts
+   // In a .d.ts file augmenting Express
+   declare module "express" {
+     interface Request { user?: User; }
+   }
+   ```
+
+2. **You're modeling a class shape.** When a class implements an interface, the relationship reads naturally: `class UserService implements IUserService`. Same works with `type implements`, but interface-flavored OO codebases find `interface` clearer.
+
+3. **The team convention says so.** Big codebases with style guides often pin one of them as the standard for object shapes. If yours says `interface`, follow it — the mental cost of mixed conventions outweighs the slight functional difference.
+
+Outside those reasons, `type` is the safer default in a "type-heavy" codebase because it handles everything (unions, tuples, intersections, mapped types) with one tool. Picking `interface` everywhere forces you to occasionally drop to `type` for the cases it can't handle anyway, which produces inconsistency.
+
+In summary: default to one (whichever the team picked), reach for `interface` only when the language forces your hand.
+
+</InterviewQuestion>

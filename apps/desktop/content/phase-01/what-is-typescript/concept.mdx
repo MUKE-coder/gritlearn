@@ -1,0 +1,328 @@
+## What TypeScript is and why types
+
+JavaScript lets you write `user.nmae` instead of `user.name` and only finds out at 2:43 AM when a real customer hits that code path. TypeScript is JavaScript with **types** — a small layer of extra notation that tells the editor what shape each value has, so the typo gets a red squiggle the moment you type it. The runtime still runs plain JavaScript; the types vanish at build time. You get the safety net without the runtime cost.
+
+<Analogy>
+TypeScript is a **luggage label with a destination on it**.
+
+You're checking bags onto a plane. Plain JavaScript is unlabeled luggage: you write "user" on a sticky note and toss it onto the conveyor belt. At the other end, someone opens it and finds... what? A user object? A user ID number? Two users in a trench coat? You won't know until you open the bag — which in a running app means "until a customer crashes and you read the stack trace."
+
+TypeScript adds a printed luggage tag with the destination spelled out: **`User { id: number, name: string, email: string }`**. The handlers reading that tag don't need to peek inside. They know exactly what's there. If the conveyor belt tries to send a `Product` bag onto a flight that only accepts `User` bags, the airport refuses it on the spot — at the gate, before takeoff.
+
+The win compounds:
+- **The editor knows.** Autocomplete fires the moment you hit `.` because the tag says what's allowed.
+- **Refactors are safe.** Rename `name` → `fullName` and the editor highlights every place that breaks.
+- **The reviewer trusts your function signature.** `function sendEmail(user: User): Promise<void>` tells them everything; they don't have to read the body to know what goes in and out.
+- **The runtime cost is zero.** The tags get peeled off before takeoff. The plane (your bundle) carries plain JavaScript.
+
+The cost: you write the labels. About 10% more typing, mostly upfront. In return, the editor and the build system become your code reviewers — and they never sleep.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing untyped JavaScript and TypeScript catching a typo"
+  caption="Same code, two outcomes. JS finds out at runtime; TS finds out as you type."
+>
+
+```
+JAVASCRIPT                              TYPESCRIPT
+
+function greet(user) {                  type User = { name: string };
+  return "Hi " + user.nmae;             function greet(user: User) {
+}                                         return "Hi " + user.nmae;
+                                        }                ↑
+                                                         ┃ red squiggle:
+greet({ name: "Ada" })                                   ┃ Property 'nmae' does
+// → "Hi undefined"                                      ┃ not exist on User.
+//   …(works in dev, breaks                              ┃ Did you mean 'name'?
+//   in prod when 'name' is
+//   missing or misspelled)              greet({ name: "Ada" })
+                                         // → "Hi Ada"   (after fix)
+```
+
+</Illustration>
+
+### What a type actually is
+
+A type is a **set of values that a name is allowed to hold**, plus a contract for what operations are allowed on it. `number` is "any numeric value, and you can do arithmetic." `string` is "any text, and you can call `.toUpperCase()`." `User` (if you define it) is "an object with these specific fields."
+
+When you write:
+
+```ts
+let count: number = 0;
+```
+
+You're telling TypeScript: "anywhere `count` appears, expect a number." Later code that does `count = "zero"` gets a red squiggle. Code that does `count.toUpperCase()` gets a red squiggle (because numbers don't have `.toUpperCase()`).
+
+### The tags vanish at build time
+
+The single most important thing to internalize: **TypeScript runs nowhere**. There is no TypeScript at runtime. The build step (`tsc`, `esbuild`, `vite`, whatever you use) reads your `.ts` file, checks the types, then strips them out and emits a `.js` file with the types removed:
+
+```ts
+// input: greet.ts
+function greet(user: User): string {
+  return "Hi " + user.name;
+}
+```
+
+```js
+// output: greet.js
+function greet(user) {
+  return "Hi " + user.name;
+}
+```
+
+That's why "TypeScript catches bugs" is true at build time but **not at runtime**. If your API returns garbage that doesn't match your declared `User` type, TypeScript never finds out — because the runtime doesn't know about types. Runtime validation is a separate job (libraries like Zod, see later concepts).
+
+### What types catch
+
+The everyday wins, in roughly the order you'll feel them:
+
+1. **Typos in property names.** `user.nmae` → red squiggle.
+2. **Wrong number/order of arguments.** `sendEmail(user)` when the signature is `sendEmail(user, subject)` → red squiggle.
+3. **Forgotten null checks.** `users.find(u => u.id === 7).name` — TypeScript knows `find` can return undefined and forces you to handle it.
+4. **API contract drift.** Change a backend response, update the type, the build highlights every frontend file that needs updating.
+5. **Dead branches.** A `switch` on `type: "a" | "b"` that has a third case → red squiggle (the type system knows that third case can't happen).
+
+### What types do NOT catch
+
+Worth saying out loud so you don't develop false confidence:
+
+- **Network failures.** TypeScript doesn't know your API will be down.
+- **Bad data at runtime.** If the server returns `{name: 42}` and your type says `string`, the runtime happily assigns 42 to a string field. Validate at boundaries.
+- **Logic bugs.** A function that returns `price * 2` when you meant `price / 2` is type-correct and wrong.
+- **Performance issues.** Types are static; runtime cost is unrelated.
+
+Types are a code-shape checker, not a correctness oracle.
+
+### `any` — the escape hatch you'll regret
+
+TypeScript lets you write `any` to mean "I'm opting out of typing this." The editor stops nagging you. The build passes. You feel clever.
+
+You won't feel clever six months later when the field on that `any`-typed object gets renamed and nothing catches it.
+
+```ts
+const user: any = fetchUser();
+user.name.toUpperCase();    // type-checks
+user.deleteAllRecords();    // also type-checks. yikes.
+```
+
+Use `any` only when:
+- You're integrating an untyped third-party library and don't have time to write declarations.
+- You're prototyping and you'll fix the types in the next pass.
+
+Prefer `unknown` when you genuinely don't know the shape — it forces you to narrow before using, which is the safe version of `any`.
+
+### `tsc` — the type checker
+
+The TypeScript compiler is a command-line tool. Two everyday uses:
+
+```bash
+tsc --noEmit          # check types, don't write output
+tsc                   # check types AND emit .js files
+```
+
+In a typical web project you don't run `tsc` directly — your bundler (Vite, Next.js) calls it under the hood. But in CI you'll add a step like `tsc --noEmit` to fail the build on type errors, so a broken PR doesn't merge.
+
+### The `tsconfig.json` file
+
+Every TypeScript project has a `tsconfig.json` at the root. The two settings worth knowing on day one:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "es2022"
+  }
+}
+```
+
+- **`strict: true`** turns on all the type-safety knobs at once. It's how every serious modern codebase starts. Without it, TypeScript is permissive in ways that defeat the point.
+- **`target`** picks the output JavaScript version. `es2022` is a safe default for modern browsers and Node.
+
+You'll meet many more options later. These two are the only ones that matter on day one.
+
+### How TypeScript fits a React project
+
+In a Next.js or Vite React project:
+
+- Files become `.tsx` (the `x` enables JSX).
+- You type your component props, your state, your API responses.
+- The editor lights up with autocomplete inside JSX.
+- Build errors fail the build before you ship.
+
+```tsx
+type ButtonProps = {
+  label: string;
+  onClick: () => void;
+};
+
+export function Button({ label, onClick }: ButtonProps) {
+  return <button onClick={onClick}>{label}</button>;
+}
+
+<Button label="Save" onClick={save} />            // ✓
+<Button label="Save" />                            // ✗ Property 'onClick' is missing
+<Button label={42} onClick={save} />              // ✗ Type 'number' is not assignable to 'string'
+```
+
+That's the bulk of the daily TypeScript experience: define a type for your component's props, the editor catches mistakes the moment you make them.
+
+### When NOT to add types
+
+A scratch file you'll delete in 10 minutes. A one-line script you `node` and throw away. Nothing wrong with plain JavaScript for those.
+
+Anywhere code is going to be read by another human, deployed, or refactored: types. The bigger the codebase, the bigger the win.
+
+<ExampleProject
+  src="runtime-error-vs-compile-error"
+  title="Same bug — caught at runtime in JS, caught as you type in TS"
+  description="Two files side by side: one is plain JavaScript that ships a typo to production, the other is TypeScript that surfaces the typo the instant you type it. Open both and watch the difference."
+/>
+
+<ExampleProject
+  src="types-as-docs"
+  title="Types as documentation that can't go stale"
+  description="A small library function with two implementations: one with JSDoc comments, one with TypeScript types. Both 'document' the function — but TypeScript enforces the documentation, so it can't drift from reality."
+/>
+
+<Exercise
+  title="Convert one untyped function to TypeScript"
+  starter={`Start with this JavaScript file:
+
+  // greeter.js
+  function greet(person, greeting) {
+    return greeting + ", " + person.name + "!";
+  }
+
+  greet({ name: "Ada" }, "Hello");
+
+Convert it to TypeScript:
+
+  1. Rename the file to greeter.ts.
+  2. Add a Person type:  { name: string }
+  3. Type the greeting parameter as string.
+  4. Type the return value as string.
+  5. Demonstrate the type catches a bug: try calling greet({}, "Hi")
+     and read the error message in the editor.
+  6. Add a second call where you accidentally pass greet({ name: "Ada" }, 42)
+     and observe the second error.
+
+Don't use 'any' anywhere. Don't import a library.`}
+>
+
+- The file is renamed to `.ts` and contains a `Person` type with `name: string`.
+- The function signature uses the `Person` type and types both `greeting` and the return value.
+- The "missing name" call produces a TypeScript error mentioning that `name` is required.
+- The "number as greeting" call produces a TypeScript error mentioning that `string` was expected.
+- `any` does not appear in the file.
+- Both error messages are read and (optionally) screenshotted into the project for reference.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between TypeScript and JavaScript at runtime?
+
+**A:** **There is no difference at runtime.** TypeScript types only exist during the build. The TypeScript compiler reads your `.ts` file, checks the types, then **strips them out** and emits a `.js` file with the type annotations removed.
+
+```ts
+// greet.ts
+function greet(name: string): string {
+  return "Hi " + name;
+}
+```
+
+becomes
+
+```js
+// greet.js
+function greet(name) {
+  return "Hi " + name;
+}
+```
+
+The runtime — the browser, Node — knows nothing about types. That's why:
+
+- TypeScript can't validate API responses or user input at runtime. Those need a real runtime validator (Zod, Joi, manual checks).
+- The bundle size impact of using TypeScript is zero.
+- A program that type-checks can still throw at runtime if real data doesn't match what the types claimed.
+
+Types are a static check, not a runtime guarantee.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `any` do in TypeScript, and when should you use it?
+
+**A:** `any` **turns off type checking** for whatever you applied it to. The editor stops complaining; the build stops verifying.
+
+```ts
+const u: any = fetchUser();
+u.name.toUpperCase();      // allowed
+u.deleteEverything();      // also allowed
+```
+
+It's appropriate in two situations:
+
+1. You're integrating an untyped third-party library and writing declarations would take longer than the value justifies.
+2. You're sketching code you'll come back to in the next pass.
+
+Otherwise `any` defeats the whole point of using TypeScript. Prefer:
+
+- **`unknown`** when you genuinely don't know the shape. It forces you to narrow (`if (typeof x === "string")`) before using it — the safe version of `any`.
+- A specific type if you know the shape, even an approximate one.
+
+A codebase with `any` sprinkled through it has the build cost of TypeScript and the safety of JavaScript — the worst of both.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does the team add `tsc --noEmit` to CI even though the bundler already runs TypeScript?
+
+**A:** Most bundlers (Vite, esbuild, SWC in Next.js) **don't actually type-check**. They strip types out for speed, but they don't *verify* that the types are consistent. If you write `const x: number = "hello"`, the bundler will happily compile it and emit broken code.
+
+`tsc --noEmit` runs the real TypeScript type checker without producing output files. In CI:
+
+```bash
+tsc --noEmit        # fail the build on any type error
+```
+
+This catches the bugs your bundler ignores — missing properties, wrong argument counts, narrowed-wrong types. It's slow (`tsc` does real semantic analysis), so most teams run it once per CI build, not on every keystroke during dev. During dev, your editor's TypeScript language service does it incrementally.
+
+The pattern: **bundler for speed during dev, `tsc` for correctness in CI**. Skipping the CI check is how shipped code ends up with type errors that the editor warned about but no one acted on.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** TypeScript types don't exist at runtime. How do you validate API responses then?
+
+**A:** With a **runtime validation library** — Zod is the modern default; alternatives are Yup, Joi, ArkType.
+
+```ts
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+});
+type User = z.infer<typeof UserSchema>;
+
+async function fetchUser(): Promise<User> {
+  const res = await fetch("/api/user");
+  const json = await res.json();
+  return UserSchema.parse(json);   // throws if shape is wrong
+}
+```
+
+Two things happen:
+
+1. **Runtime check.** `parse()` walks the JSON, verifies each field matches the schema, throws a useful error if not.
+2. **Type inference.** `z.infer<typeof UserSchema>` gives you the TypeScript type for free — single source of truth, schema and type can't drift apart.
+
+The pattern applies at every trust boundary: API responses, user form input, message-queue payloads, anything that came from outside your typed code. Inside your code, you trust the types. At the edges, you validate. The two checks together — `tsc` inside, Zod at the edges — is how modern TypeScript apps stay safe.
+
+</InterviewQuestion>

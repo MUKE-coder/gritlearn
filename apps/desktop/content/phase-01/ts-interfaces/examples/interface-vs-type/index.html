@@ -1,0 +1,90 @@
+<!--
+  Same shape, declared both ways.
+
+  This page is plain HTML (no build step), so the TypeScript is rendered
+  as text in <pre> blocks. The point is to put the two syntaxes
+  side by side and let you read the diff. In a real .ts file the
+  compiler would type-check every line.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>type vs. interface, side by side</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #1f1f24; }
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1rem; margin-top: 1.8rem; color: #555; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+      pre { background: #f4f4f6; padding: 0.85rem 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.88rem; line-height: 1.45; }
+      .gap { color: #9ca3af; font-size: 0.78rem; }
+      .ok { color: #16a34a; }
+      .bad { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>The same shape, two ways</h1>
+    <p class="gap">Below: <code>type</code> on the left, <code>interface</code> on the right. The everyday cases are interchangeable; the two cells at the bottom show where they diverge.</p>
+
+    <h2>Declaring an object shape</h2>
+    <div class="cols">
+<pre>
+type User = {
+  id:    number;
+  name:  string;
+  email: string;
+};
+</pre>
+<pre>
+interface User {
+  id:    number;
+  name:  string;
+  email: string;
+}
+</pre>
+    </div>
+
+    <h2>Extending</h2>
+    <div class="cols">
+<pre>
+type Employee = User &amp; {
+  department: string;
+  salary:     number;
+};
+</pre>
+<pre>
+interface Employee extends User {
+  department: string;
+  salary:     number;
+}
+</pre>
+    </div>
+
+    <h2><span class="ok">Only type can do this</span> — unions</h2>
+    <div class="cols">
+<pre>
+type Mode   = "dark" | "light";
+type Result = User | null;
+</pre>
+<pre>
+<span class="bad">// interface can't be a union.</span>
+<span class="bad">// Use type instead.</span>
+</pre>
+    </div>
+
+    <h2><span class="ok">Only interface can do this</span> — declaration merging</h2>
+    <div class="cols">
+<pre>
+<span class="bad">// type with same name = duplicate error.</span>
+type Box = { a: number };
+type Box = { b: string };   <span class="bad">// ✗ Duplicate identifier</span>
+</pre>
+<pre>
+interface Box { a: number }
+interface Box { b: string }
+<span class="ok">// ✓ Box now has both a and b.</span>
+</pre>
+    </div>
+
+  </body>
+</html>

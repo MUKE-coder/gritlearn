@@ -1,0 +1,63 @@
+<!--
+  The five core primitives, each with one type-appropriate operation.
+
+  This file is HTML so the lesson can show the shape without a build
+  step. In a real .ts file every line below would be type-checked by
+  your editor; the comments mark what the inferred type would be.
+
+  Open the page, see the rendered output, then read the script and
+  notice that every value has exactly one role and one set of legal
+  operations.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The primitives, each doing what it can</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.4rem; }
+      table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+      th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+      th { background: #f8f8fa; font-weight: 600; }
+      code { background: #f4f4f6; padding: 1px 5px; border-radius: 4px; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>The five primitives</h1>
+    <table>
+      <thead><tr><th>Type</th><th>Value</th><th>One typical operation</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <script>
+      // Each row here would, in a .ts file, be the inferred type
+      // shown after the colon. The script is plain JS so the page
+      // runs without a build step.
+
+      const name      = "Ada";          // string
+      const age       = 32;             // number
+      const active    = true;           // boolean
+      const nothing   = null;           // null
+      const missing   = undefined;      // undefined
+
+      const rows = [
+        ["string",    JSON.stringify(name),     "name.toUpperCase() → " + name.toUpperCase()],
+        ["number",    String(age),              "age.toFixed(1) → "    + age.toFixed(1)],
+        ["boolean",   String(active),           "!active → "           + String(!active)],
+        ["null",      String(nothing),          "(nothing === null) → " + String(nothing === null)],
+        ["undefined", String(missing),          "(missing === undefined) → " + String(missing === undefined)],
+      ];
+
+      const tbody = document.getElementById("rows");
+      for (const [type, value, op] of rows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td><code>" + type + "</code></td>" +
+          "<td><code>" + value + "</code></td>" +
+          "<td>" + op + "</td>";
+        tbody.appendChild(tr);
+      }
+    </script>
+  </body>
+</html>

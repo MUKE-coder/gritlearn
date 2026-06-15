@@ -1,0 +1,96 @@
+<!--
+  Arrays, unions, and a literal-typed filter mode.
+
+  In a TypeScript file this would be:
+
+    type User = { name: string; active: boolean };
+    type Mode = "all" | "active" | "pending";
+    let mode: Mode = "all";
+    const users: User[] = [...];
+
+  The page demonstrates the value of the literal union: the three mode
+  buttons map to the three legal values. There is no fourth button
+  because there is no fourth allowed mode — the union excludes it at
+  the type level, so the code can't accidentally try to render one.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arrays + literal-typed mode switch</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.35rem; }
+      .modes { display: flex; gap: 0.5rem; margin: 1rem 0 1.25rem; }
+      .modes button {
+        padding: 0.45rem 0.9rem; border: 1px solid #d4d4d8; background: #fff;
+        border-radius: 6px; cursor: pointer; font-size: 0.92rem;
+      }
+      .modes button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+      ul { list-style: none; padding: 0; }
+      li {
+        padding: 0.55rem 0.75rem; border: 1px solid #eee; border-radius: 6px;
+        margin-bottom: 6px; display: flex; justify-content: space-between;
+      }
+      .pill { font-size: 0.78rem; padding: 1px 8px; border-radius: 999px; }
+      .pill.active  { background: #dcfce7; color: #166534; }
+      .pill.pending { background: #fef9c3; color: #854d0e; }
+    </style>
+  </head>
+  <body>
+    <h1>Users — filter by mode</h1>
+
+    <div class="modes" id="modes"></div>
+    <ul id="list"></ul>
+
+    <script>
+      // In a .ts file:
+      //   type User = { name: string; status: "active" | "pending" };
+      //   type Mode = "all" | "active" | "pending";
+      //
+      // The literal unions are what make the mode buttons type-safe —
+      // you can't write a button for a fourth mode that the filter
+      // function doesn't know about.
+
+      const users = [
+        { name: "Ada Lovelace",   status: "active"  },
+        { name: "Linus Lin",      status: "active"  },
+        { name: "Sam Sample",     status: "pending" },
+        { name: "Grace Hopper",   status: "active"  },
+        { name: "Pat Pending",    status: "pending" },
+      ];
+
+      const modes = ["all", "active", "pending"];
+      let mode = "all";
+
+      const modesEl = document.getElementById("modes");
+      const listEl  = document.getElementById("list");
+
+      function render() {
+        modesEl.innerHTML = "";
+        for (const m of modes) {
+          const btn = document.createElement("button");
+          btn.textContent = m;
+          if (m === mode) btn.classList.add("active");
+          btn.onclick = () => { mode = m; render(); };
+          modesEl.appendChild(btn);
+        }
+
+        const filtered = mode === "all"
+          ? users
+          : users.filter(u => u.status === mode);
+
+        listEl.innerHTML = "";
+        for (const u of filtered) {
+          const li = document.createElement("li");
+          li.innerHTML =
+            "<span>" + u.name + "</span>" +
+            "<span class=\"pill " + u.status + "\">" + u.status + "</span>";
+          listEl.appendChild(li);
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>

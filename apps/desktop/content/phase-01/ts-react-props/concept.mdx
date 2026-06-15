@@ -1,0 +1,458 @@
+## Typing React props and state
+
+React + TypeScript is where the daily payoff of types shows up most. Every component has a `props` object — that object has a *shape*, and pinning the shape down means the editor autocompletes inside the JSX, the build rejects bad calls, and the next person who reads your component understands what it expects without opening the body. Same trick applies to `useState`, `useReducer`, event handlers, and refs.
+
+<Analogy>
+Typing React props is **labeling the inputs on the back of an appliance**.
+
+You're an electrician. A new appliance arrives. On the back: a power inlet labeled "120V / 60Hz", an HDMI labeled "HDMI 2.1", a USB-C labeled "100W PD". You don't need the manual. You glance at the labels and know exactly what to plug in. If you try to feed a 240V cord into the 120V inlet, the inlet doesn't fit — the physical shape *refuses* the wrong input.
+
+A React component is an appliance. Its `props` are the inputs on the back. Typing them is labeling the inlets:
+
+```tsx
+type ButtonProps = {
+  label:   string;          // ← labeled "label: string"
+  onClick: () => void;      // ← labeled "onClick: function"
+  variant?: "primary" | "ghost";   // ← labeled, optional
+};
+
+function Button({ label, onClick, variant = "primary" }: ButtonProps) {
+  /* ... */
+}
+```
+
+Now anyone using the component sees the inlets in their editor — autocomplete pops up the moment they start typing `<Button `. Pass a number where a string was expected, the build refuses. Forget a required prop, the build refuses. Pass `variant="batdge"`, the build refuses — the editor even suggests `"primary"` and `"ghost"` because those are the only legal values.
+
+The compounding effects when components compose into pages:
+
+- **Self-documenting components.** A reviewer reads the `Props` type and knows what the component does at the boundary level — no need to read the body.
+- **Refactor-safe.** Change a prop name; every call site lights up with red squiggles, listing every fix you have to make.
+- **Better autocomplete than any docs site.** The editor knows your specific component, including the optional props with their defaults.
+- **State stays honest too.** `useState<User | null>(null)` declares that the state is "a User or null" — the rest of the file is type-checked against that.
+
+The cost is one line per component (the `Props` type) and one annotation per `useState`. Three minutes total. The first time you change a prop and watch the editor list every broken call site, you'll never go back.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a typed React component with props labeled and call sites checked"
+  caption="Inputs on the back of the appliance. Editor and build both refuse wrong shapes."
+>
+
+```
+   THE COMPONENT                          THE CALL SITES
+
+   type ButtonProps = {                   <Button label="Save"
+     label:   string;                             onClick={save} />
+     onClick: () => void;
+     variant?: "primary" | "ghost";       <Button label="Cancel"     ← ✗
+   };                                             variant="batdge"      ← ✗ "batdge"
+                                                  onClick={cancel} />     not in union
+
+   function Button({ label, onClick,     <Button label={42}           ← ✗
+                     variant = "primary" }                onClick={save} /> ← ✗ number
+                   : ButtonProps) {                                          where string
+     return ( ... );                                                         expected
+   }
+                                          <Button onClick={save} />    ← ✗ missing label
+```
+
+</Illustration>
+
+### The everyday pattern
+
+```tsx
+type GreetingProps = {
+  name: string;
+};
+
+export function Greeting({ name }: GreetingProps) {
+  return <h1>Hello, {name}</h1>;
+}
+```
+
+Three pieces:
+
+1. **`type Props` declaration** above the component. `interface` works too — pick one and stay consistent.
+2. **Destructuring in the parameter list** with the type after the colon: `{ name }: GreetingProps`.
+3. **Use the props** inside the JSX — TypeScript knows the types.
+
+That's the entire daily pattern. Repeat for every component.
+
+### `children` — the special prop
+
+Components that wrap content take a `children` prop. The right type is `React.ReactNode`:
+
+```tsx
+type CardProps = {
+  children: React.ReactNode;
+};
+
+function Card({ children }: CardProps) {
+  return <div className="card">{children}</div>;
+}
+```
+
+`React.ReactNode` is "anything React can render" — strings, numbers, JSX elements, arrays of those, `null`, `undefined`, booleans. Almost always the right choice for `children`.
+
+When you want to *restrict* children to specific shapes (only `<Tab>` children inside a `<Tabs>`), you use a more specific type or use a render-prop pattern. Day-one default: `React.ReactNode`.
+
+### Optional props with defaults
+
+```tsx
+type ButtonProps = {
+  label: string;
+  variant?: "primary" | "ghost";   // ← optional with ?
+  disabled?: boolean;
+};
+
+function Button({ label, variant = "primary", disabled = false }: ButtonProps) {
+  return <button disabled={disabled} className={variant}>{label}</button>;
+}
+```
+
+The `?` makes the prop optional at the call site. The `= "primary"` provides the default if it's not passed. Two separate mechanisms; both are needed.
+
+### Function-prop types (event handlers, callbacks)
+
+The everyday callbacks:
+
+```tsx
+type FormProps = {
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
+};
+```
+
+Three patterns you'll write daily:
+
+- **No arguments, no return:** `() => void`
+- **One value out:** `(value: string) => void`
+- **Async callback:** `(value: string) => Promise<void>`
+
+`void` as the return means "I don't care what you return." TypeScript treats `void` callbacks loosely — a handler that returns a value is still valid for a `void` slot, which is convenient for React (a click handler that happens to return a Promise is fine).
+
+### `useState` — type goes in the generic
+
+`useState` is generic. If the initial value tells the whole story, inference handles it:
+
+```tsx
+const [count, setCount] = useState(0);              // inferred number
+const [name, setName]   = useState("");             // inferred string
+const [open, setOpen]   = useState(false);          // inferred boolean
+```
+
+When the initial value is `null` or could become richer later, annotate explicitly:
+
+```tsx
+const [user, setUser] = useState<User | null>(null);
+const [items, setItems] = useState<Item[]>([]);     // empty array needs a hint
+const [error, setError] = useState<string | undefined>(undefined);
+```
+
+The annotation goes between `useState<` and `>`. Inside the component, TypeScript narrows correctly when you check for `null`:
+
+```tsx
+if (user === null) return <p>Loading...</p>;
+return <p>Hi, {user.name}</p>;     // ✓ user is narrowed to User here
+```
+
+### `useRef` — the two shapes
+
+Refs in React come in two flavors:
+
+```tsx
+// 1. Ref to a DOM element — initial value is null
+const inputRef = useRef<HTMLInputElement>(null);
+
+// 2. Ref to a mutable value (timer ID, persisted value, etc.)
+const intervalRef = useRef<number | null>(null);
+```
+
+The generic tells TypeScript what's *inside* the ref's `.current`. For DOM refs, the type is the element's interface (`HTMLInputElement`, `HTMLDivElement`, `HTMLCanvasElement`). For mutable-value refs, it's whatever you're holding.
+
+When you use a DOM ref, `current` may be `null` (before the element mounts):
+
+```tsx
+function focus() {
+  inputRef.current?.focus();      // ?. guards the null case
+}
+```
+
+### Event handler types
+
+When you put a handler inline, you don't need to annotate the event:
+
+```tsx
+<input onChange={e => setName(e.target.value)} />    // e inferred correctly
+```
+
+When you pull the handler into a named function, you need a type:
+
+```tsx
+function onNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+  setName(e.target.value);
+}
+
+<input onChange={onNameChange} />
+```
+
+The common event types:
+
+- `React.ChangeEvent<HTMLInputElement>` / `<HTMLSelectElement>` / `<HTMLTextAreaElement>`
+- `React.MouseEvent<HTMLButtonElement>`
+- `React.KeyboardEvent<HTMLInputElement>`
+- `React.FormEvent<HTMLFormElement>`
+
+The `<HTMLInputElement>` part says *what element* the event came from — so `e.target` has the right type for that element (an input has `.value`, a button doesn't).
+
+Most of the time you'll inline the handler and skip the annotation entirely.
+
+### Component types — `React.FC` vs. typed parameter
+
+Two styles exist:
+
+```tsx
+// Style 1 — type the parameter (modern preference)
+function Button({ label }: { label: string }) {
+  return <button>{label}</button>;
+}
+
+// Style 2 — React.FC<Props>
+const Button: React.FC<{ label: string }> = ({ label }) => {
+  return <button>{label}</button>;
+};
+```
+
+`React.FC` was popular in the React 16 era. Modern teams (and the React docs) recommend **style 1**: typing the parameter directly. Reasons: it's less to import, plays better with generics, and doesn't implicitly add a `children` prop. You'll still see `React.FC` in older codebases.
+
+### Discriminated unions for component variants
+
+Components often have variants where each variant has *different required props*. The clean shape is a discriminated union:
+
+```tsx
+type AlertProps =
+  | { kind: "info";    message: string }
+  | { kind: "error";   message: string; retry: () => void };
+
+function Alert(props: AlertProps) {
+  if (props.kind === "error") {
+    return (
+      <div>
+        {props.message}
+        <button onClick={props.retry}>Retry</button>     // ✓ retry exists here
+      </div>
+    );
+  }
+  return <div>{props.message}</div>;
+}
+
+<Alert kind="info"  message="Saved" />                              // ✓
+<Alert kind="error" message="Failed" retry={() => doIt()} />        // ✓
+<Alert kind="error" message="Failed" />                             // ✗ retry missing
+<Alert kind="info"  message="Saved" retry={() => doIt()} />         // ✗ no retry on info
+```
+
+The compiler enforces "you only need `retry` when kind is `error`." That's hard to express in any other typing system — and it's the right shape for a real-world component.
+
+### Typing a custom hook's return
+
+When you write your own hook, type the return value just like a function:
+
+```tsx
+type UseCounterReturn = {
+  count: number;
+  increment: () => void;
+  decrement: () => void;
+};
+
+function useCounter(initial = 0): UseCounterReturn {
+  const [count, setCount] = useState(initial);
+  return {
+    count,
+    increment: () => setCount(c => c + 1),
+    decrement: () => setCount(c => c - 1),
+  };
+}
+```
+
+You don't *have* to declare the return type — TypeScript will infer it from the body — but for public hooks (in a library, or used across many files) the explicit return type is documentation that won't drift.
+
+### Quick "what type goes here" cheat sheet
+
+| Slot                          | Type                                          |
+| ----------------------------- | --------------------------------------------- |
+| children                      | `React.ReactNode`                             |
+| onClick                       | `() => void` (or with the event if needed)    |
+| an event handler param        | `React.ChangeEvent<HTMLInputElement>` etc.    |
+| useState w/ rich initial      | inferred — no annotation                      |
+| useState starting null        | `useState<User \| null>(null)`                |
+| useRef to a DOM input         | `useRef<HTMLInputElement>(null)`              |
+| useRef to a mutable value     | `useRef<number \| null>(null)`                |
+| forwardRef'd component        | `React.forwardRef<HTMLDivElement, Props>(...)` |
+| async callback prop           | `(value: T) => Promise<void>`                 |
+
+Memorize these and you've covered ~95% of daily React + TypeScript.
+
+<ExampleProject
+  src="typed-button"
+  title="A fully typed Button with variants, defaults, and event handler"
+  description="The everyday pattern, end to end: ButtonProps with required label, optional variant (literal union), optional disabled, and an onClick. Demonstrates the editor catching every wrong call. The kind of component you'll write a hundred of."
+/>
+
+<ExampleProject
+  src="typed-list"
+  title="A typed list rendering with useState + an event handler"
+  description="A small TODO-style list — typed Item[] state, typed event handlers extracted into named functions, typed prop passed to a child component. Shows the wiring across three slots at once."
+/>
+
+<Exercise
+  title="Type a small Tabs component"
+  starter={`Build a Tabs component fully in TypeScript:
+
+  1. Declare a Tab type:
+       { id: string; label: string; content: React.ReactNode }
+  2. Declare a TabsProps type with:
+       - tabs: Tab[]
+       - defaultId: string
+       - onChange?: (id: string) => void   (optional)
+  3. The Tabs component:
+       - Uses useState<string> to track the active tab id, starting at defaultId.
+       - Renders a row of tab buttons (clicking switches the active id and calls onChange).
+       - Renders the content of the active tab below.
+  4. Demonstrate it: render Tabs with three Tab entries, an onChange that
+     console.logs the new id, and a defaultId pointing at the second tab.
+  5. Use the right event type if you extract any handlers into named functions.
+
+Don't use 'any'. Let TypeScript infer wherever it can.`}
+>
+
+- A `Tab` type and a `TabsProps` type are both declared.
+- The component is `function Tabs(props: TabsProps) { ... }` or destructured equivalent — explicitly typed.
+- `useState` is typed as `<string>` (or correctly inferred from `defaultId`).
+- `onChange` is **optional** in `TabsProps` (`?:`) and called only when present (`onChange?.()` or an `if` guard).
+- The tab buttons render the labels; clicking switches state and (if `onChange` is provided) calls it with the new id.
+- The visible content reads from the active tab's `content` field.
+- Three tabs are rendered in the demo, with content that's distinguishably different per tab.
+- The `console.log` confirms `onChange` fires with the new id.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How do you type a component's props in TypeScript?
+
+**A:** Declare a `type` (or `interface`) above the component, then **type the destructured parameter**:
+
+```tsx
+type ButtonProps = {
+  label: string;
+  onClick: () => void;
+};
+
+function Button({ label, onClick }: ButtonProps) {
+  return <button onClick={onClick}>{label}</button>;
+}
+```
+
+That's it — one type, one annotation. Three things follow automatically:
+
+- **Inside the component**, every prop is typed (autocomplete on `label.toUpperCase()`).
+- **At every call site**, the editor and build verify the props you pass.
+- **Refactors are safe** — rename a prop and every consumer lights up.
+
+Two patterns to skip: the old `React.FC<Props>` style (implicitly adds children, harder with generics — modern React docs recommend typing the parameter directly), and writing the type inline (`function Button({ label }: { label: string }) { ... }` works for a one-off, but pulling it out reads better).
+
+For props that wrap content, add `children: React.ReactNode`. For optional props, suffix with `?`. For defaults, use destructuring with `=`: `{ label, variant = "primary" }`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When does `useState` need an explicit type, and when can you skip it?
+
+**A:** **Skip the annotation** when the initial value is rich enough to infer from:
+
+```tsx
+const [count, setCount] = useState(0);          // number — inferred
+const [name, setName]   = useState("");         // string — inferred
+const [open, setOpen]   = useState(false);      // boolean — inferred
+```
+
+**Annotate** when the initial value is `null`, `undefined`, an empty array, or a primitive that should grow into a richer type:
+
+```tsx
+const [user, setUser]   = useState<User | null>(null);
+const [items, setItems] = useState<Item[]>([]);                  // empty array
+const [error, setError] = useState<string | undefined>(undefined);
+```
+
+The mechanism: `useState` is `useState<T>(initial: T)`. TypeScript can only infer `T` from the initial value. `useState(null)` infers `T` as exactly `null` — useless, because you can never set anything else. `useState([])` infers `never[]` — useless, because you can never push anything. In both cases, the explicit generic tells TypeScript what the eventual *richer* shape will be.
+
+A useful pattern: when state may be loading, use `T | undefined` (modern) or `T | null` (older codebases) and narrow with `if (state === undefined)` before using. The narrowing is free; TypeScript tracks it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the right way to type a callback prop in TypeScript?
+
+**A:** **Write the function signature: `(args) => returnType`.** Three patterns you'll write daily:
+
+```tsx
+type Props = {
+  onClick:  () => void;                          // no args, no result
+  onSelect: (id: string) => void;                // value out, nothing back
+  onSubmit: (data: FormData) => Promise<void>;   // async callback
+};
+```
+
+A few things worth knowing:
+
+- **`() => void`** is the right type for "fire and forget." Even if your handler happens to return something, TypeScript allows it — `void` callbacks are intentionally loose so a click handler that returns a Promise (e.g. from an async function) doesn't break the type.
+- **Avoid `Function`** — it's `any` in a trenchcoat, allows any arguments and any return.
+- **Optional callbacks** use `?`: `onChange?: (id: string) => void`. Call them with optional chaining: `onChange?.(newId)`.
+- **For event handlers**, two choices. Inline (`onClick={e => setOpen(true)}`) — TypeScript infers `e`. Extracted (`function handle(e: React.MouseEvent<HTMLButtonElement>) { ... }`) — you need the explicit event type. Most teams inline simple handlers and extract complex ones.
+
+When the callback signature is reused (e.g. a custom event handler shape), name the type:
+
+```tsx
+type IdHandler = (id: string) => void;
+type Props = { onSelect: IdHandler; onDelete: IdHandler };
+```
+
+Same idea as naming any other shape — one place to update, one source of truth.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a discriminated union prop, and when would you use one?
+
+**A:** A **discriminated union prop** is when a component's props are a union of object shapes, each tagged with a literal-typed field, where different variants require different props:
+
+```tsx
+type AlertProps =
+  | { kind: "info";    message: string }
+  | { kind: "error";   message: string; retry: () => void };
+
+function Alert(props: AlertProps) {
+  if (props.kind === "error") {
+    return <>{props.message} <button onClick={props.retry}>Retry</button></>;
+  }
+  return <>{props.message}</>;
+}
+```
+
+What it gives you:
+
+- **`<Alert kind="error" message="Failed" retry={fn} />`** — required `retry` enforced.
+- **`<Alert kind="info"  message="Saved" />`** — no `retry` needed (and an error if you pass one).
+- **Inside the component**, TypeScript narrows based on `kind`. In the `if` branch, `props.retry` is typed; in the `else`, it doesn't exist.
+
+When to reach for it: when a component truly has two-or-more *distinct behaviors* with *different inputs*. An `Alert` whose error variant needs a retry callback. A `Button` whose link variant needs an `href` and whose button variant needs an `onClick`. A `Modal` whose confirm variant needs a `confirmLabel` while the info variant doesn't.
+
+The alternative — a single shape with everything optional — works but offers no protection: you could ship `<Alert kind="error" />` with no retry, and the compiler wouldn't notice. Discriminated unions move the rule into the type system so it can't be violated.
+
+The cost: slightly more verbose declaration. The win: one type that encodes the variant rules, and the compiler enforces them at every call site.
+
+</InterviewQuestion>

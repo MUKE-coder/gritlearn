@@ -1,0 +1,96 @@
+<!--
+  A fully typed Button with variants, defaults, and event handler.
+
+  In a real React project this would be a .tsx file. Here we use the
+  in-page Babel transpiler to render React + JSX without a build step
+  so you can see and run it. The TypeScript types are written as
+  comments since Babel-standalone doesn't strip TS — but the SHAPE
+  is what matters, and the JSX call sites demonstrate the type-checked
+  pattern at a glance.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Typed Button</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.4rem; }
+      .stack { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+      button.btn {
+        padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+        border: 1px solid transparent; cursor: pointer; transition: background-color .15s;
+      }
+      button.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+      button.btn.primary { background: #2563eb; color: #fff; }
+      button.btn.primary:hover:not([disabled]) { background: #1d4ed8; }
+      button.btn.ghost   { background: transparent; border-color: #d4d4d8; color: #1f1f24; }
+      button.btn.ghost:hover:not([disabled]) { background: #f4f4f6; }
+      pre { background: #f4f4f6; padding: 0.7rem 0.95rem; border-radius: 6px; font-size: 0.85rem; line-height: 1.45; }
+    </style>
+  </head>
+  <body>
+    <h1>Typed Button</h1>
+    <div id="root"></div>
+    <p>The component below is the everyday React + TypeScript pattern. The type up top is the contract; the call sites at the bottom of the script exercise it.</p>
+<pre>
+type ButtonProps = {
+  label:    string;
+  onClick:  () =&gt; void;
+  variant?: "primary" | "ghost";    // optional, two legal values
+  disabled?: boolean;
+};
+
+function Button({ label, onClick, variant = "primary", disabled }: ButtonProps) {
+  return (
+    &lt;button className={"btn " + variant} onClick={onClick} disabled={disabled}&gt;
+      {label}
+    &lt;/button&gt;
+  );
+}
+</pre>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="text/babel">
+      const { useState } = React;
+
+      // In a .tsx file:
+      //   type ButtonProps = {
+      //     label: string;
+      //     onClick: () => void;
+      //     variant?: "primary" | "ghost";
+      //     disabled?: boolean;
+      //   };
+      function Button({ label, onClick, variant = "primary", disabled }) {
+        return (
+          <button
+            className={"btn " + variant}
+            onClick={onClick}
+            disabled={disabled}
+          >
+            {label}
+          </button>
+        );
+      }
+
+      function App() {
+        const [count, setCount] = useState(0);
+        return (
+          <div>
+            <p>You clicked {count} time{count === 1 ? "" : "s"}.</p>
+            <div className="stack">
+              <Button label="Primary (default)" onClick={() => setCount(c => c + 1)} />
+              <Button label="Ghost variant"     variant="ghost" onClick={() => setCount(c => c + 1)} />
+              <Button label="Disabled"          disabled onClick={() => setCount(c => c + 1)} />
+              <Button label="Reset"             variant="ghost" onClick={() => setCount(0)} />
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

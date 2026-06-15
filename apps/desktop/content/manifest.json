@@ -48,10 +48,10 @@
         { "slug": "phase-01/react-useeffect", "title": "React useEffect and side effects", "available": true },
         { "slug": "phase-01/react-lifting-state", "title": "Lifting state up / sharing state", "available": true },
         { "slug": "phase-01/react-tailwind-combo", "title": "React + Tailwind together", "available": true },
-        { "slug": "phase-01/what-is-typescript", "title": "What TypeScript is and why types", "available": false },
-        { "slug": "phase-01/ts-basic-types", "title": "TS basic types and inference", "available": false },
-        { "slug": "phase-01/ts-interfaces", "title": "TS interfaces and types", "available": false },
-        { "slug": "phase-01/ts-react-props", "title": "Typing React props and state", "available": false },
+        { "slug": "phase-01/what-is-typescript", "title": "What TypeScript is and why types", "available": true },
+        { "slug": "phase-01/ts-basic-types", "title": "TS basic types and inference", "available": true },
+        { "slug": "phase-01/ts-interfaces", "title": "TS interfaces and types", "available": true },
+        { "slug": "phase-01/ts-react-props", "title": "Typing React props and state", "available": true },
         { "slug": "phase-01/milestone-portfolio", "title": "Milestone: Build a portfolio / weather app", "available": false }
       ]
     },

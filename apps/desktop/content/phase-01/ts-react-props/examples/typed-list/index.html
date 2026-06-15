@@ -1,0 +1,122 @@
+<!--
+  A typed list with useState<Item[]> and a typed event handler.
+
+  Demonstrates three slots typed at once:
+    - useState<Item[]> for the array
+    - A named handler with React.ChangeEvent<HTMLInputElement>
+    - A typed prop for the row component
+
+  Comments mark what the types would be in a .tsx file.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Typed list with React + TS</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #1f1f24; }
+      h1 { font-size: 1.35rem; }
+      input[type="text"] {
+        width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d4d4d8;
+        border-radius: 6px; font-size: 0.95rem; box-sizing: border-box;
+      }
+      .row {
+        display: flex; gap: 0.5rem; align-items: center; padding: 0.45rem 0.65rem;
+        border: 1px solid #eee; border-radius: 6px; margin-top: 6px;
+      }
+      .row.done { text-decoration: line-through; color: #888; }
+      button.x {
+        margin-left: auto; background: transparent; border: 0; font-size: 1.05rem;
+        cursor: pointer; color: #999;
+      }
+      button.x:hover { color: #dc2626; }
+      form { display: flex; gap: 0.5rem; margin-top: 1rem; }
+      form button {
+        background: #2563eb; color: #fff; border: 0; border-radius: 6px;
+        padding: 0 1rem; font-weight: 600; cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Typed TODO list</h1>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="text/babel">
+      const { useState } = React;
+
+      // In a .tsx file:
+      //   type Item = { id: number; text: string; done: boolean };
+      //   type RowProps = { item: Item; onToggle: (id: number) => void; onRemove: (id: number) => void };
+      //   useState<Item[]>([])
+      //   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+      //   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+
+      function Row({ item, onToggle, onRemove }) {
+        return (
+          <div className={"row" + (item.done ? " done" : "")}>
+            <input
+              type="checkbox"
+              checked={item.done}
+              onChange={() => onToggle(item.id)}
+            />
+            <span>{item.text}</span>
+            <button className="x" onClick={() => onRemove(item.id)} title="remove">×</button>
+          </div>
+        );
+      }
+
+      function App() {
+        const [items, setItems] = useState([
+          { id: 1, text: "Read TS basic types lesson", done: true },
+          { id: 2, text: "Read TS interfaces lesson",  done: true },
+          { id: 3, text: "Read TS react props lesson", done: false },
+        ]);
+        const [draft, setDraft] = useState("");
+
+        function handleDraftChange(e) {
+          // In a .tsx file: e: React.ChangeEvent<HTMLInputElement>
+          setDraft(e.target.value);
+        }
+
+        function handleSubmit(e) {
+          // In a .tsx file: e: React.FormEvent<HTMLFormElement>
+          e.preventDefault();
+          const text = draft.trim();
+          if (!text) return;
+          const nextId = items.length === 0 ? 1 : Math.max(...items.map(i => i.id)) + 1;
+          setItems([...items, { id: nextId, text, done: false }]);
+          setDraft("");
+        }
+
+        function toggle(id) {
+          setItems(items.map(i => i.id === id ? { ...i, done: !i.done } : i));
+        }
+        function remove(id) {
+          setItems(items.filter(i => i.id !== id));
+        }
+
+        return (
+          <div>
+            {items.map(item => (
+              <Row key={item.id} item={item} onToggle={toggle} onRemove={remove} />
+            ))}
+            <form onSubmit={handleSubmit}>
+              <input
+                type="text"
+                placeholder="Add a task…"
+                value={draft}
+                onChange={handleDraftChange}
+              />
+              <button type="submit">Add</button>
+            </form>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

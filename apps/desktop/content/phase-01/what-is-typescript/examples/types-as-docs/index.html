@@ -1,0 +1,73 @@
+<!--
+  Types as documentation that can't go stale.
+
+  Two versions of the same function: one documented with JSDoc comments,
+  one with TypeScript types. The JSDoc version "documents" the function
+  in a comment that the runtime ignores — and that the team forgets to
+  update when the function changes.
+
+  The TS version makes the documentation part of the function signature.
+  It can't drift, because if you change the function and forget to update
+  the type, the compiler complains. The docs ARE the contract.
+
+  This file is plain HTML so we can show both shapes side by side without
+  a build step — the TS block is rendered as text, not executed. In a
+  real project you'd write the TS version in a .ts file and the editor
+  would enforce it.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Types as documentation</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #1f1f24; }
+      h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+      h2 { font-size: 1.05rem; margin-top: 2rem; }
+      pre { background: #f4f4f6; padding: 0.9rem 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.92rem; }
+      .stale { color: #c53030; }
+      .fresh { color: #2f855a; }
+      p.note { color: #555; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Two ways to document a function</h1>
+    <p class="note">Both describe the same function. Only one of them stays honest as the code evolves.</p>
+
+    <h2 class="stale">1. JSDoc — the comment can lie</h2>
+<pre>
+/**
+ * Format a user's display name.
+ * @param {Object} user - the user object
+ * @param {string} user.name - their full name
+ * @param {string} user.title - their job title    ← STALE
+ * @returns {string} formatted display string
+ */
+function format(user) {
+  return user.name;   // 'title' silently removed last sprint
+}                     // …docstring never updated. Future you reads
+                      // it, expects a title, gets a name. Bug.
+</pre>
+
+    <h2 class="fresh">2. TypeScript — the contract is enforced</h2>
+<pre>
+type User = {
+  name: string;
+};
+
+function format(user: User): string {
+  return user.name;
+}
+
+format({ name: "Ada" });                  // ✓
+format({ name: "Ada", title: "Dr" });     // ✗ Property 'title' does
+                                          //   not exist on User.
+format({});                               // ✗ Property 'name' is missing.
+</pre>
+    <p class="note">
+      If someone later adds <code>user.title</code> back, the type forces them to update
+      the <code>User</code> definition. The contract and the code can't drift apart —
+      the build will refuse to ship a mismatch.
+    </p>
+  </body>
+</html>
