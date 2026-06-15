@@ -71,7 +71,7 @@ export async function localList(
 
 export async function sync(tables: string[]): Promise<SyncResult> {
   if (!isWails) notWailsError();
-  return window.go!.main.App.Sync(tables);
+  return window.go!.main.App.Sync(tables) as Promise<SyncResult>;
 }
 
 export async function pendingCount(): Promise<number> {
@@ -81,7 +81,7 @@ export async function pendingCount(): Promise<number> {
 
 export async function getPendingChanges(): Promise<OutboxEntry[]> {
   if (!isWails) return [];
-  return window.go!.main.App.GetPendingChanges();
+  return window.go!.main.App.GetPendingChanges() as Promise<OutboxEntry[]>;
 }
 
 export async function resolveConflict(

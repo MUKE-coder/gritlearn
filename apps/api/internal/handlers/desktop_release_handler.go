@@ -179,18 +179,51 @@ func desktopFetchGithub(url string) (*desktopGithubRelease, error) {
 }
 
 // pickAssetFor returns the first asset whose name contains any of the
-// target's matchers (case-insensitive). Returns (0, "", "", 0) if no
-// asset matches — the caller treats that platform as "not yet built"
-// and the marketing tile renders as "coming soon".
+// target's matchers (case-insensitive) AND is NOT an NSIS installer.
+// The "no Setup keyword" rule prevents the windows-amd64 matcher from
+// returning JEditor-Setup-vX.Y.Z.exe instead of the portable raw .exe
+// — the auto-updater needs the raw binary to do its swap-and-relaunch
+// dance; an installer would relaunch the wizard instead of the app.
+// Returns (0, "", "", 0) if no asset matches.
 func pickAssetFor(rel *desktopGithubRelease, t osTarget) (id int64, name, url string, size int64) {
 	for _, matcher := range t.AssetMatchers {
 		for _, a := range rel.Assets {
-			if strings.Contains(strings.ToLower(a.Name), matcher) {
-				return a.ID, a.Name, a.BrowserDownloadURL, a.Size
+			lower := strings.ToLower(a.Name)
+			if !strings.Contains(lower, matcher) {
+				continue
 			}
+			// Skip NSIS / .dmg installer-flavoured names — those go
+			// through pickInstallerAsset for the installer_url field.
+			if strings.Contains(lower, "setup") || strings.Contains(lower, "installer") {
+				continue
+			}
+			return a.ID, a.Name, a.BrowserDownloadURL, a.Size
 		}
 	}
 	return 0, "", "", 0
+}
+
+// pickInstallerAsset finds the NSIS installer asset (for Windows) so
+// the marketing /download page and the browser fallback can offer the
+// wizard rather than the raw portable binary. Looks for "setup" in the
+// name and prefers the non-slim flavour.
+func pickInstallerAsset(rel *desktopGithubRelease) (string, int64) {
+	var slim string
+	var slimSize int64
+	for _, a := range rel.Assets {
+		lower := strings.ToLower(a.Name)
+		if !strings.Contains(lower, "setup") {
+			continue
+		}
+		if strings.Contains(lower, "slim") {
+			slim = a.BrowserDownloadURL
+			slimSize = a.Size
+			continue
+		}
+		// Non-slim full installer — prefer this when both exist.
+		return a.BrowserDownloadURL, a.Size
+	}
+	return slim, slimSize
 }
 
 // desktopRequestBase returns "scheme://host" for the current request,
@@ -227,6 +260,10 @@ func desktopResolveFromGithub(proxyBase string) gin.H {
 
 	downloads := make([]gin.H, 0, len(osTargets))
 	any := false
+	// Track the windows raw .exe URL so we can also surface it as
+	// download_url at the payload root for the desktop auto-updater
+	// (which expects flat fields, not the downloads array).
+	windowsRawURL := ""
 	for _, t := range osTargets {
 		assetID, assetName, _, size := pickAssetFor(rel, t)
 		entry := gin.H{
@@ -243,9 +280,13 @@ func desktopResolveFromGithub(proxyBase string) gin.H {
 			any = true
 			entry["available"] = true
 			entry["asset_name"] = assetName
-			entry["url"] = fmt.Sprintf("%s/api/desktop/download?tag=%s&os=%s",
+			proxied := fmt.Sprintf("%s/api/desktop/download?tag=%s&os=%s",
 				proxyBase, rel.TagName, t.Platform)
+			entry["url"] = proxied
 			entry["size"] = size
+			if t.Platform == "windows" {
+				windowsRawURL = proxied
+			}
 		}
 		downloads = append(downloads, entry)
 	}
@@ -255,8 +296,18 @@ func desktopResolveFromGithub(proxyBase string) gin.H {
 		return nil
 	}
 
+	// installer_url uses the GitHub browser_download_url directly
+	// rather than the /api/desktop/download proxy because the
+	// installer isn't OS-keyed in our matcher rules (it's a single
+	// asset, not per-platform). The desktop in-app updater uses
+	// download_url; the marketing download page + the modal's
+	// browser-fallback path use installer_url.
+	installerURL, _ := pickInstallerAsset(rel)
+
 	return gin.H{
 		"version":       version,
+		"download_url":  windowsRawURL,
+		"installer_url": installerURL,
 		"released_at":   rel.PublishedAt,
 		"release_notes": rel.Body,
 		"github_url":    rel.HTMLURL,
@@ -300,6 +351,8 @@ func fallbackPayload(proxyBase string) gin.H {
 	}
 	return gin.H{
 		"version":       desktopDefaultVersion,
+		"download_url":  "",
+		"installer_url": "",
 		"released_at":   desktopDefaultReleasedAt,
 		"release_notes": desktopDefaultReleaseNotes,
 		"github_url":    fmt.Sprintf("https://github.com/%s/%s/releases", desktopDefaultGithubOwner, desktopDefaultGithubRepo),

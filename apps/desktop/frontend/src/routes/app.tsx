@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { TitleBar } from "@/components/layout/title-bar";
 import { SessionStatusBanner } from "@/components/layout/session-status-banner";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { UpdateBanner } from "@/components/update-banner";
 import { WorkspaceProvider } from "@/lib/workspace-store";
 import { CurriculumProvider } from "@/lib/curriculum-store";
 import { ProgressProvider } from "@/lib/progress-store";
@@ -47,6 +48,7 @@ function AppLayout() {
         <WorkspaceProvider>
           <div className="flex h-screen flex-col bg-background">
             <TitleBar />
+            <UpdateBanner />
             <SessionStatusBanner />
 
             {/* No padding here — EditorShell fills the whole canvas. Sub-routes

@@ -3,29 +3,36 @@
 #
 # Usage:
 #   .\scripts\release-desktop.ps1                       # uses version from wails.json
-#   .\scripts\release-desktop.ps1 -Version "0.2.0"      # bumps wails.json + commits
-#   .\scripts\release-desktop.ps1 -Version "0.2.0" -Notes "Fix the thing"
+#   .\scripts\release-desktop.ps1 -Version "0.3.0"      # bumps wails.json + commits
+#   .\scripts\release-desktop.ps1 -Version "0.3.0" -Notes "Fix the thing"
 #   .\scripts\release-desktop.ps1 -DryRun               # build only, no tag / push
+#   .\scripts\release-desktop.ps1 -NoInstaller          # raw .exe only (emergency hot-fix)
 #
 # What it does:
-#   1. Bumps apps/desktop/wails.json (if -Version is given and different)
-#   2. Runs `wails build -platform windows/amd64`
-#   3. Renames the artifact to the canonical jeditor-windows-amd64.exe
+#   1. Bumps apps/desktop/wails.json (if -Version differs from current)
+#   2. Runs `wails build -nsis -platform windows/amd64`
+#      → produces both the raw jeditor.exe AND JEditor-Setup-vX.Y.Z.exe
+#   3. Renames the raw binary to jeditor-windows-amd64.exe (canonical
+#      name the API's pickAsset rule looks for in auto-updater payloads)
 #   4. Stages + commits the wails.json bump
-#   5. Tags vX.Y.Z and creates a GitHub release with the .exe attached
+#   5. Tags vX.Y.Z and creates a GitHub release with both assets
 #   6. Pushes the commit + tag
 #
 # The deployed API auto-discovers the new release on its next
-# /api/desktop/latest call (10-min cache). The marketing /download page
-# revalidates within 10 min too. See RELEASING.md for the macOS / Linux
-# builds — those need to be produced on their own host OS and uploaded
-# to the same GitHub release with `gh release upload`.
+# /api/desktop/latest call (10-min cache TTL). Installed clients with
+# v0.3.0+ desktops see the update banner within ~6 hours on idle apps,
+# or instantly via Settings > System > Check for updates.
+#
+# Asset upload order matters — gh release create lists assets in upload
+# order on the release page. NSIS installer first (most users want the
+# wizard), raw .exe second (auto-updater fetches it programmatically).
 
 [CmdletBinding()]
 param(
   [string]$Version,
   [string]$Notes,
-  [switch]$DryRun
+  [switch]$DryRun,
+  [switch]$NoInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,7 +42,7 @@ Set-Location $repoRoot
 
 $wailsJson = "apps/desktop/wails.json"
 $binDir = "apps/desktop/build/bin"
-$canonicalName = "jeditor-windows-amd64.exe"
+$rawCanonical = "jeditor-windows-amd64.exe"
 
 # ---- read current version ----
 $json = Get-Content $wailsJson -Raw | ConvertFrom-Json
@@ -52,6 +59,7 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$') {
 }
 
 $tag = "v$Version"
+$installerName = "JEditor-Setup-v$Version.exe"
 
 # ---- guard rails ----
 if (-not $DryRun) {
@@ -75,10 +83,18 @@ if ($Version -ne $current) {
 }
 
 # ---- build ----
-Write-Host "==> Running wails build (this takes ~60s)" -ForegroundColor Cyan
+Write-Host "==> Running wails build (this takes ~60-120s)" -ForegroundColor Cyan
 Push-Location apps/desktop
 try {
-  & wails build -platform windows/amd64 -clean
+  if ($NoInstaller) {
+    & wails build -platform windows/amd64 -clean
+  } else {
+    # -nsis produces both the raw .exe AND JEditor-Setup-vX.Y.Z.exe at
+    # apps/desktop/build/bin/. The NSIS template
+    # (build/windows/installer/project.nsi) declares the installer
+    # filename via its OutFile directive.
+    & wails build -nsis -platform windows/amd64 -clean
+  }
   if ($LASTEXITCODE -ne 0) {
     Write-Error "wails build failed"
     exit 1
@@ -88,24 +104,35 @@ finally {
   Pop-Location
 }
 
-# ---- rename to canonical filename ----
+# ---- rename raw .exe to canonical filename ----
 $sourceExe = Join-Path $binDir "jeditor.exe"
-$targetExe = Join-Path $binDir $canonicalName
+$targetExe = Join-Path $binDir $rawCanonical
 if (-not (Test-Path $sourceExe)) {
-  # Fallback names wails sometimes uses
-  $candidates = Get-ChildItem $binDir -Filter "*.exe" | Sort-Object LastWriteTime -Descending
+  $candidates = Get-ChildItem $binDir -Filter "*.exe" |
+    Where-Object { $_.Name -notmatch "Setup" } |
+    Sort-Object LastWriteTime -Descending
   if ($candidates.Count -eq 0) {
-    Write-Error "No .exe produced in $binDir"
+    Write-Error "No raw .exe produced in $binDir"
     exit 1
   }
   $sourceExe = $candidates[0].FullName
-  Write-Host "==> Using produced binary: $sourceExe" -ForegroundColor Yellow
+  Write-Host "==> Using produced raw binary: $sourceExe" -ForegroundColor Yellow
 }
 if (Test-Path $targetExe) {
   Remove-Item $targetExe -Force
 }
 Copy-Item $sourceExe $targetExe
-Write-Host "==> Built $targetExe" -ForegroundColor Green
+Write-Host "==> Raw binary: $targetExe" -ForegroundColor Green
+
+# ---- verify installer (when not -NoInstaller) ----
+$installerPath = Join-Path $binDir $installerName
+if (-not $NoInstaller) {
+  if (-not (Test-Path $installerPath)) {
+    Write-Error "Expected $installerPath — NSIS build did not produce it. Re-run with -NoInstaller for raw-only ship."
+    exit 1
+  }
+  Write-Host "==> Installer:  $installerPath" -ForegroundColor Green
+}
 
 if ($DryRun) {
   Write-Host "==> -DryRun set — skipping commit / tag / release" -ForegroundColor Yellow
@@ -117,7 +144,7 @@ $status = & git status --short $wailsJson
 if ($status) {
   Write-Host "==> Committing wails.json bump" -ForegroundColor Cyan
   & git add $wailsJson
-  & git commit -m "Desktop release $tag"
+  & git commit -m "chore(release): bump desktop to $tag"
 }
 
 # ---- tag + push ----
@@ -126,10 +153,21 @@ Write-Host "==> Tagging $tag" -ForegroundColor Cyan
 & git push origin HEAD
 & git push origin $tag
 
+# ---- assemble release assets ----
+# Order matters — installer first (most users want the wizard /
+# Start Menu / uninstaller path), raw .exe second (auto-updater
+# fetches it via the API's pickAsset rule that prefers the
+# "no Setup keyword" asset).
+$assets = @()
+if (-not $NoInstaller -and (Test-Path $installerPath)) {
+  $assets += $installerPath
+}
+$assets += $targetExe
+
 # ---- gh release create ----
 $notesArg = if ($Notes) { @("--notes", $Notes) } else { @("--generate-notes") }
-Write-Host "==> Creating GitHub release $tag" -ForegroundColor Cyan
-& gh release create $tag --title "JEditor $tag" @notesArg $targetExe
+Write-Host "==> Creating GitHub release $tag with $($assets.Count) asset(s)" -ForegroundColor Cyan
+& gh release create $tag --title "JEditor $tag" @notesArg @assets
 
 Write-Host ""
 Write-Host "✔ Released $tag" -ForegroundColor Green

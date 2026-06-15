@@ -24,6 +24,34 @@ declare global {
           SaveFileDialog: (title: string, defaultFilename: string) => Promise<string>;
           GetPlatform: () => Promise<"darwin" | "windows" | "linux">;
           GetAppVersion: () => Promise<string>;
+          // Offline sync bindings — see apps/desktop/sync.go.
+          LocalCreate: (table: string, id: string, data: Record<string, unknown>) => Promise<void>;
+          LocalUpdate: (table: string, id: string, data: Record<string, unknown>) => Promise<void>;
+          LocalDelete: (table: string, id: string) => Promise<void>;
+          LocalGet: (table: string, id: string) => Promise<Record<string, unknown> | null>;
+          LocalList: (table: string) => Promise<Record<string, unknown>[]>;
+          Sync: (tables: string[]) => Promise<unknown>;
+          PendingCount: () => Promise<number>;
+          GetPendingChanges: () => Promise<unknown[]>;
+          ResolveConflict: (
+            table: string,
+            entityID: string,
+            mergedData: Record<string, unknown>,
+            serverVersion: number,
+          ) => Promise<void>;
+        };
+        // Auto-updater bindings — see apps/desktop/updater.go.
+        Updater: {
+          StartDownload: (url: string, version: string) => Promise<void>;
+          GetProgress: () => Promise<{
+            status: "idle" | "downloading" | "downloaded" | "installing" | "error";
+            version: string;
+            bytesDownloaded: number;
+            bytesTotal: number;
+            error?: string;
+          }>;
+          CancelDownload: () => Promise<void>;
+          InstallAndRestart: () => Promise<void>;
         };
       };
     };

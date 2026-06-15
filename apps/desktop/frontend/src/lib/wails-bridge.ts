@@ -7,6 +7,11 @@
 
 const isWails = typeof window !== "undefined" && !!window.go?.main?.App;
 
+// Re-exported for hooks/components that need to gate desktop-only flows
+// (the auto-updater, OS keychain, window controls). Stays false in the
+// browser dev preview so polls don't fire there.
+export const isDesktop = isWails;
+
 // ─── Token storage (OS keychain or localStorage fallback) ─────────
 
 export async function setToken(key: string, value: string): Promise<void> {
@@ -70,4 +75,48 @@ export async function openFileDialog(title: string): Promise<string> {
 export async function saveFileDialog(title: string, defaultFilename: string): Promise<string> {
   if (isWails) return window.go!.main.App.SaveFileDialog(title, defaultFilename);
   throw new Error("saveFileDialog requires Wails runtime");
+}
+
+// ─── Auto-updater (Updater struct in updater.go) ──────────────────────
+// Drives the in-app upgrade flow. The full lifecycle:
+//   1. useLatestVersion polls /api/desktop/latest, gets a download URL.
+//   2. UpdateBanner shows when newer version available.
+//   3. User clicks "Update" → UpdateProgressModal opens, calls
+//      startUpdateDownload(url, version).
+//   4. Modal polls getUpdateProgress() every 500ms for the progress bar.
+//   5. When status flips to "downloaded", show "Install & restart".
+//   6. Click → installAndRestart() — Go side swaps the binary and
+//      relaunches; the current window closes ~250ms later.
+
+export interface UpdaterState {
+  status: "idle" | "downloading" | "downloaded" | "installing" | "error";
+  version: string;
+  bytesDownloaded: number;
+  bytesTotal: number;
+  error?: string;
+}
+
+const noopUpdater: UpdaterState = {
+  status: "idle",
+  version: "",
+  bytesDownloaded: 0,
+  bytesTotal: 0,
+};
+
+export async function startUpdateDownload(url: string, version: string): Promise<void> {
+  if (isWails) return window.go!.main.Updater.StartDownload(url, version);
+  console.warn("[updater] startDownload no-op outside Wails");
+}
+
+export async function getUpdateProgress(): Promise<UpdaterState> {
+  if (isWails) return window.go!.main.Updater.GetProgress();
+  return noopUpdater;
+}
+
+export async function cancelUpdateDownload(): Promise<void> {
+  if (isWails) return window.go!.main.Updater.CancelDownload();
+}
+
+export async function installAndRestart(): Promise<void> {
+  if (isWails) return window.go!.main.Updater.InstallAndRestart();
 }

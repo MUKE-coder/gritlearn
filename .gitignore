@@ -6,7 +6,10 @@ node_modules/
 .next/
 out/
 dist/
-build/
+# Anchored to root so apps/desktop/build/windows/installer/ (NSIS
+# template + brand bitmaps — source files we need tracked) stays
+# unmatched. apps/desktop/.gitignore re-excludes build/bin/ etc.
+/build/
 tmp/
 
 # Go

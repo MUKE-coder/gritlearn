@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 
@@ -17,6 +18,7 @@ var assets embed.FS
 
 func main() {
 	app := NewApp()
+	updater := NewUpdater()
 
 	err := wails.Run(&options.App{
 		Title:     "JEditor",
@@ -29,9 +31,17 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 10, G: 10, B: 15, A: 1},
-		OnStartup:        app.startup,
+		OnStartup: func(ctx context.Context) {
+			app.startup(ctx)
+			updater.SetContext(ctx)
+			// Best-effort cleanup of the .exe.old left by a previous
+			// in-app upgrade. Runs in a goroutine so startup isn't
+			// blocked if the old process hasn't released the handle yet.
+			go updater.CleanupOldOnStartup()
+		},
 		Bind: []interface{}{
 			app,
+			updater,
 		},
 		// Drag region: any HTML element with style "--wails-draggable: drag"
 		CSSDragProperty: "--wails-draggable",
