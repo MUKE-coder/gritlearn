@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pure vs impure functions</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pure   { border-color: #10b981; }
+      .impure { border-color: #f59e0b; }
+      .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 6px; }
+      .pure   .label { color: #047857; }
+      .impure .label { color: #b45309; }
+      pre { background: #1c2230; color: #e6edf3; padding: 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; margin: 0 0 10px; overflow-x: auto; }
+      button { padding: 6px 12px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+      .result { font-family: ui-monospace, monospace; font-size: 13px; margin-top: 8px; }
+      .red { color: #b91c1c; font-weight: 700; }
+      .green { color: #047857; font-weight: 700; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Pure vs side effects</h1>
+    <p>Both functions "add 1 to a counter." One is pure (no mutation), one mutates a shared variable. Click the buttons and watch the difference.</p>
+
+    <div class="row">
+
+      <div class="pane pure">
+        <div class="label">✓ Pure — returns new value</div>
+        <pre>function increment(n) {
+  return n + 1;       // takes n, returns n+1
+}                       // no globals, no DOM, no mutation</pre>
+        <p>Counter (kept in component state):</p>
+        <div class="result"><span id="pCount">0</span></div>
+        <button id="pInc">increment(pCount)</button>
+        <p style="font-size:12px; color:#6b7280; margin-top: 10px;">
+          The function takes a number and returns a number. The caller decides what to do with it (assign it to a variable, render it, ignore it).
+        </p>
+      </div>
+
+      <div class="pane impure">
+        <div class="label">⚠ Impure — mutates a shared variable</div>
+        <pre>let count = 0;
+function bump() {
+  count++;            // reaches into outer scope
+}                       // side effect — no return</pre>
+        <p>Shared count:</p>
+        <div class="result"><span id="iCount">0</span></div>
+        <button id="iInc">bump()</button>
+        <button id="iInc2">bump() (other caller)</button>
+        <p style="font-size:12px; color:#6b7280; margin-top: 10px;">
+          Both buttons call <code>bump()</code> and read the same shared <code>count</code>. Calls from different places fight over the same state.
+        </p>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 28px; padding: 14px 18px; background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 0 6px 6px 0;">
+      <strong>Lesson:</strong> the pure version is local — its behavior depends only on its inputs. The impure version is global — any change to <code>count</code> happens everywhere at once. In a small example that's fine; in a real app it's the source of weeks of debugging.
+    </div>
+
+    <script>
+      // ── Pure side ──
+      function increment(n) { return n + 1; }
+      let pCount = 0;
+      const pEl = document.getElementById("pCount");
+      document.getElementById("pInc").addEventListener("click", () => {
+        pCount = increment(pCount);     // assign the returned value
+        pEl.textContent = pCount;
+      });
+
+      // ── Impure side ──
+      let count = 0;
+      function bump() { count++; }
+      const iEl = document.getElementById("iCount");
+      document.getElementById("iInc").addEventListener("click", () => {
+        bump(); iEl.textContent = count;
+      });
+      document.getElementById("iInc2").addEventListener("click", () => {
+        bump(); iEl.textContent = count;
+      });
+    </script>
+  </body>
+</html>

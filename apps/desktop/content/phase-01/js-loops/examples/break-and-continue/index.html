@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>break vs continue</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; }
+      th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; background: #f9fafb; }
+      tr.skipped td { background: #fffbeb; color: #92400e; text-decoration: line-through; }
+      tr.matched td { background: #ecfdf5; color: #047857; font-weight: 700; }
+      tr.unreached td { background: #f3f4f6; color: #9ca3af; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+      .b-inactive { background: #fef3c7; color: #92400e; }
+      .b-active   { background: #ecfdf5; color: #047857; }
+      pre { background: #1c2230; color: #e6edf3; padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <h1>break vs continue — live</h1>
+    <p>The loop below walks the users array, skipping inactive ones (<code>continue</code>) and stopping when it finds Aisha (<code>break</code>).</p>
+
+    <pre>for (const user of users) {
+  if (!user.active) <span style="color:#f9a825;">continue</span>;      // skip this one
+  if (user.name === "Aisha") <span style="color:#f87171;">break</span>;  // stop searching
+  process(user);
+}</pre>
+
+    <table>
+      <thead><tr><th>#</th><th>User</th><th>Status</th><th>What happened</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <p style="color: #6b7280; font-size: 13px; margin-top: 14px;">
+      Yellow rows were skipped (continue). Green row matched and triggered break. Grey rows after Aisha never got reached.
+    </p>
+
+    <script>
+      const users = [
+        { name: "Brian",   active: true  },
+        { name: "Daniel",  active: true  },
+        { name: "Carla",   active: false },
+        { name: "Emily",   active: true  },
+        { name: "Aisha",   active: true  },
+        { name: "Zach",    active: true  },
+        { name: "Maya",    active: true  },
+      ];
+
+      let stopped = false;
+      const results = users.map((u, i) => {
+        if (stopped) return { ...u, idx: i, status: "unreached" };
+        if (!u.active) return { ...u, idx: i, status: "skipped" };
+        if (u.name === "Aisha") {
+          stopped = true;
+          return { ...u, idx: i, status: "matched" };
+        }
+        return { ...u, idx: i, status: "processed" };
+      });
+
+      document.getElementById("rows").innerHTML = results.map((r) => {
+        const klass = r.status === "skipped" ? "skipped"
+                    : r.status === "matched" ? "matched"
+                    : r.status === "unreached" ? "unreached" : "";
+        const badge = r.active
+          ? `<span class="badge b-active">active</span>`
+          : `<span class="badge b-inactive">inactive</span>`;
+        const action = ({
+          processed: "processed (loop body ran)",
+          skipped:   "continue — skipped",
+          matched:   "match — break (loop ends)",
+          unreached: "loop already ended — never reached",
+        })[r.status];
+        return `<tr class="${klass}"><td>${r.idx}</td><td>${r.name}</td><td>${badge}</td><td>${action}</td></tr>`;
+      }).join("");
+    </script>
+  </body>
+</html>

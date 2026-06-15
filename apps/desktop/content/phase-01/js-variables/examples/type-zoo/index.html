@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Every primitive type</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-family: ui-monospace, monospace; font-size: 13px; vertical-align: top; }
+      th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; background: #f9fafb; }
+      .type { color: #4763e4; font-weight: 600; }
+      .value { color: #047857; }
+      .note { color: #b91c1c; font-style: italic; }
+      .gotcha { background: #fef2f2; }
+    </style>
+  </head>
+  <body>
+    <h1>The typeof zoo</h1>
+    <p>Every primitive type, plus a few of the famous edge cases. Open DevTools and try <code>typeof &lt;your value&gt;</code> in the console.</p>
+
+    <table>
+      <thead>
+        <tr><th>Value</th><th>typeof</th><th>Note</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <p style="font-size: 13px; color: #6b7280;">
+      Notice <code>typeof null === "object"</code> and <code>typeof [] === "object"</code> — two famous historical bugs. Use <code>Array.isArray()</code> to detect arrays.
+    </p>
+
+    <script>
+      const samples = [
+        { code: "42",                value: 42 },
+        { code: "3.14",              value: 3.14 },
+        { code: '"hello"',           value: "hello" },
+        { code: "`a template`",      value: `a template` },
+        { code: "true",              value: true },
+        { code: "false",             value: false },
+        { code: "null",              value: null,         gotcha: true, note: 'famously typeof null === "object"' },
+        { code: "undefined",         value: undefined },
+        { code: "{ a: 1 }",          value: { a: 1 } },
+        { code: "[1, 2, 3]",         value: [1, 2, 3],     gotcha: true, note: "use Array.isArray()" },
+        { code: "function(){}",      value: function(){} },
+        { code: "9007199254740993n", value: 9007199254740993n },
+        { code: 'Symbol("id")',      value: Symbol("id") },
+        { code: "NaN",               value: NaN,           gotcha: true, note: 'typeof NaN === "number"' },
+      ];
+
+      const rows = document.getElementById("rows");
+      rows.innerHTML = samples.map((s) => `
+        <tr ${s.gotcha ? 'class="gotcha"' : ""}>
+          <td class="value">${s.code}</td>
+          <td class="type">"${typeof s.value}"</td>
+          <td>${s.note || ""}</td>
+        </tr>
+      `).join("");
+    </script>
+  </body>
+</html>

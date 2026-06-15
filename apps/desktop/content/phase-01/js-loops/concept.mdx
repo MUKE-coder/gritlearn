@@ -1,0 +1,312 @@
+## JS loops — `for`, `while`, `for…of`
+
+Once you can make a decision, the other half of a program is doing the *same thing many times* — render every item in a list, validate every field in a form, sum every number in an array, walk every character in a string. **Loops** are how. JavaScript gives you a few flavors, and each has a job. Most modern code uses `for…of` for iterating over collections and the higher-order array methods (`forEach`, `map`, `filter`) for transforming them — but the older `for` and `while` still earn their keep when you need precise control.
+
+<Analogy>
+A loop is **the instruction "knead the dough until smooth."**
+
+You don't say "press, fold, press, fold, press, fold, press, fold…" twenty times. You say *one* instruction and add the stopping rule: *"keep doing this until smooth."* The hands repeat; the rule decides when to stop.
+
+JavaScript loops are the same: one body of code that runs many times, plus a *condition* that decides when to stop. Different loop shapes encode different stopping rules:
+
+- **`for` loop** — "do this **N times**." The classic counter from 0 to length.
+- **`while` loop** — "do this **as long as** the condition is true." You don't know in advance how many times.
+- **`for…of` loop** — "do this **once for each item** in this collection." The dough is a list of dough balls; knead each one.
+- **`do…while`** — "do this **at least once**, then keep going while the condition is true." Rare.
+
+Picking the right loop is like picking the right recipe instruction. "Knead until smooth" is `while`. "Knead 10 times" is `for`. "Knead each dough ball once" is `for…of`. The kitchen knows what you mean from the *shape* of the instruction.
+</Analogy>
+
+<Illustration
+  alt="Diagram of for loop initialization, condition, and increment with the loop body executing repeatedly"
+  caption="A `for` loop has three parts: initialize, test condition, increment. The body runs while the condition is true."
+>
+
+```
+   for (let i = 0; i < arr.length; i++) {
+        │         │              │
+        │         │              └─ increment (after each loop pass)
+        │         └─ condition (checked BEFORE each pass; stop when false)
+        └─ initialization (runs once at the start)
+
+     // body — runs once per pass
+     doSomethingWith(arr[i]);
+   }
+
+   // After the loop ends, execution continues here.
+```
+
+</Illustration>
+
+### The classic `for` loop
+
+```js
+for (let i = 0; i < 10; i++) {
+  console.log(i);   // prints 0 through 9
+}
+```
+
+Three parts in the parentheses, separated by semicolons:
+
+1. **Initialize** — runs once before the first pass. Usually declares the counter.
+2. **Condition** — checked before each pass. Stops the loop when false.
+3. **Increment** — runs after each pass.
+
+To iterate over an array by index:
+
+```js
+const colors = ["red", "green", "blue"];
+for (let i = 0; i < colors.length; i++) {
+  console.log(i, colors[i]);
+}
+```
+
+You'll write this shape thousands of times in your career. It's the no-magic, full-control option — you decide every detail.
+
+### `for…of` — the modern iteration
+
+When you don't need the index, `for…of` is shorter and clearer:
+
+```js
+const colors = ["red", "green", "blue"];
+for (const color of colors) {
+  console.log(color);
+}
+```
+
+Reads like English: "for each color of colors, …". Use this for arrays, strings (`for (const char of "hello")`), and any other iterable (`Map`, `Set`, `NodeList`).
+
+If you need the index too, pair with `entries()`:
+
+```js
+for (const [i, color] of colors.entries()) {
+  console.log(i, color);
+}
+```
+
+### `while` — when you don't know how many times
+
+```js
+let value = 100;
+while (value > 1) {
+  value = value / 2;
+  console.log(value);
+}
+```
+
+The loop body runs as long as the condition is true. Useful when the stopping condition isn't a fixed count:
+
+```js
+let token = startToken;
+const allItems = [];
+while (token != null) {
+  const page = await fetchPage(token);
+  allItems.push(...page.items);
+  token = page.nextToken;
+}
+// loop ends when nextToken is null
+```
+
+`while` is the right tool for "keep going until something happens" — paging through an API, reading from a stream, polling for a result.
+
+### `do…while` — at least once
+
+```js
+let answer;
+do {
+  answer = prompt("Pick a number 1-10:");
+} while (Number(answer) < 1 || Number(answer) > 10);
+```
+
+The body runs *first*, then the condition is checked. Useful when you want at least one execution before deciding whether to continue. You'll rarely write one.
+
+### `break` and `continue`
+
+Two keywords for non-linear flow inside loops:
+
+- **`break`** — exit the loop immediately.
+- **`continue`** — skip to the next iteration.
+
+```js
+for (const user of users) {
+  if (user.inactive) continue;        // skip this one, go to next
+  if (user.name === "Aisha") break;   // we found her — stop searching
+  process(user);
+}
+```
+
+Both are clean tools when the early-exit condition is genuinely there. Don't overuse them; sometimes a guard clause inside the body reads more linearly.
+
+### Infinite loops — and how to recover
+
+```js
+while (true) {
+  // ⚠ this never ends — browser tab freezes
+}
+```
+
+In a browser, an infinite loop will freeze the tab until you force-quit it. Three rescues:
+
+- **In an example HTML page**: close the tab.
+- **With a counter safeguard**: add a `iterations++; if (iterations > 10000) break;` line during development.
+- **In Node**: Ctrl+C.
+
+Every junior dev writes one infinite loop on their first day. It's a rite of passage. The fix is muscle memory: add the safeguard early.
+
+### Iterating over arrays: prefer the higher-order methods
+
+For most "do something with each item" needs, the array methods read better than a `for` loop:
+
+```js
+const numbers = [1, 2, 3, 4, 5];
+
+// forEach — side effect on each item
+numbers.forEach((n) => console.log(n));
+
+// map — transform each item, return a new array
+const doubled = numbers.map((n) => n * 2);
+// → [2, 4, 6, 8, 10]
+
+// filter — keep items matching a condition
+const evens = numbers.filter((n) => n % 2 === 0);
+// → [2, 4]
+
+// reduce — combine into a single value
+const sum = numbers.reduce((acc, n) => acc + n, 0);
+// → 15
+```
+
+We'll dedicate a whole lesson to these in the arrays chapter. For now, just know they exist — and that **`for…of` and the array methods are usually preferable to a classic indexed `for` loop in modern code**. Reach for indexed `for` only when you genuinely need the index, or when you're skipping items in a non-trivial pattern.
+
+<ExampleProject
+  src="loop-zoo"
+  title="Four loops, one task"
+  description="A page that prints the same list of numbers using four different loops: classic for, for…of, while, and forEach. Side by side so you can compare the syntax and decide which fits your taste."
+/>
+
+<ExampleProject
+  src="break-and-continue"
+  title="break vs continue, live"
+  description="A loop over a list of users where break exits when it finds a match and continue skips inactive users. Console log shows exactly which iterations ran and which were skipped. Demonstrates the difference between 'stop early' and 'skip this one'."
+/>
+
+<Exercise
+  title="Sum the even numbers, three ways"
+  starter={`Given the array  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+write three small functions that all return 30 (the sum of
+2 + 4 + 6 + 8 + 10):
+
+  1. evenSumForLoop(arr)   — using a classic for loop with continue.
+  2. evenSumForOf(arr)     — using for…of.
+  3. evenSumMethods(arr)   — using .filter and .reduce.
+
+Print all three results in the page. They should all read 30.
+
+Stretch: which is the most readable? Which is the fastest?
+(Hint: the answers aren't always the same.)`}
+>
+
+- Three named functions, one for each loop style.
+- `evenSumForLoop` uses a classic `for (let i = 0; i < arr.length; i++)` with a `continue` for odd numbers.
+- `evenSumForOf` uses `for (const n of arr)` and an `if (n % 2 === 0)` test.
+- `evenSumMethods` chains `arr.filter(n => n % 2 === 0).reduce((a, b) => a + b, 0)`.
+- All three return exactly `30`.
+- The page displays all three so you can confirm consistency.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `for…in` and `for…of`?
+
+**A:** They iterate over different things — and `for…in` is a common source of bugs.
+
+- **`for…in`** iterates over **property names (keys)** of an object — including inherited enumerable properties. On an array, it gives you the **string-typed indices** ("0", "1", "2") plus any custom enumerable properties added to the prototype. Almost never what you want for arrays.
+- **`for…of`** iterates over the **values** of an iterable — arrays, strings, Maps, Sets, NodeLists. It uses the iteration protocol (`Symbol.iterator`).
+
+```js
+const arr = ["a", "b", "c"];
+arr.extra = "hello";    // add a custom property
+
+for (const k of arr)  console.log(k);   // "a", "b", "c"
+for (const k in arr)  console.log(k);   // "0", "1", "2", "extra"  ← surprise
+```
+
+The rule: **`for…of` for arrays and other iterables**; **`for…in` for object keys** (and even then, prefer `Object.keys(obj)` + `for…of` for safety, since `for…in` walks the prototype chain).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What do `break` and `continue` do inside a loop?
+
+**A:**
+
+- **`break`** exits the loop **immediately**. Execution jumps past the loop body and continues with the next statement after the loop.
+- **`continue`** skips the **rest of the current iteration** and goes to the next one. The condition is re-checked; if it's still true, the loop continues.
+
+```js
+for (let i = 0; i < 10; i++) {
+  if (i === 3) continue;   // skip i=3
+  if (i === 7) break;      // stop entirely at i=7
+  console.log(i);
+}
+// logs: 0, 1, 2, 4, 5, 6
+```
+
+Both are clean when the early-exit logic is genuinely there. The classic use of `break` is "found what I was looking for, stop searching." The classic use of `continue` is "this item doesn't apply to me, skip it."
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use a `for` loop vs `forEach` vs `map`?
+
+**A:** All iterate over an array, but they're optimized for different intents:
+
+- **`for` (or `for…of`)** — when you need to break early, control the iteration order, skip iterations, or perform side effects with full flexibility. Also the only option when working with async/await inside the body (more on that in the async lesson).
+- **`forEach`** — call a function for each item, **for its side effect**. Returns nothing. You can't `break` from it (the workaround: throw an exception or use a `for…of`). Best when "do this for each item" is genuinely all you mean.
+- **`map`** — **transform** each item and return a **new array** of results. Use when the loop's purpose is "I want a new array where each item is a function of the original." Cleaner than push-into-an-array-from-a-for-loop.
+
+A common mistake: using `forEach` when you really wanted `map`. If you find yourself doing `arr.forEach((x) => results.push(transform(x)))`, that's `arr.map(transform)`. Cleaner, fewer moving parts.
+
+Performance: in modern engines all three are within a few percent of each other for typical sizes. Pick for **clarity of intent**, not for performance.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's an infinite loop and how do you avoid one in production code?
+
+**A:** An infinite loop is one whose condition never becomes false, so the body runs forever. In a browser tab it freezes the page; in Node it pegs a CPU core.
+
+```js
+let i = 0;
+while (i < 10) {
+  console.log(i);   // forgot to increment i — infinite loop
+}
+```
+
+Avoidance practices:
+
+1. **Always verify the counter actually changes.** Read the loop body and ask: "what advances the condition toward false?"
+2. **Prefer `for…of` and array methods** over manual indexing. They can't loop forever because they're iterating a finite collection.
+3. **Use a hard safety counter** in long-running production loops (pagination, polling):
+
+```js
+let token = startToken;
+let pages = 0;
+while (token != null && pages < 1000) {
+  const next = await fetch(token);
+  token = next.token;
+  pages++;
+}
+```
+
+   The `pages < 1000` is a circuit-breaker. If something pathological happens upstream (server returns its own token forever), you bail instead of pegging the CPU.
+
+4. **In tests**, mock the data so loops terminate. Don't depend on real network behavior to stop the loop.
+
+The hardest infinite loops to detect are the *almost*-infinite ones — that run 100,000 times instead of 100 because of an off-by-one. Defensive ceilings on counters catch them too.
+
+</InterviewQuestion>

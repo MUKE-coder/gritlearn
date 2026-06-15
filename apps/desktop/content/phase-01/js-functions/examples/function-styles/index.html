@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three syntaxes, same function</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+      .pane h2 { margin: 0 0 6px; font-family: ui-monospace, monospace; font-size: 12px; color: #4763e4; }
+      pre { background: #1c2230; color: #e6edf3; padding: 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; margin: 0 0 10px; }
+      .result { background: white; border: 1px dashed #d1d5db; border-radius: 6px; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 12px; }
+      .note { padding: 10px 12px; background: #eef2ff; border-left: 4px solid #4763e4; border-radius: 0 6px 6px 0; margin-top: 16px; font-size: 13px; color: #4338ca; }
+      .ok  { color: #047857; }
+      .err { color: #b91c1c; }
+      @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Three syntaxes, same function</h1>
+    <p>All three return the same string. They differ in hoisting and <code>this</code> behavior.</p>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2>declaration</h2>
+        <pre>function greet(name) {
+  return `Hello, ${name}!`;
+}</pre>
+        <div class="result">greet("Aisha") → <span id="r1"></span></div>
+      </div>
+
+      <div class="pane">
+        <h2>expression</h2>
+        <pre>const greet =
+  function(name) {
+    return `Hello, ${name}!`;
+  };</pre>
+        <div class="result">greet("Brian") → <span id="r2"></span></div>
+      </div>
+
+      <div class="pane">
+        <h2>arrow (modern)</h2>
+        <pre>const greet = (name) =&gt;
+  `Hello, ${name}!`;</pre>
+        <div class="result">greet("Carla") → <span id="r3"></span></div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-top: 30px;">Hoisting</h2>
+    <p>The declaration is hoisted; the others aren't.</p>
+
+    <pre>// works — function declarations are hoisted to the top of their scope:
+beforeDeclaration();
+function beforeDeclaration() { console.log("ran"); }
+
+// throws — const/let are not hoisted with their values:
+beforeArrow();
+const beforeArrow = () =&gt; console.log("ran");
+// ReferenceError: Cannot access 'beforeArrow' before initialization</pre>
+
+    <div class="note">
+      <strong>Modern advice:</strong> use arrows by default. Reach for <code>function</code> only when you need its <code>this</code> behavior (rare) or hoisting (also rare).
+    </div>
+
+    <script>
+      // 1. Declaration
+      function greetDecl(name) { return `Hello, ${name}!`; }
+      document.getElementById("r1").textContent = greetDecl("Aisha");
+
+      // 2. Expression
+      const greetExpr = function(name) { return `Hello, ${name}!`; };
+      document.getElementById("r2").textContent = greetExpr("Brian");
+
+      // 3. Arrow
+      const greetArrow = (name) => `Hello, ${name}!`;
+      document.getElementById("r3").textContent = greetArrow("Carla");
+    </script>
+  </body>
+</html>

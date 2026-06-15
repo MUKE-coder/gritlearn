@@ -1,0 +1,317 @@
+## JS operators and expressions
+
+You've got variables. Now you need to *do things* with them — add, multiply, compare, combine, glue strings together, ask "is this bigger than that?" These are **operators**, and JavaScript has a generous set of them. An **expression** is anything that evaluates to a value, and operators are how you build expressions out of other expressions. Most code you write — even complex code — boils down to a chain of expressions.
+
+<Analogy>
+Operators are **the verbs of the language**.
+
+Think of variables as the nouns ("count," "name," "isReady") and operators as the verbs that act on them: **add** these, **multiply** by 2, **is** this greater than that, **combine** these strings. A sentence in natural language stops being meaningful without verbs. Code stops being useful without operators — it'd just be a list of values sitting there.
+
+Operators come in small families that match how we naturally think:
+
+- **Arithmetic** verbs — `+`, `-`, `*`, `/` — for numbers.
+- **Comparison** verbs — `<`, `===`, `!==` — for asking questions.
+- **Logical** verbs — `&&`, `||`, `!` — for combining yes/no answers.
+- **Assignment** verbs — `=`, `+=` — for putting values into jars.
+- **String** verbs — `+`, template literals — for stitching text.
+
+Once you internalize the family each operator belongs to, you stop memorizing them one at a time and start *combining* them, the way you'd combine "**add** 1 to count **and** check if **greater** than max **then** **assign** false to running" — three operators, one sentence.
+</Analogy>
+
+<Illustration
+  alt="Diagram of operator families: arithmetic, comparison, logical, assignment with examples"
+  caption="Operators fall into a small handful of families. Once you know the family a symbol belongs to, you know what kind of question it's asking."
+>
+
+```
+   ARITHMETIC          COMPARISON          LOGICAL           ASSIGNMENT
+   ──────────          ──────────          ───────           ──────────
+   +  add              ===  equal          &&  and           =     set
+   -  subtract         !==  not equal      ||  or            +=    add and set
+   *  multiply         <    less           !   not           -=    sub and set
+   /  divide           >    greater        ??  nullish       *=
+   %  remainder        <=   ≤              ??=  nullish set  /=
+   **  power           >=   ≥              ?.  optional      ||=, &&=
+   ++  increment                            chain
+   --  decrement
+```
+
+</Illustration>
+
+### Arithmetic: just like math
+
+```js
+1 + 2       // 3
+10 - 4      // 6
+3 * 4       // 12
+10 / 3      // 3.333333...
+10 % 3      // 1   ← remainder
+2 ** 8      // 256 ← power
+
+let count = 0;
+count++;    // count is now 1 (post-increment)
+++count;    // count is now 2 (pre-increment)
+count--;    // count is now 1
+```
+
+`%` (modulo) returns the remainder. It's how you check "is this even?" — `n % 2 === 0`.
+
+### String concatenation: `+` and templates
+
+The `+` operator does both arithmetic AND string concatenation:
+
+```js
+"Hello, " + name       // string concat
+1 + 2                  // number add
+
+"5" + 1                // "51"   ← the moment ONE operand is a string, + concats
+1 + "5"                // "15"   ← same — left-to-right
+```
+
+The string-coercion behavior is why you should almost always use **template literals** for combining strings and values:
+
+```js
+const greeting = `Hello, ${name}! You're ${age} years old.`;
+```
+
+Inside `${...}` you can put any expression — variables, arithmetic, function calls. Template literals also preserve line breaks, which makes multi-line strings (HTML snippets, SQL queries) much nicer.
+
+### Comparison: returning booleans
+
+Every comparison operator returns `true` or `false`:
+
+```js
+5 < 10          // true
+5 > 10          // false
+5 <= 5          // true
+"a" < "b"       // true   ← strings compare alphabetically
+5 === 5         // true
+5 === "5"       // false  ← strict — different types
+5 !== "5"       // true
+```
+
+**Always use `===` and `!==` (strict equality).** As covered last lesson, `==` does silent type coercion that hides bugs.
+
+### Logical operators: combining booleans
+
+```js
+const isLoggedIn = true;
+const isAdmin    = false;
+
+isLoggedIn && isAdmin   // false — AND: both must be true
+isLoggedIn || isAdmin   // true  — OR: at least one true
+!isLoggedIn             // false — NOT: flip a boolean
+```
+
+#### Short-circuit evaluation: more than booleans
+
+`&&` and `||` are sneakier than they look. They don't *just* return `true`/`false` — they return one of their operands:
+
+```js
+"hello" && "world"    // "world"   ← && returns the LAST truthy value
+"" && "world"         // ""        ← && returns the first falsy value it sees
+null || "default"     // "default" ← || returns the first truthy value
+"name" || "fallback"  // "name"
+```
+
+You'll see this pattern constantly:
+
+```js
+const display = user.name || "Guest";   // fall back to "Guest" if name is empty
+```
+
+The values JavaScript treats as **falsy** (in a boolean context): `false`, `0`, `""` (empty string), `null`, `undefined`, `NaN`. Everything else is **truthy** — including `[]` (empty array!) and `{}` (empty object!).
+
+### Nullish coalescing: `??`
+
+The `||` fallback above has a problem: it triggers for *any* falsy value, including `0` and `""`. Sometimes you genuinely want the user's `0` to stick. That's what `??` is for:
+
+```js
+const tabs = userPref.tabs || 4;    // ← falls back if tabs is 0 too!
+const tabs = userPref.tabs ?? 4;    // ← falls back ONLY if tabs is null or undefined
+```
+
+`??` is the modern "default for null/undefined" operator. Reach for it whenever the difference between "0" and "absent" matters.
+
+### Optional chaining: `?.`
+
+```js
+user.profile.avatar.url    // crashes if profile is null
+user?.profile?.avatar?.url // returns undefined if any link is null
+```
+
+`?.` lets you walk a path of properties without crashing on `null`/`undefined` at any step. The expression "short-circuits" the moment it hits a nullish value and returns `undefined`. Used everywhere in modern code.
+
+### Assignment shortcuts
+
+```js
+let x = 10;
+x += 5;     // same as x = x + 5    → 15
+x -= 3;     // same as x = x - 3    → 12
+x *= 2;     // same as x = x * 2    → 24
+x /= 4;     // same as x = x / 4    → 6
+x **= 2;    // same as x = x ** 2   → 36
+```
+
+Plus a few modern niceties:
+
+```js
+let username = null;
+username ||= "Anonymous";   // assign only if username is falsy → "Anonymous"
+username ??= "Anonymous";   // assign only if username is null/undefined
+let count = 5;
+count &&= count + 1;        // assign only if count is truthy → 6
+```
+
+### Operator precedence (a tiny dose)
+
+When multiple operators meet, which runs first? Mostly the rules match math:
+
+- `*`, `/`, `%` before `+`, `-`
+- `&&` before `||`
+- Comparisons before logical operators
+
+```js
+2 + 3 * 4              // 14, not 20
+true || false && false // true (&& binds tighter than ||)
+```
+
+When in doubt, **add parentheses**. Clear-but-redundant parens cost nothing; "I thought this would work" bugs cost hours:
+
+```js
+(true || false) && false   // false — explicit, unambiguous
+```
+
+<ExampleProject
+  src="operator-playground"
+  title="Live calculator with every operator"
+  description="A page with two number inputs and a row of buttons — one per operator. Click +, the page shows a + b. Click %, it shows the remainder. Includes strict-equality vs loose-equality so you can confirm '5' == 5 vs '5' === 5 with your own eyes."
+/>
+
+<ExampleProject
+  src="string-template-fun"
+  title="Template literals and the falsy table"
+  description="Two demos: a template-literal greeting that mixes variables and expressions, plus a complete table of every JavaScript value that's falsy (the six values you'll memorize this lesson). The truthiness behavior of empty array and empty object — both truthy! — is highlighted."
+/>
+
+<Exercise
+  title="Build a username sanitizer"
+  starter={`Write a small page with one text input and one button.
+When the user types a name and clicks the button, your script
+should:
+
+  1. Trim whitespace.
+  2. Lowercase the result.
+  3. If the result is empty, default it to "anonymous".
+  4. Build a greeting like "Hello, <name>! You typed <N>
+     characters."
+  5. Show it in a paragraph on the page.
+
+Use:
+  - The nullish coalescing operator (??) or || for the default.
+  - A template literal for the greeting.
+  - .length on the string for the character count.
+  - At least one comparison operator (e.g. to detect empty after
+    trim).`}
+>
+
+- Uses `const` for the result and `let` only where reassignment happens.
+- Uses a template literal for the greeting — no `+` concatenation.
+- Uses either `||` or `??` (preferably `??`) for the default fallback.
+- Uses `===` (strict equality), not `==`.
+- The button's click handler reads the input fresh each time (so editing and re-clicking shows new output).
+- Empty input genuinely shows "Hello, anonymous!" — not "Hello, undefined!".
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `==` do that `===` doesn't, and why does it matter?
+
+**A:** `==` performs **implicit type coercion** before comparing — it converts both operands to a common type, then compares. `===` compares both type AND value with no conversion. The difference matters because `==` produces surprising results:
+
+```js
+0  == false   // true    ← number coerced to boolean
+"" == 0       // true    ← string coerced to number
+"5" == 5      // true    ← string coerced to number
+null == undefined  // true    ← special-case
+```
+
+Almost every modern style guide enforces `===` because the silent conversions hide bugs. The classic example: `if (count == "0")` matches when `count` is the number 0 — easy to write, hard to notice.
+
+The single common exception: `x == null` is a concise idiom for "x is null OR undefined." Otherwise: always strict.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Which values are falsy in JavaScript?
+
+**A:** Exactly six values are falsy — they coerce to `false` in a boolean context:
+
+```
+false       0       ""        null       undefined       NaN
+```
+
+Everything else is truthy, **including these surprises**:
+
+```
+[]    // truthy!  (an empty array)
+{}    // truthy!  (an empty object)
+"0"   // truthy!  (a string containing the character zero)
+```
+
+The surprises catch a lot of people. `if (arr) { … }` runs even when `arr` is empty — use `arr.length > 0` if you mean "has items." `if ("0") { … }` runs — the string "0" is truthy because every non-empty string is.
+
+Memorize the six. They cover every truthy/falsy question you'll get asked.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `||` and `??`?
+
+**A:** Both pick a fallback when a value is "missing," but they disagree about what counts as missing:
+
+- **`||`** uses **truthiness** — it falls back if the left side is falsy, which includes `0`, `""`, `false`, and `NaN`.
+- **`??`** uses **nullishness** — it falls back **only** if the left side is `null` or `undefined`.
+
+```js
+const limit = 0;
+const a = limit || 10;   // 10  ← || treats 0 as missing
+const b = limit ?? 10;   // 0   ← ?? keeps 0 because it's not null/undefined
+```
+
+Use `??` whenever a legitimate value of the variable would be `0` or `""` and you only want to fall back when the value is genuinely absent. Use `||` when any falsy value should fall back (less common in modern code; `??` is the safer default).
+
+`??` was added in 2020 (ES2020). In older codebases you'll see `||` everywhere; in new code, prefer `??` unless you specifically want the broader fallback.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does optional chaining (`?.`) do, and when would you reach for it?
+
+**A:** `?.` lets you safely walk a chain of property accesses where any link might be `null` or `undefined`. If a link is nullish, the whole expression **short-circuits to `undefined`** instead of throwing a `TypeError`:
+
+```js
+user.profile.avatar.url     // crashes if profile is null
+user?.profile?.avatar?.url  // returns undefined if any link is null
+```
+
+You can chain it with function calls and array indexing too:
+
+```js
+user?.getAvatar?.()    // call only if getAvatar exists
+arr?.[0]               // access only if arr exists
+```
+
+Use it at API boundaries where data structure is uncertain — responses from a server, deeply-nested config, optional callback methods. The pre-`?.` idiom was `user && user.profile && user.profile.avatar && user.profile.avatar.url` — six tokens replaced by one. Combine with `??` for a clean default:
+
+```js
+const url = user?.profile?.avatar?.url ?? "/default-avatar.png";
+```
+
+That's the modern "safely get this nested value or use this fallback" pattern.
+
+</InterviewQuestion>

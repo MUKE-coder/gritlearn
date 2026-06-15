@@ -1,0 +1,272 @@
+## JS variables and data types
+
+Every program does three things: read data, transform it, and write it somewhere. **Variables** are how you hold data while you transform it — labeled boxes you put values into and pull values out of. JavaScript also has a small set of built-in *types* — number, string, boolean, null, undefined, object — and the language helpfully lets values move between them sometimes (and infuriatingly does it without asking other times). Today's lesson: how to declare variables, what types exist, and how to spot the gotchas.
+
+<Analogy>
+A variable is **a labeled jar in a pantry**.
+
+When you cook, you don't keep flour in an unmarked bag — you put it in a jar labeled FLOUR. Sugar goes in SUGAR. Salt in SALT. You don't write the recipe with "the white powdery one on the left"; you write "1 cup flour" and your eyes find the right jar instantly. The label decouples *what's in the jar* from *where it lives* — you can rearrange the pantry without rewriting every recipe.
+
+JavaScript variables work the same way. `let count = 0` is a jar labeled `count` with `0` inside. `count = count + 1` reaches into the jar, takes out the value, adds 1, and puts the result back. You don't track memory addresses; you track labels. The labels are how you reason about the program.
+
+Different jars hold different *types* of things. A SALT jar is for salt — putting flour in it would be a mistake. JavaScript loosely cares about type: it lets you put a number in a jar then later replace it with a string, where Java or Go would refuse. That flexibility is freeing in small programs and dangerous in big ones — which is why TypeScript (later in this phase) re-introduces the strict "this jar only holds salt" rules.
+</Analogy>
+
+<Illustration
+  alt="Diagram of three labeled boxes for let, const, and var showing their scoping rules"
+  caption="Three ways to declare a variable: let (block-scoped, can change), const (block-scoped, can't reassign), var (function-scoped, legacy — avoid)."
+>
+
+```
+   let count = 0;         ← can reassign:  count = count + 1  OK
+                          ← block-scoped:  only visible inside { }
+
+   const NAME = "Aisha";  ← cannot reassign: NAME = "x"  ERROR
+                          ← block-scoped:    only visible inside { }
+
+   var legacy = 1;        ← can reassign + function-scoped
+                          ← LEGACY: never use in modern code
+```
+
+</Illustration>
+
+### Declaring variables: `let` and `const`
+
+Modern JavaScript gives you two declaration keywords:
+
+```js
+let count = 0;          // mutable — can be reassigned later
+const name = "Aisha";   // can't reassign; throws an error if you try
+```
+
+The rule, used by every team: **default to `const`. Reach for `let` only when you actually need to reassign.** Using `const` everywhere it works tells the next reader "this value won't surprise you by changing."
+
+You'll also see `var` in older code. `var` was the original way and has confusing rules (function-scoped instead of block-scoped, hoisted, declarable twice). **In code you write today, never use `var`.** It still exists for backwards compatibility; that's its only job.
+
+### What `const` actually freezes
+
+A common confusion:
+
+```js
+const user = { name: "Aisha" };
+user.name = "Brian";   // ✓ legal — the OBJECT's contents changed, not the variable
+user = { name: "Z" };  // ✗ TypeError — you tried to reassign the VARIABLE
+```
+
+`const` freezes the *binding* between the label and the value. It doesn't freeze the value itself. If the value is an object or array, you can still mutate its contents (`user.name = ...`, `arr.push(...)`). To freeze the contents too, you'd reach for `Object.freeze()`. We'll come back to mutation when we get to immutability later.
+
+### The data types
+
+JavaScript has **eight** built-in types. Six are *primitives* — simple, immutable values — and two are *reference types* — objects and the things built on top of them.
+
+#### Primitives
+
+```js
+let count   = 42;            // number
+let pi      = 3.14;          // number (no separate int/float)
+let big     = 9007199254740993n; // bigint (very large integers, suffix n)
+let name    = "Aisha";       // string
+let truthy  = true;          // boolean
+let nothing = null;          // null — "intentionally empty"
+let absent  = undefined;     // undefined — "no value assigned"
+let id      = Symbol("id");  // symbol — unique identifier (rare in app code)
+```
+
+You'll use **number, string, boolean** constantly. **null** and **undefined** show up at every API boundary ("the user has no avatar yet"). **bigint** and **symbol** are rare — don't worry about them for now.
+
+The line **"no separate int/float"** is important: JavaScript numbers are 64-bit floats, even for things you think of as integers. `1 + 1 === 2` works fine, but `0.1 + 0.2 === 0.30000000000000004` — the classic floating-point surprise.
+
+#### Strings
+
+Three quote styles, all equivalent except for what you can put inside:
+
+```js
+let a = "Double quotes";
+let b = 'Single quotes';
+let c = `Backticks — supports ${interpolation}!`;
+```
+
+The third — backticks, called a **template literal** — lets you embed expressions with `${...}`. It's the modern default for any string that mixes text with values. Backticks also allow line breaks inside the string.
+
+```js
+const greeting = `Hello, ${user.name}!
+Your last login was ${user.lastLogin}.`;
+```
+
+#### Objects and arrays
+
+```js
+const user = {
+  name: "Aisha",
+  age: 22,
+  premium: false,
+};
+
+const colors = ["red", "green", "blue"];
+```
+
+Objects are bags of key-value pairs. Arrays are ordered lists. Both get their own dedicated lessons soon — for now, just notice the syntax.
+
+### `null` vs `undefined`
+
+A common interview question, and a real source of bugs:
+
+- **`undefined`** — the engine's "no value here yet" marker. A variable declared without a value, a function parameter you didn't pass, an object property that doesn't exist.
+- **`null`** — your code's "intentionally empty." You assign `null` to say "we looked, there isn't one."
+
+```js
+let x;                 // x is undefined
+let y = null;          // y is null — you said "deliberately empty"
+console.log({}.foo);   // undefined — property doesn't exist
+```
+
+Most APIs use one consistently. The Grit API in this very project returns `null` for "field exists but is empty" and `undefined` only on the JS side for "key wasn't provided at all." It's a small distinction with real consequences when serializing.
+
+### Type checks
+
+```js
+typeof 42         // "number"
+typeof "hi"       // "string"
+typeof true       // "boolean"
+typeof null       // "object"   ← a famous historical bug, won't be fixed
+typeof undefined  // "undefined"
+typeof {}         // "object"
+typeof []         // "object"   ← arrays are objects; use Array.isArray() instead
+typeof function(){} // "function"
+```
+
+`typeof null === "object"` is a 1995 mistake that became too widespread to fix. Just know it exists.
+
+### Implicit type conversion (and the `==` vs `===` rule)
+
+JavaScript is happy to convert types on the fly:
+
+```js
+"5" + 1     // "51"   ← string concatenation
+"5" - 1     // 4      ← arithmetic, string coerced to number
+0 == false  // true   ← lenient equality coerces
+0 === false // false  ← strict equality says "different types, different values"
+```
+
+The rule: **always use `===` (strict equality) and `!==` (strict inequality)**. `==` does silent type conversions that hide bugs. Every modern style guide enforces strict equality; you should too.
+
+### Naming conventions
+
+- **`camelCase`** for variables and functions: `userName`, `fetchPosts`, `isLoggedIn`.
+- **`UPPER_SNAKE_CASE`** for true constants: `MAX_RETRIES`, `API_URL`. (Not every `const` — just compile-time values that are *constants* in the philosophical sense.)
+- **`PascalCase`** for classes and React components: `User`, `LoginForm`.
+
+Names should be readable nouns or noun phrases. `n` is a sin in everything but the tightest loops. Reading `for (let n = 0; n < users.length; n++)` next year, *you* won't remember what `n` was either.
+
+<ExampleProject
+  src="labeled-boxes"
+  title="Variables in action"
+  description="A page that declares a let counter and a const name, prints them, reassigns the counter on button click, and demonstrates what happens when you try to reassign the const (a console error). Open DevTools to see the errors."
+/>
+
+<ExampleProject
+  src="type-zoo"
+  title="Every primitive type, side by side"
+  description="A page that creates one value of each primitive type and shows typeof for each. Includes the famous typeof null === 'object' gotcha. Edit the values and watch the typeof output update in real time."
+/>
+
+<Exercise
+  title="Build a tiny user profile object"
+  starter={`Create an HTML file with a <script> tag at the bottom of <body>.
+In the script:
+
+  - Declare a const user with name (string), age (number), and
+    premium (boolean) properties.
+  - Declare a let visitCount initialized to 0.
+  - Use template literals to build a greeting string that uses
+    user.name and visitCount.
+  - Write the greeting into an <h1 id="greeting"> on the page.
+  - Add a button that, when clicked, increments visitCount and
+    re-writes the greeting.
+
+Open the page. Click the button. The visit count goes up; the
+user's name doesn't change. Try reassigning user with user = {}
+and watch the console error.`}
+>
+
+- `user` is declared with `const` and `visitCount` with `let`.
+- The greeting uses a template literal with `${user.name}` and `${visitCount}` — not string concatenation with `+`.
+- The button updates `visitCount` and writes the new greeting back into the DOM.
+- Trying to do `user = { … }` in the console produces a `TypeError: Assignment to constant variable`.
+- But `user.name = "X"` (mutating a property) works without an error, demonstrating that `const` freezes the binding, not the contents.
+- The variable names follow camelCase (`visitCount`, `user`, not `VisitCount` or `user_name`).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `let` and `const`?
+
+**A:**
+
+- **`let`** declares a variable you can **reassign** later: `let x = 1; x = 2;` is fine.
+- **`const`** declares a variable you **cannot reassign**: `const x = 1; x = 2;` throws a `TypeError`.
+
+Both are **block-scoped** — they only exist inside the nearest `{ … }`. The convention is to default to `const` and only use `let` when you actually need to reassign. `const` is a hint to the next reader: "this value won't suddenly change on you."
+
+One subtlety: `const` freezes the **binding** between the name and the value, not the value itself. `const arr = []; arr.push(1)` is legal because you're mutating the array's contents, not reassigning the variable.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `null` and `undefined`?
+
+**A:**
+
+- **`undefined`** — the JavaScript engine's "no value yet" placeholder. A variable declared without an initializer, a function parameter you didn't pass, an object property that doesn't exist — all return `undefined`. *The runtime put it there.*
+- **`null`** — *your code's* "intentionally empty." You assign `null` to say "we looked, there isn't one."
+
+Practically: APIs often pick one and stay consistent. JSON only has `null` (no `undefined`), so a JS object serialized to JSON loses its `undefined` properties entirely. When checking, `value == null` (loose) catches both, but most teams now use explicit `value === null || value === undefined` or the nullish coalescing operator `value ?? fallback`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is `0.1 + 0.2 === 0.30000000000000004`?
+
+**A:** Because JavaScript stores all numbers as **64-bit IEEE 754 floats** — the same format C and most languages use for double-precision math. A few decimal fractions, including 0.1 and 0.2, have no exact binary representation, so they're stored as the closest binary approximation. Adding two approximations produces a slightly-off result.
+
+This is not a JavaScript bug — it's how floating-point math works on every modern CPU. Python, Java, Go, C all show the same thing for `0.1 + 0.2`.
+
+When precision matters (money, especially), the workarounds are:
+
+1. **Work in the smallest unit.** Store cents instead of dollars; multiply by 100 to display.
+2. **Use `Number.toFixed(2)`** for display only — it returns a string with rounded precision.
+3. **Use `BigInt`** for exact integer math beyond `Number.MAX_SAFE_INTEGER`.
+4. **Use a decimal library** like `decimal.js` for arbitrary-precision arithmetic.
+
+The classic interview follow-up: *"How would you check if two floats are 'equal'?"* — answer: `Math.abs(a - b) < EPSILON` for some small `EPSILON` like `Number.EPSILON` or `1e-9`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why prefer `===` over `==` in JavaScript?
+
+**A:** `==` (loose equality) performs **implicit type coercion** before comparing, leading to surprising results:
+
+```js
+0  == false   // true
+"" == 0       // true
+"0" == 0      // true
+null == undefined  // true
+[] == false   // true
+```
+
+The rules behind these conversions are documented but counterintuitive — almost no one remembers them all. `===` (strict equality) checks **both type and value** with no coercion:
+
+```js
+0  === false   // false
+"" === 0       // false
+"0" === 0      // false
+```
+
+The risk with `==`: a bug like `if (count == "0")` matching when `count` is the *number* zero. Every modern linter and style guide enforces `===` and `!==`. The two exceptions where `==` is acceptable: `x == null` to catch both `null` and `undefined` in one check (concise idiom), and intentional duck-typing in low-level libraries. In application code: always strict.
+
+</InterviewQuestion>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Four loops, one task</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pane h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 13px; color: #4763e4; }
+      pre { background: #1c2230; color: #e6edf3; padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; margin: 0 0 10px; overflow-x: auto; }
+      .result { background: white; border: 1px dashed #d1d5db; border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12px; min-height: 30px; }
+      .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #4763e4; color: white; font-size: 10px; font-weight: 700; margin-left: 4px; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Four loops, one task</h1>
+    <p>All four print the array <code>[10, 20, 30, 40, 50]</code> one item at a time. Same result; different syntax.</p>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2>1. classic for <span class="badge">indexed</span></h2>
+        <pre>for (let i = 0; i &lt; arr.length; i++) {
+  log(arr[i]);
+}</pre>
+        <div class="result" id="r1"></div>
+      </div>
+
+      <div class="pane">
+        <h2>2. for…of <span class="badge">modern default</span></h2>
+        <pre>for (const n of arr) {
+  log(n);
+}</pre>
+        <div class="result" id="r2"></div>
+      </div>
+
+      <div class="pane">
+        <h2>3. while</h2>
+        <pre>let i = 0;
+while (i &lt; arr.length) {
+  log(arr[i]);
+  i++;
+}</pre>
+        <div class="result" id="r3"></div>
+      </div>
+
+      <div class="pane">
+        <h2>4. forEach</h2>
+        <pre>arr.forEach((n) =&gt; {
+  log(n);
+});</pre>
+        <div class="result" id="r4"></div>
+      </div>
+
+    </div>
+
+    <p style="font-size: 13px; color: #6b7280;">
+      In modern code, <strong>for…of</strong> and <strong>forEach/map/filter</strong> cover 95% of needs. Reach for the classic indexed <code>for</code> only when you need the index or unusual increments.
+    </p>
+
+    <script>
+      const arr = [10, 20, 30, 40, 50];
+      const mkLogger = (el) => (n) => {
+        el.textContent += (el.textContent ? " · " : "") + n;
+      };
+
+      const log1 = mkLogger(document.getElementById("r1"));
+      for (let i = 0; i < arr.length; i++) log1(arr[i]);
+
+      const log2 = mkLogger(document.getElementById("r2"));
+      for (const n of arr) log2(n);
+
+      const log3 = mkLogger(document.getElementById("r3"));
+      let j = 0;
+      while (j < arr.length) { log3(arr[j]); j++; }
+
+      const log4 = mkLogger(document.getElementById("r4"));
+      arr.forEach((n) => log4(n));
+    </script>
+  </body>
+</html>

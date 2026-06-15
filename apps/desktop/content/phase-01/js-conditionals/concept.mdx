@@ -1,0 +1,353 @@
+## JS conditionals — `if`, `else`, `switch`
+
+Programs make decisions. Every page you've ever used responds differently depending on something — are you logged in? was the form valid? is dark mode on? are there any items in the cart? **Conditionals** are how you express those decisions in code: "if this is true, do this; otherwise, do that." Two syntaxes — `if/else` and `switch` — plus a handful of expression-level conditionals (ternary, short-circuit) cover virtually every decision you'll ever write.
+
+<Analogy>
+A conditional is **a fork in the road**.
+
+You're walking, you reach a fork. A sign tells you which way to go based on where you're heading: "to the lake — left; to the village — right." You read the sign, pick a path, keep walking. The fork *itself* doesn't take you anywhere — it just routes you.
+
+`if/else` is exactly that fork. The condition is the sign's question ("are you going to the lake?"); the body is the path you take if the answer is yes; the `else` is the path if no. Code execution flows through one branch or the other and rejoins after the fork.
+
+Some forks have three or more paths. The trail to the lake branches into "north shore," "south shore," "boat dock" further down. That's `else if` — a chain of forks where each asks a different question and the first match wins.
+
+A `switch` is the **lookup table at a train station**. Trains 1, 2, 3, 4 go to different cities. You don't ask "is this train 1? then to Paris" then "is this train 2? then to Brussels" — you read the destination from a board, organized by train number. `switch` is the same: one value, many possible matches, one matching branch executes. Every time you find yourself writing four or more `else if` against the same variable, a `switch` reads cleaner.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the flow of if-else if-else, switch, and ternary operator"
+  caption="Three syntaxes for the same idea — branching execution. if/else for free-form questions; switch for lookups against one value; ternary for inline expressions."
+>
+
+```
+   if / else if / else                      switch (value)
+   ──────────────────                       ──────────────
+   if (cond1) { … }                         switch (kind) {
+   else if (cond2) { … }                      case "a": …; break;
+   else if (cond3) { … }                      case "b": …; break;
+   else { … }                                 default:  …;
+                                            }
+
+   ternary (expression form)
+   ─────────────────────────
+   const label = isAdmin ? "Admin" : "User";
+```
+
+</Illustration>
+
+### `if` and `else`
+
+```js
+const age = 18;
+
+if (age >= 18) {
+  console.log("You can vote.");
+} else {
+  console.log("Too young to vote.");
+}
+```
+
+The shape is always `if (condition) { … }` optionally followed by `else { … }`. The condition can be any expression — JavaScript treats it as truthy/falsy according to the rules from the last lesson.
+
+Chain multiple checks with `else if`:
+
+```js
+if (status === "ok") {
+  /* success */
+} else if (status === "pending") {
+  /* still working */
+} else if (status === "failed") {
+  /* show error */
+} else {
+  /* unknown status */
+}
+```
+
+The chain stops at the first match. After that, control jumps past the entire `if/else if/else`.
+
+#### Always use braces, even for one-line bodies
+
+```js
+// AVOID — works, but breaks the moment you add a second line
+if (loggedIn) navigate("/dashboard");
+
+// PREFERRED
+if (loggedIn) {
+  navigate("/dashboard");
+}
+```
+
+The braced form costs you nothing and prevents the famous "Apple goto fail" class of bugs where someone adds a second line that accidentally executes unconditionally.
+
+### `switch` — when one value drives many branches
+
+```js
+switch (kind) {
+  case "circle":
+    area = Math.PI * radius * radius;
+    break;
+  case "square":
+    area = side * side;
+    break;
+  case "rectangle":
+    area = width * height;
+    break;
+  default:
+    area = 0;
+}
+```
+
+Three things to memorize about `switch`:
+
+1. **Cases use `===`.** No type coercion. `case "1"` matches the string "1", not the number 1.
+2. **`break` is required.** Without it, execution **falls through** to the next case. This is occasionally useful but mostly a footgun. Forgetting `break` is the single most common `switch` bug.
+3. **`default` is the else.** Runs when no case matched. Put it last by convention.
+
+A nice trick: stack multiple cases when they share a body:
+
+```js
+switch (day) {
+  case "Mon":
+  case "Tue":
+  case "Wed":
+  case "Thu":
+  case "Fri":
+    return "weekday";
+  case "Sat":
+  case "Sun":
+    return "weekend";
+}
+```
+
+(Note the `return` — when a `switch` lives inside a function, you can use `return` instead of `break` and the fallthrough problem disappears, because returning *also* exits the function. Some teams prefer this style for that reason.)
+
+### The ternary operator
+
+For a quick "if A then X else Y" in an expression, use the ternary:
+
+```js
+const label = isAdmin ? "Admin" : "User";
+
+const button = isLoading
+  ? "Loading…"
+  : "Save";
+```
+
+The shape is `condition ? value-if-true : value-if-false`. It returns a value, which means you can use it inside template literals, JSX, function arguments — anywhere an expression goes.
+
+**When to use it:** for one decision producing one value. Don't try to nest ternaries; it gets unreadable fast:
+
+```js
+// PAIN
+const x = a ? (b ? "ab" : "a") : (c ? "c" : "none");
+
+// USE if/else IF YOU'RE DOING THIS
+let x;
+if (a) x = b ? "ab" : "a";
+else x = c ? "c" : "none";
+```
+
+A nested ternary read at 2am is everyone's least favorite kind of code review.
+
+### `&&` and `||` as conditionals
+
+Short-circuit operators turn into mini-conditionals:
+
+```js
+// Run a function only when condition is true
+loggedIn && trackEvent("page_view");
+
+// Default value pattern
+const name = user.name || "Guest";
+
+// Optional chain + default — the modern combo
+const avatar = user?.profile?.avatar?.url ?? "/default.png";
+```
+
+These are *expression-level* conditionals — they evaluate to a value or skip work. Powerful inside JSX, function arguments, and template literals.
+
+### Guard clauses: avoiding deep nesting
+
+A function that handles errors and special cases up front, then runs the main logic at the end, reads much better than one that nests everything inside `if`:
+
+```js
+// HARDER TO READ
+function processOrder(order) {
+  if (order != null) {
+    if (order.items.length > 0) {
+      if (order.user.active) {
+        // ... actual work, indented 3 levels deep
+      } else {
+        return "user inactive";
+      }
+    } else {
+      return "no items";
+    }
+  } else {
+    return "no order";
+  }
+}
+
+// MUCH BETTER (guard clauses)
+function processOrder(order) {
+  if (order == null) return "no order";
+  if (order.items.length === 0) return "no items";
+  if (!order.user.active) return "user inactive";
+
+  // ... actual work, no indentation
+}
+```
+
+This pattern is so widely loved it has a name: **early return** or **guard clauses**. The pattern is: handle every edge case at the top, return immediately, then the rest of the function is the happy path with no indentation. Adopting this single habit makes any codebase noticeably cleaner.
+
+<ExampleProject
+  src="if-else-ladder"
+  title="An age category checker"
+  description="A page with a number input for age and a button. The script uses an if/else if/else ladder to label the user as 'child', 'teen', 'adult', or 'senior'. Demonstrates the chain pattern and includes a refactored version using a single ternary for comparison."
+/>
+
+<ExampleProject
+  src="switch-vs-if"
+  title="The same logic, two ways"
+  description="A status-color-coder rendered both as an if/else if/else chain AND as a switch statement, side by side. Identical behavior — readability comparison. Includes a 'multiple cases share a body' example."
+/>
+
+<Exercise
+  title="Tip calculator with guard clauses"
+  starter={`Create a page with a number input for "bill amount" and a
+button.
+
+When clicked, your script should:
+
+  1. Read the bill from the input. If it's empty or 0 or
+     negative, show "Enter a valid bill amount" and stop.
+     (Guard clauses — early returns!)
+
+  2. Determine the tip percentage:
+     - bill < 20      → 20%
+     - bill < 50      → 18%
+     - bill < 100     → 15%
+     - bill ≥ 100     → 12%
+
+  3. Calculate tip amount and total.
+
+  4. Use a template literal to display: "Bill: $X · Tip: $Y
+     (Z%) · Total: $W"
+
+Use:
+  - At least two guard-clause early returns at the top.
+  - An if/else if/else ladder for the tier selection.
+  - A template literal for the output.`}
+>
+
+- The function has guard-clause early returns at the top (no deep nesting).
+- The tier ladder uses `if/else if/else if/else`, not nested `if`s.
+- The conditions are checked in the right order (less restrictive last, otherwise the first condition catches everything).
+- The output uses a template literal with `${...}` for the values.
+- Numbers are formatted to two decimal places (`.toFixed(2)`).
+- The page doesn't crash on edge inputs (empty string, negative number, non-number).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `if/else` and a `switch` statement?
+
+**A:** Both branch execution, but they're optimized for different shapes of decision:
+
+- **`if/else`** chains test **different conditions** that can involve different variables: `if (a > 10 && b === "x") … else if (c < 5) …`. Best when each branch is a free-form question.
+- **`switch`** tests **one value** against many possible matches: `switch (status) { case "ok": …; case "failed": …; }`. Best when you're routing based on a single variable's value.
+
+Mechanically: `switch` uses strict equality (`===`) and requires `break` to prevent falling through to the next case. `if/else` doesn't need either of those. As a rule, if you're writing 4+ `else if` against the same variable, a `switch` reads cleaner.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is the ternary operator and when do you use it?
+
+**A:** The ternary is the **expression-form** of `if/else` — three operands: `condition ? valueIfTrue : valueIfFalse`. It evaluates to one of the two values.
+
+```js
+const label = isAdmin ? "Admin" : "User";
+```
+
+Use it for **one decision producing one value**, especially inline:
+
+- In JSX: `<div>{isLoading ? "…" : data}</div>`
+- In template literals: `` `Saved ${count} item${count === 1 ? '' : 's'}` ``
+- For default values when the choice is more nuanced than `||` or `??` handle.
+
+Avoid **nesting ternaries** — they become unreadable after one level. If you find yourself writing `a ? b : c ? d : e`, switch to an `if/else if` chain.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's "fallthrough" in a `switch` statement, and why is it considered a footgun?
+
+**A:** Without `break` at the end of a `case`, execution **continues into the next case** instead of exiting the switch. So:
+
+```js
+switch (x) {
+  case 1:
+    doA();
+  case 2:
+    doB();
+    break;
+}
+```
+
+When `x` is `1`, BOTH `doA()` and `doB()` run. The author probably meant only `doA()` but forgot the `break`. The bug is silent — no error, no warning, just unexpected behavior.
+
+Most modern linters (ESLint's `no-fallthrough`) flag missing `break`s. The legitimate fallthrough use is stacking cases that share a body:
+
+```js
+case "Sat":
+case "Sun":
+  return "weekend";
+```
+
+Some style guides forbid `switch` entirely for this reason and prefer lookup objects or `if/else` chains. A defensive alternative: put your switch inside a function and `return` from each case — returning exits the function regardless of fallthrough, so the missing-`break` bug can't happen.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What are "guard clauses," and why do experienced developers prefer them over nested ifs?
+
+**A:** A **guard clause** (also "early return") is an `if` that handles an edge case and immediately returns, **before** the function's main logic. Instead of:
+
+```js
+function processOrder(order) {
+  if (order != null) {
+    if (order.items.length > 0) {
+      if (order.user.active) {
+        // main logic, 3 levels deep
+      }
+    }
+  }
+}
+```
+
+you write:
+
+```js
+function processOrder(order) {
+  if (order == null) return "no order";
+  if (order.items.length === 0) return "no items";
+  if (!order.user.active) return "user inactive";
+
+  // main logic, no indentation
+}
+```
+
+Three benefits:
+
+1. **Readability.** The happy path is unindented, easy to follow.
+2. **Locality.** Each edge case lives next to the condition that triggered it.
+3. **Easier to extend.** Adding a new precondition is one line at the top, not a new wrapper around everything.
+
+The pattern is sometimes called "fail fast." Almost every modern style guide recommends it. The one tradeoff: multiple returns in a function, which some older styles consider impure — most modern teams happily trade that for the readability.
+
+</InterviewQuestion>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Age category checker</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin: 12px 0; }
+      label { font-size: 13px; color: #6b7280; }
+      input { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; margin: 4px 0 12px; }
+      button { padding: 10px 18px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+      button:hover { background: #3a53c6; }
+      .result { font-size: 18px; font-weight: 700; margin-top: 12px; }
+      .child  { color: #ec4899; }
+      .teen   { color: #6366f1; }
+      .adult  { color: #047857; }
+      .senior { color: #b45309; }
+      .err    { color: #b91c1c; }
+      .pre { background: #1c2230; color: #e6edf3; padding: 14px; border-radius: 8px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Age category checker</h1>
+
+    <div class="card">
+      <label for="age">Age</label>
+      <input id="age" type="number" min="0" value="22" />
+      <button id="check">What am I?</button>
+      <div id="out" class="result">—</div>
+    </div>
+
+    <p style="color: #6b7280; font-size: 13px;">The script behind this page:</p>
+
+    <pre class="pre">function category(age) {
+  // Guard clause — fail fast on invalid input
+  if (typeof age !== "number" || Number.isNaN(age)) {
+    return { label: "Enter a number", klass: "err" };
+  }
+  if (age &lt; 0) {
+    return { label: "Age can't be negative", klass: "err" };
+  }
+
+  // The ladder — first match wins
+  if (age &lt; 13) return { label: "Child",  klass: "child" };
+  if (age &lt; 20) return { label: "Teen",   klass: "teen" };
+  if (age &lt; 65) return { label: "Adult",  klass: "adult" };
+  return            { label: "Senior", klass: "senior" };
+}</pre>
+
+    <script>
+      function category(age) {
+        if (typeof age !== "number" || Number.isNaN(age)) {
+          return { label: "Enter a number", klass: "err" };
+        }
+        if (age < 0) {
+          return { label: "Age can't be negative", klass: "err" };
+        }
+        if (age < 13) return { label: "Child",  klass: "child" };
+        if (age < 20) return { label: "Teen",   klass: "teen" };
+        if (age < 65) return { label: "Adult",  klass: "adult" };
+        return            { label: "Senior", klass: "senior" };
+      }
+
+      document.getElementById("check").addEventListener("click", () => {
+        const raw = document.getElementById("age").value;
+        const age = raw === "" ? NaN : Number(raw);
+        const { label, klass } = category(age);
+        const out = document.getElementById("out");
+        out.className = "result " + klass;
+        out.textContent = label;
+      });
+    </script>
+  </body>
+</html>

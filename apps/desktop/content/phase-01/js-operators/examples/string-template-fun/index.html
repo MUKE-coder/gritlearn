@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Template literals + falsy table</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      pre { background: #1c2230; color: #e6edf3; padding: 14px; border-radius: 8px; font-size: 12px; line-height: 1.5; overflow-x: auto; }
+      pre .var { color: #58a6ff; }
+      pre .str { color: #3fb950; }
+      pre .punct { color: #aeb9c7; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; font-family: ui-monospace, monospace; font-size: 13px; }
+      th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; background: #f9fafb; }
+      tr.falsy td { color: #b91c1c; background: #fef2f2; }
+      tr.truthy td { color: #047857; background: #f0fdf4; }
+      tr.surprise td { font-weight: 700; }
+      .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+      .b-falsy { background: #b91c1c; color: white; }
+      .b-truthy { background: #047857; color: white; }
+    </style>
+  </head>
+  <body>
+    <h1>Template literals</h1>
+    <p>The modern way to build strings that mix text and values.</p>
+
+    <pre><span class="var">const</span> name = <span class="str">"Aisha"</span>;
+<span class="var">const</span> age  = 22;
+<span class="var">const</span> greeting = <span class="str">`Hello, ${'$'}{name}!
+You're ${'$'}{age} years old.
+In 10 years you'll be ${'$'}{age + 10}.`</span>;</pre>
+
+    <p>Output:</p>
+    <pre id="out"></pre>
+
+    <h2 style="margin-top: 40px;">The falsy table</h2>
+    <p>The six values JavaScript treats as <code>false</code> in a boolean context.</p>
+    <table>
+      <thead><tr><th>Value</th><th>typeof</th><th>Boolean(...)</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p style="color: #6b7280; font-size: 13px; margin-top: 14px;">
+      The bottom three rows highlight common <em>truthy</em> values that surprise people. <code>[]</code> and <code>{}</code> are both truthy.
+    </p>
+
+    <script>
+      const name = "Aisha";
+      const age  = 22;
+      const greeting = `Hello, ${name}!
+You're ${age} years old.
+In 10 years you'll be ${age + 10}.`;
+      document.getElementById("out").textContent = greeting;
+
+      const samples = [
+        { val: false,     show: "false" },
+        { val: 0,         show: "0" },
+        { val: -0,        show: "-0" },
+        { val: "",        show: '""' },
+        { val: null,      show: "null" },
+        { val: undefined, show: "undefined" },
+        { val: NaN,       show: "NaN" },
+        { val: [],        show: "[]",       surprise: true },
+        { val: {},        show: "{}",       surprise: true },
+        { val: "0",       show: '"0"',     surprise: true },
+        { val: " ",       show: '" "',     surprise: true },
+      ];
+      document.getElementById("rows").innerHTML = samples.map((s) => {
+        const isFalsy = !s.val && !(typeof s.val === "object" && s.val !== null);
+        // Above isn't perfect; use the language definition:
+        const truthy = Boolean(s.val);
+        const klass = truthy ? "truthy" : "falsy";
+        const badge = truthy
+          ? '<span class="badge b-truthy">truthy</span>'
+          : '<span class="badge b-falsy">falsy</span>';
+        return `<tr class="${klass} ${s.surprise ? 'surprise' : ''}"><td>${s.show}</td><td>${typeof s.val}</td><td>${badge}</td></tr>`;
+      }).join("");
+    </script>
+  </body>
+</html>

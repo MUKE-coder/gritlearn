@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>switch vs if/else</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pane h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 14px; color: #4763e4; }
+      pre { background: #1c2230; color: #e6edf3; padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; overflow-x: auto; margin: 0 0 12px; }
+      .demo { display: flex; gap: 6px; flex-wrap: wrap; }
+      .demo button { padding: 6px 10px; border: 1px solid #d1d5db; background: white; border-radius: 6px; font-size: 12px; font-family: ui-monospace, monospace; cursor: pointer; }
+      .demo button:hover { background: #4763e4; color: white; border-color: #4763e4; }
+      .label { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-top: 8px; }
+      .ok      { background: #ecfdf5; color: #047857; }
+      .pending { background: #fffbeb; color: #b45309; }
+      .failed  { background: #fef2f2; color: #b91c1c; }
+      .unknown { background: #f3f4f6; color: #6b7280; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Same logic, two ways</h1>
+    <p>Both panes label a status string with one of four colors. Pick any status — both panes return the same label.</p>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2>if / else if / else</h2>
+        <pre>function label(s) {
+  if (s === "ok")       return "ok";
+  if (s === "pending")  return "pending";
+  if (s === "failed")   return "failed";
+  return "unknown";
+}</pre>
+        <div class="demo">
+          <button data-status="ok">ok</button>
+          <button data-status="pending">pending</button>
+          <button data-status="failed">failed</button>
+          <button data-status="weird">weird</button>
+        </div>
+        <div id="ifOut"></div>
+      </div>
+
+      <div class="pane">
+        <h2>switch</h2>
+        <pre>function label(s) {
+  switch (s) {
+    case "ok":      return "ok";
+    case "pending": return "pending";
+    case "failed":  return "failed";
+    default:        return "unknown";
+  }
+}</pre>
+        <div class="demo">
+          <button data-status="ok">ok</button>
+          <button data-status="pending">pending</button>
+          <button data-status="failed">failed</button>
+          <button data-status="weird">weird</button>
+        </div>
+        <div id="switchOut"></div>
+      </div>
+
+    </div>
+
+    <script>
+      function labelIf(s) {
+        if (s === "ok")      return "ok";
+        if (s === "pending") return "pending";
+        if (s === "failed")  return "failed";
+        return "unknown";
+      }
+      function labelSwitch(s) {
+        switch (s) {
+          case "ok":      return "ok";
+          case "pending": return "pending";
+          case "failed":  return "failed";
+          default:        return "unknown";
+        }
+      }
+      function render(target, value) {
+        target.innerHTML = `<span class="label ${value}">${value}</span>`;
+      }
+      document.querySelectorAll(".pane").forEach((pane, i) => {
+        const out = pane.querySelector("[id]");
+        pane.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const s = btn.dataset.status;
+            const fn = i === 0 ? labelIf : labelSwitch;
+            render(out, fn(s));
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
