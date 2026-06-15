@@ -1,0 +1,499 @@
+## Clean code — naming and structure
+
+Code is read way more often than it's written. Every line you commit will be re-read by someone — your reviewer this week, your future self in six months, a new hire in a year — and the readability of that line decides whether they understand it in three seconds or three minutes. "Clean code" isn't a style debate. It's a set of habits that lower the cost of *reading* code, so the team can ship faster without the codebase rotting into a maze.
+
+<Analogy>
+Clean code is **a well-organized kitchen during a dinner service**.
+
+Two restaurants. Both serve the same dishes. In the first kitchen, the chef keeps every tool within reach, labeled, in the same drawer they've been in for five years. Salt is by the stove. Knives are sharpened and lined up. Mise en place — the prep — is done before service starts; each station has its components in clearly-labeled containers. New hires shadow for one shift and the next day they can find anything. Speed comes from *predictability*: nobody is hunting for a slotted spoon at 8:47pm.
+
+In the second kitchen, every shift is improvised. The mise en place is in random tupperware. Pans are wherever they were last left. The sous-chef knows the system because they invented it; nobody else does. Every new cook spends three weeks learning the kitchen before they're useful. Mistakes happen because shortcuts hide in plain sight — "oh, you grab the *small* pan for the sauce, not the *medium* one, because the medium one's handle is loose." Bugs cost dinners.
+
+A codebase is the same kitchen. The "clean" habits are the same ideas, mapped to code:
+
+- **Names tell you what's in the container.** `userCount` says what's in the variable; `n` makes you read the next ten lines to find out.
+- **Functions are stations with one job.** A function called `getOrCreateUserAndSendEmail` is doing three jobs and the name admits it. Split. Each has a clear input, a clear output, a name that tells the truth.
+- **Mise en place — declare close to use.** A variable assigned 40 lines before it's first read is salt that lives across the room. Move it next to the burner.
+- **Consistency reduces decisions.** A team that always sorts imports the same way, names hooks the same way, structures files the same way doesn't waste calories on "where does this go?" — they ship features.
+- **Comments are food labels.** Useful when the dish has a non-obvious ingredient (a workaround, a constraint, a "why this is upside-down"). Pointless when the dish is just labeled "soup" — the code already shows that.
+
+The shift from "I can write it" to "I can write it so someone else won't curse me" is the difference between a junior and a mid-level engineer. None of the habits below are advanced. They compound brutally. A team that follows them ships features in days; a team that doesn't spends weeks reverse-engineering its own history.
+</Analogy>
+
+<Illustration
+  alt="Two side-by-side code samples — same function, before and after a clean-code refactor"
+  caption="Same behaviour, different reading time. The 'after' takes 3 seconds to understand."
+>
+
+```
+   BEFORE                                       AFTER
+
+   function p(a, b) {                           function priceWithTax(cents, rate) {
+     let r = 0;                                   return Math.round(cents * (1 + rate));
+     for (let i = 0; i < a.length; i++) {       }
+       r += a[i].x * b;
+     }                                           function cartTotal(items, taxRate) {
+     return r;                                     return items.reduce(
+   }                                                 (sum, item) => sum + priceWithTax(item.priceCents, taxRate),
+                                                     0,
+   const t = p(c, 1.18);                           );
+                                                  }
+
+                                                  const total = cartTotal(cart, 0.18);
+```
+
+</Illustration>
+
+### Names — the highest-leverage tool
+
+Naming is the single biggest readability lever. A function with a good name doesn't need a comment explaining what it does. A variable with a good name doesn't need to be traced through ten lines.
+
+**Six rules of thumb:**
+
+1. **Say what it IS, not what it LOOKS LIKE.** `items` over `list`. `usersWithoutEmail` over `filtered`. `priceCents` over `n`.
+2. **Bool names read as questions.** `isAdmin`, `hasEmail`, `canEdit` — read at the call site as `if (user.isAdmin)`. A bool named `admin` reads as if it might be a user object.
+3. **Functions are verbs.** `formatPrice`, `loadUser`, `validateEmail`. A function named `total` should be a value; a function named `calculateTotal` is a function.
+4. **Consistent units in the name.** `delayMs`, `priceCents`, `durationSec`. Saves you from the mixed-unit bug (and the next reader from a long debugging session).
+5. **Short scopes can have short names.** The `i` in a tiny `for` loop is fine. The variable that lives across 40 lines deserves a real name.
+6. **Avoid name-stuttering.** `user.userName` and `user.userEmail` stutter. `user.name` and `user.email` read cleanly. Same for files: `Button.tsx` exports `Button`, not `ButtonComponent`.
+
+**Names to avoid almost always:**
+
+- Single letters outside trivial loops: `data`, `info`, `tmp`, `obj`, `x`.
+- "Manager", "Handler", "Processor" suffixes when they hide what the class actually does (`UserManager` could be anything).
+- Abbreviations the team didn't establish (`usrLst`, `cnclBtn`).
+
+### Functions — one thing per function
+
+A function should answer **one** question or perform **one** action. When the name has "and" in it (`fetchUserAndCalculate`), it's two functions wearing a trench coat.
+
+**Three smells that mean "split me":**
+
+- **More than ~25 lines.** Not a hard limit — but past 25, you're usually doing multiple things.
+- **The body has its own visible "sections" separated by blank lines.** Each section is a candidate function.
+- **You can't write a one-sentence docstring.** If "this function does X and Y" is the simplest description, it's two functions.
+
+The refactor: extract each section to its own function, give it a verb name, call the new functions in sequence. The wrapper function becomes a table of contents:
+
+```js
+async function checkout(cart) {
+  const validated = validateCart(cart);
+  const total = calculateTotal(validated);
+  const payment = await chargeCustomer(total);
+  await sendReceipt(payment);
+  return payment;
+}
+```
+
+Five lines. The reader knows the shape immediately. Each helper is on its own, easy to test in isolation.
+
+### Single level of abstraction per function
+
+A subtle smell: a function that mixes high-level orchestration with low-level details:
+
+```js
+async function checkout(cart) {
+  // high-level
+  const total = await calculateTotal(cart);
+
+  // suddenly very low-level
+  let buf = "";
+  for (let i = 0; i < cart.length; i++) {
+    buf += cart[i].name + ":" + cart[i].priceCents + ",";
+  }
+  buf = buf.slice(0, -1);
+
+  await fetch("/api/order", { method: "POST", body: buf });
+}
+```
+
+The middle block is a serialization detail. It doesn't belong next to the high-level steps. Extract it:
+
+```js
+async function checkout(cart) {
+  const total = await calculateTotal(cart);
+  const payload = serializeCart(cart);
+  await fetch("/api/order", { method: "POST", body: payload });
+}
+```
+
+The reader sees three things happening; each is named. The "how" of serialization is one function away if they want it.
+
+### Boolean parameters — usually a smell
+
+```js
+sendEmail(user, true);
+```
+
+What does `true` mean? "Send as HTML"? "Mark as urgent"? "Resend"? The reader has to find the function. Better:
+
+```js
+sendEmail(user, { html: true });
+// or two functions
+sendEmailAsHtml(user);
+```
+
+The named option is self-documenting. The two-function split is even clearer when the flag changes the behavior significantly.
+
+### Magic numbers — name your constants
+
+```js
+if (user.failedAttempts > 5) lockAccount(user);
+```
+
+What's special about 5? Bury the number; name the rule:
+
+```js
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+if (user.failedAttempts > MAX_FAILED_LOGIN_ATTEMPTS) lockAccount(user);
+```
+
+Three wins: the rule is named, the value is one place to change, and a `grep` for the constant finds every place it's enforced.
+
+### Comments — code says what, comments say why
+
+Code already says **what** it does. Variable names and function names ARE the documentation. Comments should explain **why**:
+
+```js
+// Bad — restates the code
+// Increment the counter by 1
+count++;
+
+// Good — explains a non-obvious choice
+// Stripe uses cents to avoid floating-point bugs in money math.
+const totalCents = subtotalCents + taxCents;
+```
+
+Five rules:
+
+1. **No "what" comments.** They go stale (the code changes; the comment doesn't); they add reading time; the code itself should be readable enough.
+2. **"Why" comments are gold.** The reason for a workaround, a magic number you can't change, a constraint from an external system.
+3. **Don't apologize.** `// TODO: this is hacky` is fine; `// I know this is bad, sorry` wastes a line.
+4. **Don't leave commented-out code.** Git remembers what was there. Delete; commit; move on.
+5. **Use JSDoc / TSDoc for public APIs.** The structured form is what editors read for tooltips. Worth the ceremony for library code; overkill for app code.
+
+### File structure — readable from the top
+
+A file should read like a newspaper article: headline at the top, key info next, details below. In a JS / TS file:
+
+```ts
+// 1. Imports (top)
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+// 2. Types & constants
+type UserProps = { name: string };
+const MAX_LENGTH = 100;
+
+// 3. The main thing this file exports
+export function UserCard({ name }: UserProps) {
+  // body
+  return <Button>{name}</Button>;
+}
+
+// 4. Helper functions used only here (bottom)
+function shortenName(name: string) { /* ... */ }
+```
+
+Imports at the top. Types and module-level constants next. The exported thing. Helpers below — they're hoisted (function declarations), so they can be called from above. A reader who lands on the file knows what it exports without scrolling.
+
+### Directory structure — co-locate by feature
+
+Big debate, simple answer for most apps: **group by feature, not by file type**.
+
+```
+   ❌ BY FILE TYPE                       ✓ BY FEATURE
+   ──────────────────                    ──────────────────
+   /components                            /users
+     UserCard.tsx                           UserCard.tsx
+     ProfilePage.tsx                        UserCard.test.tsx
+     ProductList.tsx                        useUsers.ts
+   /hooks                                   types.ts
+     useUsers.ts                          /products
+     useProducts.ts                         ProductList.tsx
+   /types                                   useProducts.ts
+     user.ts                                types.ts
+     product.ts
+```
+
+The "by type" layout looks neat but every edit requires opening three folders. "By feature" keeps everything related to one concern next to each other. Need to refactor user code? Open `/users` and everything's there.
+
+The exception: shared primitives (Button, Input, layout) live in `/components/ui` or `/components/shared` because they're used by every feature.
+
+### Don't repeat yourself — but don't pre-extract either
+
+The Don't-Repeat-Yourself (DRY) principle is overrated when followed too early. Three copies of similar code is usually fine — extract on the **fourth**, when you actually know the shape they share.
+
+```js
+// 3 places that look similar — leave them
+function formatPrice(c) { return "$" + (c / 100).toFixed(2); }
+function formatRefund(c) { return "-$" + (c / 100).toFixed(2); }
+function formatDiscount(c) { return "(" + (c / 100).toFixed(2) + ")"; }
+
+// 4th identical-shaped function would justify a helper
+const formatCents = (c, { sign = "+", brackets = false } = {}) => { ... };
+```
+
+Premature DRY produces "AbstractBaseFormatter" classes that handle three real callers and twelve imagined ones. The abstraction is the wrong shape because nobody knew the right one yet.
+
+**Three good rules of thumb:**
+
+- Wait for **three real call sites** before extracting.
+- When you extract, name the new function for what it **does**, not what it's **for** (`formatCents`, not `priceDisplayHelper`).
+- Be willing to **un-extract** if you realize the shared shape was wrong.
+
+### Premature optimization — the famous warning
+
+> "Premature optimization is the root of all evil." — Donald Knuth
+
+The right time to optimize is when a profiler shows you a hotspot. Before that, optimize for **readability**. The intuition that "this loop will be slow" is wrong far more often than it's right; modern engines are stupendously fast and most performance bugs come from N+1 queries, unnecessary re-renders, and big bundles — not slow loops.
+
+Two consequences for daily code:
+
+- Write the `.map`/`.filter`/`.reduce` version even if you think the `for` loop is faster. Profile first; rewrite if measurement justifies it.
+- Don't pre-memoize every value "just in case." `useMemo` and `useCallback` have a cost; un-needed ones make code harder to read for zero performance gain.
+
+### What "clean code" doesn't mean
+
+A few common misreadings worth correcting:
+
+- **It doesn't mean "few lines."** A 5-line function with bad names is harder to read than a 25-line function with good names.
+- **It doesn't mean "no comments."** It means *useful* comments — why, not what.
+- **It doesn't mean "follow a 400-page style guide."** It means agree on a few conventions and apply them consistently.
+- **It doesn't mean "rewrite the codebase."** Most legacy code can be improved in tiny patches over months. The Boy Scout rule: leave the campsite a little cleaner than you found it.
+
+The compounding effect, year over year: a clean codebase stays approachable; a sloppy one rots. The investment in good habits pays back for as long as the code exists.
+
+<ExampleProject
+  src="before-after-refactor"
+  title="A 60-line tangled function refactored into a clean composition"
+  description="A real-shaped checkout function with magic numbers, single-letter variables, mixed abstraction levels, and a 60-line body. The 'after' panel shows the same logic refactored into named constants, helper functions, and a six-line wrapper. Read both; feel the difference."
+/>
+
+<ExampleProject
+  src="naming-rename"
+  title="Rename one variable at a time — watch readability climb"
+  description="A short function with five bad variable names. Five steps; each one renames a single variable. After each rename, re-read the function and notice how much easier it is to understand. Demonstrates that naming is the cheapest, highest-impact refactor."
+/>
+
+<Exercise
+  title="Refactor this 50-line function into clean code"
+  starter={`Start with this function (paste it into your editor):
+
+  function p(a, t) {
+    let r = 0;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) {
+      let x = a[i].p * a[i].q;
+      if (a[i].o == true) x = x * 0.9;
+      r = r + x;
+    }
+    if (r > 1000) {
+      d = r * 0.1;
+    }
+    let f = r + (r * t / 100) - d;
+    if (f < 0) f = 0;
+    return { s: r, d: d, t: r * t / 100, f: f };
+  }
+
+  // Sample call
+  const c = [
+    { p: 1200, q: 2, o: false },
+    { p: 2500, q: 1, o: true  },
+  ];
+  console.log(p(c, 18));
+
+Apply the principles from this lesson. At minimum:
+
+  1. Give every variable and parameter a name that says what it IS.
+  2. Replace magic numbers (0.9, 0.1, 1000) with named constants.
+  3. Split the function so each helper does ONE thing
+     (line-item total, cart subtotal, discount, tax).
+  4. The final function should be a table of contents — 4-6 lines
+     calling the helpers.
+  5. Use .map/.reduce instead of the for loop.
+  6. Make the return value's field names readable
+     (subtotal, discount, tax, final).
+
+Bonus:
+  - Add JSDoc to the top-level function describing what it does.
+  - Test it with at least two carts and confirm the output matches.`}
+>
+
+- All variable names express **what the value is** — no single letters except in trivial scopes.
+- All parameters are named (the input array is named for what it contains; the rate parameter says it's a percentage).
+- The three magic numbers (0.9 loyalty discount, 0.1 large-order discount, 1000 threshold) are named constants at module top.
+- The function is split into at least 3 helper functions, each doing one thing.
+- The top-level function is short (≤ 8 lines) and reads as a sequence of named calls.
+- The for loop is replaced with `.reduce` (or `.map` + `.reduce`).
+- The returned object uses descriptive field names.
+- Output for the sample input matches the original within rounding.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do experienced developers spend time renaming variables?
+
+**A:** **Because code is read way more often than it's written, and a good name saves every future reader (including you) 30 seconds of figuring out what a value is.**
+
+Concrete cost-savings:
+
+- **Onboarding.** A new developer reading `userCount` understands it immediately. Reading `n` requires tracing where it came from. Multiply by every variable in the file.
+- **Reviews.** A pull request with `subtotalCents = items.reduce(...)` is approvable at a glance. The same with `t = items.reduce(...)` makes the reviewer ask "what's `t`?" — review takes longer; you ship slower.
+- **Bug surface.** Half of "bug found in code review" stories are mixed units (dollars vs cents, seconds vs ms, kilobytes vs bytes). Naming the unit (`priceCents`, `delayMs`) makes the mismatch visible at the call site.
+- **Future-you.** In six months you won't remember why you wrote `r += a[i].p * a[i].q`. You will instantly recognize `subtotal += item.price * item.qty`.
+
+A rename is also the **cheapest** refactor with the **highest** impact:
+
+- Modern editors do it across the file in one keystroke.
+- It doesn't change behaviour — no risk of breaking tests.
+- The diff is purely cosmetic; reviewers can approve in seconds.
+
+The rule of thumb that experienced devs internalize: **when reading a function feels harder than it should, the variables are usually the problem**. Rename three of them; re-read; usually clear.
+
+This is also why most teams' style guides have detailed naming rules — bools as questions, functions as verbs, units in names — even though "style guide" sounds boring. Consistency in naming is the highest-leverage code hygiene a team can enforce.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When should you add comments to code?
+
+**A:** **When the code explains WHAT it does (variable and function names do that) but the WHY is non-obvious. Specifically: a workaround, a constraint, a magic number you can't change, behaviour that would surprise a reader.**
+
+```js
+// ✓ Good — WHY a constant is what it is
+// Stripe's API rejects requests larger than 1MB; chunk above that.
+const MAX_CHUNK_BYTES = 1 << 20;
+
+// ✓ Good — WHY a workaround exists
+// Safari 16 fires `resize` before fonts load; defer one frame
+// so font metrics are stable when we measure.
+requestAnimationFrame(measure);
+
+// ✗ Bad — restates the code, adds nothing
+// Loop through items and sum prices
+const total = items.reduce((s, i) => s + i.price, 0);
+
+// ✗ Bad — apologetic
+// I know this is hacky, sorry
+```
+
+Three rules:
+
+1. **No "what" comments.** The code shows what. Restating wastes lines and goes stale when the code changes.
+2. **"Why" comments are gold.** Why this specific constant. Why this specific order of operations. Why this fix exists. Future readers can't grep for the bug report that drove your decision; the comment is their only record.
+3. **Don't leave commented-out code.** Git remembers what was there. Delete; commit; move on. Commented blocks rot — six months later nobody knows whether to revive them or remove them.
+
+JSDoc / TSDoc are a different category:
+
+```ts
+/**
+ * Format an amount in cents into a localized currency string.
+ * @param cents - The amount in cents.
+ * @param locale - BCP 47 locale tag, e.g. "en-US".
+ * @returns Formatted string, e.g. "$1,234.56".
+ */
+function formatCents(cents: number, locale: string): string { ... }
+```
+
+Worth the ceremony for **library code** (public APIs your team or external users call). Overkill for **app code** (internal helpers used in one place). The line: when the function will be called from outside the file, document it; otherwise let the code speak for itself.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the "single level of abstraction" principle?
+
+**A:** **Inside one function, all the steps should be at roughly the same level of detail. Mixing high-level orchestration with low-level details makes the function harder to read because the reader has to switch mental modes every line.**
+
+Bad:
+
+```js
+async function checkout(cart) {
+  const total = await calculateTotal(cart);   // high-level
+
+  let buf = "";                                 // suddenly very low-level
+  for (let i = 0; i < cart.length; i++) {
+    buf += cart[i].name + ":" + cart[i].priceCents + ",";
+  }
+  buf = buf.slice(0, -1);
+
+  await sendOrderEmail(buf);                    // back to high-level
+}
+```
+
+The middle three lines are *implementation* — building a string. They don't belong next to "calculate the total" and "send the email" — those are *steps in the business flow*. Extract:
+
+```js
+async function checkout(cart) {
+  const total = await calculateTotal(cart);
+  const payload = serializeCart(cart);
+  await sendOrderEmail(payload);
+}
+
+function serializeCart(cart) {
+  return cart.map(item => `${item.name}:${item.priceCents}`).join(",");
+}
+```
+
+The wrapper reads as three named steps. The reader sees the *shape* of checkout instantly. If they want to know how the serialization works, they jump into `serializeCart`. Two levels, separated.
+
+Why it matters:
+
+1. **Top-level function as a table of contents.** A reader who lands on `checkout` should understand "what happens in a checkout" without parsing implementation details. Extracted helpers turn it into a summary.
+2. **Helpers are independently testable.** Once `serializeCart` exists, you can test it without standing up a full checkout flow.
+3. **Refactor confidence.** Changing how the serialization works doesn't risk breaking the high-level flow — you're editing one helper.
+
+A useful heuristic: **a function should read like a description, not a recipe**. If you find yourself describing *how* to do something in a function that's named for *what* needs to happen, extract.
+
+Robert Martin's *Clean Code* devotes a chapter to this. It's the single most useful "refactoring habit" in his book.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do experienced developers warn against premature DRY (Don't Repeat Yourself)?
+
+**A:** **Because extracting a shared helper *before* you know the real shape of what's shared produces an abstraction that fits the imagined use cases, not the real ones. The abstraction has to be re-shaped (or scrapped) the moment a fourth caller arrives with different needs.**
+
+Concrete story:
+
+```js
+// Two formatters. They look similar.
+function formatPrice(c)   { return "$" + (c / 100).toFixed(2); }
+function formatRefund(c)  { return "-$" + (c / 100).toFixed(2); }
+
+// "DRY" temptation — extract early
+function formatCents(c, isRefund) {
+  return (isRefund ? "-" : "") + "$" + (c / 100).toFixed(2);
+}
+```
+
+A week later you need `formatDiscount`. Discounts use parentheses for negatives:
+
+```js
+function formatCents(c, isRefund, isDiscount) {
+  // hmm, isDiscount overrides isRefund... or does it combine?
+  // and what about formatting in EUR? Need a locale flag too...
+}
+```
+
+The boolean parameters explode. Each new caller adds a flag. Six months in, `formatCents` has eight parameters and a 30-line body. Untangling is harder than starting fresh — the abstraction *was the wrong shape* because you extracted before you knew the shape.
+
+The "right time" to extract is **the fourth call site** (some people say the third — the exact number doesn't matter; the principle does). By then you know:
+
+- What's *actually* shared across all uses (not what *looked* shared).
+- What's variable per caller — and that variation drives the helper's parameters.
+- That the duplication is enough of a maintenance burden to justify the abstraction.
+
+Three good rules:
+
+1. **Wait for 3-4 real call sites.** Three copies of similar code is rarely a problem. The fourth justifies extracting.
+2. **Name the helper for what it does, not what it's for.** `formatCents` (does), not `priceDisplayHelper` (for). The "does" name survives use-case changes.
+3. **Be willing to un-extract.** If the shared shape was wrong, inline the helper back into its callers and try again with the new information.
+
+The phrase to remember: **a little duplication is far cheaper than the wrong abstraction**. Sandi Metz's "Wrong Abstraction" talk is the canonical reference; the lesson is one of the most universally-agreed-upon ideas in serious code review.
+
+</InterviewQuestion>

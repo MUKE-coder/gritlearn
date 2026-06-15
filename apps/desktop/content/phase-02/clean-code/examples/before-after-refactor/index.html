@@ -1,0 +1,141 @@
+<!--
+  Same checkout function, two implementations.
+  Tangled: 50 lines, single-letter names, magic numbers, mixed
+  abstraction levels.
+  Clean: same behaviour, six-line wrapper calling four named helpers,
+  constants named, .reduce instead of imperative loop.
+
+  A test panel at the bottom runs both against the same cart to prove
+  they produce identical output.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tangled vs. clean — same behaviour, different reading time</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1000px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col.bad  { border-color: #fda4af; }
+      .col.good { border-color: #86efac; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      pre { background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.8rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.5; overflow-x: auto; }
+      .test {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.6; margin-top: 1rem;
+      }
+      .ok { color: #7fff5b; }
+    </style>
+  </head>
+  <body>
+    <h1>Same checkout — tangled, then clean</h1>
+
+    <div class="grid">
+      <div class="col bad">
+        <h2>❌ Tangled — 25 lines, single letters, magic numbers</h2>
+<pre>function p(a, t) {
+  let r = 0;
+  let d = 0;
+  for (let i = 0; i &lt; a.length; i++) {
+    let x = a[i].p * a[i].q;
+    if (a[i].o == true) x = x * 0.9;
+    r = r + x;
+  }
+  if (r &gt; 100_000) d = r * 0.1;
+  let f = r + (r * t / 100) - d;
+  if (f &lt; 0) f = 0;
+  return { s: r, d: d, t: r * t / 100, f: f };
+}</pre>
+      </div>
+
+      <div class="col good">
+        <h2>✓ Clean — named constants, helpers, 6-line wrapper</h2>
+<pre>const LOYALTY_DISCOUNT   = 0.10;
+const BULK_THRESHOLD     = 100_000;
+const BULK_DISCOUNT_RATE = 0.10;
+
+const lineTotal = (item) =&gt; {
+  const base = item.priceCents * item.qty;
+  return item.isLoyalty
+    ? Math.round(base * (1 - LOYALTY_DISCOUNT))
+    : base;
+};
+const subtotal = (cart) =&gt; cart.reduce((s, i) =&gt; s + lineTotal(i), 0);
+const bulkDiscount = (sub) =&gt; sub &gt; BULK_THRESHOLD ? sub * BULK_DISCOUNT_RATE : 0;
+const taxOf = (sub, ratePct) =&gt; Math.round(sub * ratePct / 100);
+
+function checkout(cart, taxRatePct) {
+  const sub  = subtotal(cart);
+  const disc = bulkDiscount(sub);
+  const tax  = taxOf(sub, taxRatePct);
+  const final = Math.max(0, sub + tax - disc);
+  return { subtotal: sub, discount: disc, tax, final };
+}</pre>
+      </div>
+    </div>
+
+    <div class="test" id="test"></div>
+
+    <script>
+      // ── Tangled ──
+      function p(a, t) {
+        let r = 0; let d = 0;
+        for (let i = 0; i < a.length; i++) {
+          let x = a[i].p * a[i].q;
+          if (a[i].o == true) x = x * 0.9;
+          r = r + x;
+        }
+        if (r > 100_000) d = r * 0.1;
+        let f = r + (r * t / 100) - d;
+        if (f < 0) f = 0;
+        return { s: r, d: d, t: r * t / 100, f: f };
+      }
+
+      // ── Clean ──
+      const LOYALTY_DISCOUNT   = 0.10;
+      const BULK_THRESHOLD     = 100_000;
+      const BULK_DISCOUNT_RATE = 0.10;
+
+      const lineTotal = (item) => {
+        const base = item.priceCents * item.qty;
+        return item.isLoyalty
+          ? Math.round(base * (1 - LOYALTY_DISCOUNT))
+          : base;
+      };
+      const subtotal = (cart) => cart.reduce((s, i) => s + lineTotal(i), 0);
+      const bulkDiscount = (sub) => sub > BULK_THRESHOLD ? sub * BULK_DISCOUNT_RATE : 0;
+      const taxOf = (sub, ratePct) => Math.round(sub * ratePct / 100);
+
+      function checkout(cart, taxRatePct) {
+        const sub  = subtotal(cart);
+        const disc = bulkDiscount(sub);
+        const tax  = taxOf(sub, taxRatePct);
+        const final = Math.max(0, sub + tax - disc);
+        return { subtotal: sub, discount: disc, tax, final };
+      }
+
+      // ── Same input → same output ──
+      const cartTangled = [
+        { p: 12_000, q: 2, o: false },
+        { p: 80_000, q: 1, o: true  },
+      ];
+      const cartClean = [
+        { priceCents: 12_000, qty: 2, isLoyalty: false },
+        { priceCents: 80_000, qty: 1, isLoyalty: true  },
+      ];
+
+      const t = p(cartTangled, 18);
+      const c = checkout(cartClean, 18);
+
+      const fmt = (n) => "UGX " + n.toLocaleString();
+      const out = document.getElementById("test");
+      out.innerHTML =
+        "<span class=\"ok\">$</span> tangled p(cart, 18) → " + JSON.stringify(t) + "\n" +
+        "<span class=\"ok\">$</span> clean   checkout(cart, 18) → " + JSON.stringify(c) + "\n\n" +
+        "<span class=\"ok\">✓</span> final values match: " + (t.f === c.final) + "\n" +
+        "  tangled.f = " + fmt(t.f) + "   clean.final = " + fmt(c.final);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,130 @@
+<!--
+  Five rename steps. Each click renames ONE variable and re-renders
+  the function source so the student can read it again with the new
+  name. Demonstrates how each rename improves understanding by itself.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Naming — one rename at a time</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 1rem 1.2rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.9rem; line-height: 1.6;
+        overflow-x: auto; margin-top: 1rem;
+      }
+      .accent { color: #7fff5b; font-weight: 700; }
+      .step {
+        font-size: 0.78rem; color: #71717a; margin-top: 1rem;
+        text-transform: uppercase; letter-spacing: 0.1em;
+      }
+      .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+      button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-weight: 600; font-size: 0.88rem;
+      }
+      button.active { border-color: #15803d; background: #ecfdf5; }
+      button:hover { background: #f4f4f5; }
+    </style>
+  </head>
+  <body>
+    <h1>Rename one variable at a time</h1>
+    <p>Same function. Each click below renames a single variable, and the source re-renders so you can re-read it. Notice how much clearer the function becomes with each step — naming is the cheapest refactor with the highest return.</p>
+
+    <div class="btns" id="btns"></div>
+    <div class="step" id="step"></div>
+    <pre id="src"></pre>
+
+    <script>
+      const renames = [
+        {
+          label: "0 — start",
+          src: `function f(a, t) {
+  let r = 0;
+  for (let i = 0; i < a.length; i++) {
+    r += a[i].p * a[i].q;
+  }
+  return r * (1 + t);
+}`,
+        },
+        {
+          label: "1 — rename f → cartTotal",
+          src: `function cartTotal(a, t) {
+  let r = 0;
+  for (let i = 0; i < a.length; i++) {
+    r += a[i].p * a[i].q;
+  }
+  return r * (1 + t);
+}`,
+        },
+        {
+          label: "2 — rename a → items",
+          src: `function cartTotal(items, t) {
+  let r = 0;
+  for (let i = 0; i < items.length; i++) {
+    r += items[i].p * items[i].q;
+  }
+  return r * (1 + t);
+}`,
+        },
+        {
+          label: "3 — rename t → taxRate",
+          src: `function cartTotal(items, taxRate) {
+  let r = 0;
+  for (let i = 0; i < items.length; i++) {
+    r += items[i].p * items[i].q;
+  }
+  return r * (1 + taxRate);
+}`,
+        },
+        {
+          label: "4 — rename r → subtotal; p / q → priceCents / qty",
+          src: `function cartTotal(items, taxRate) {
+  let subtotal = 0;
+  for (let i = 0; i < items.length; i++) {
+    subtotal += items[i].priceCents * items[i].qty;
+  }
+  return subtotal * (1 + taxRate);
+}`,
+        },
+        {
+          label: "5 — for loop → .reduce",
+          src: `function cartTotal(items, taxRate) {
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.priceCents * item.qty,
+    0,
+  );
+  return subtotal * (1 + taxRate);
+}`,
+        },
+      ];
+
+      const btns = document.getElementById("btns");
+      const step = document.getElementById("step");
+      const src  = document.getElementById("src");
+
+      function render(i) {
+        step.textContent = renames[i].label;
+        src.innerHTML = renames[i].src
+          .replace(/cartTotal|items|taxRate|subtotal|priceCents|qty/g,
+            (m) => "<span class=\"accent\">" + m + "</span>");
+        document.querySelectorAll("button[data-i]").forEach(b => {
+          b.classList.toggle("active", Number(b.dataset.i) === i);
+        });
+      }
+
+      renames.forEach((r, i) => {
+        const b = document.createElement("button");
+        b.textContent = "step " + i;
+        b.dataset.i = i;
+        b.addEventListener("click", () => render(i));
+        btns.appendChild(b);
+      });
+
+      render(0);
+    </script>
+  </body>
+</html>

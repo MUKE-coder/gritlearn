@@ -1,0 +1,373 @@
+## Debugging with browser devtools
+
+Every browser ships with a full debugger built in. Most developers spend their first year using `console.log` for everything and only later discover that the same browser has breakpoints, step-through execution, network inspection, performance profiling, and DOM editing — all one keystroke away. The shift from "print things and squint" to "pause the program and look around" is the single biggest productivity jump in junior-to-mid development.
+
+<Analogy>
+Browser devtools are **a watchmaker's loupe and tweezers**.
+
+A watchmaker doesn't open a stopped watch by shaking it. They put it under a loupe — a magnifying eyepiece that makes the tiny moving parts visible — and use tweezers to isolate one gear at a time. Each piece can be examined where it sits, in context with its neighbours, while it's still inside the watch. Repairs happen *in situ*; the watchmaker doesn't have to dismantle the whole thing and rebuild it to find out which gear was sticking.
+
+Browser devtools are the same setup, scaled up to your running application. Open them with **F12** (or Cmd+Opt+I on Mac) and you get a magnified view of the running web page:
+
+- **Elements panel** — the loupe over the DOM. Inspect, edit, and try CSS changes in place. The browser shows the live tree; you experiment without reloading.
+- **Console** — write JavaScript that runs in the page's context. Read variables. Call functions. Inspect React components. The REPL is connected to your actual app, with all its state.
+- **Sources / Debugger** — set a breakpoint on any line. When execution hits it, the engine pauses; you walk through one line at a time, watching variables change, seeing the call stack, inspecting the scope at every level.
+- **Network panel** — every request the page makes, with timing, headers, payload, response. The single most useful tool when "the API call isn't working" — you see exactly what went out and what came back.
+- **Application panel** — localStorage, cookies, IndexedDB, service workers. Your app's persistent layer in one place.
+- **Performance panel** — record a few seconds of activity, get a flame graph of what took how long. Where the watchmaker uses a stopwatch.
+
+The mental shift the loupe enables: **stop guessing**. The bug is somewhere specific; the tools tell you exactly where. Instead of adding `console.log("a"); console.log("b"); console.log("c");` and reading the output backwards, you set a breakpoint where you suspect the bug, click "reload," and the engine *brings the bug to you* — paused on the offending line with every variable in scope visible in the side panel.
+
+The rule of thumb that experienced developers wish they'd learned earlier: **every `console.log` you reach for, there's a faster devtools answer**. Breakpoints replace tracing. Network panel replaces "let me check what the request looks like." Performance panel replaces "I think it's slow because of...". Learn the panels once, save thousands of hours over a career.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the devtools layout with the seven main panels labeled"
+  caption="Six panels, one keyboard shortcut. F12 opens the whole suite."
+>
+
+```
+   ┌─ Browser ─────────────────────────────────────────────────────────────┐
+   │  Your page                                                            │
+   │  ── live, running, you can interact with it ──                        │
+   │  ▲                                                                    │
+   │  │  every panel below is INSPECTING this same running page            │
+   │  ▼                                                                    │
+   ├──────────────────────────────────────────────────────────────────────┤
+   │ [Elements] [Console] [Sources] [Network] [Performance] [Application] │
+   ├──────────────────────────────────────────────────────────────────────┤
+   │                                                                       │
+   │   DOM tree              breakpoints             requests              │
+   │   editable CSS          step over / into        timing                │
+   │   live preview          watch expressions       payload + headers     │
+   │                         call stack              response              │
+   │                         scope at each level                           │
+   │                                                                       │
+   └───────────────────────────────────────────────────────────────────────┘
+
+   Open: F12 (Windows / Linux), Cmd + Opt + I (Mac)
+```
+
+</Illustration>
+
+### Console — the everyday entrypoint
+
+The console is a REPL connected to the page. Anything you can write in JavaScript, you can write here:
+
+```js
+// At the console prompt:
+document.title                            // read DOM
+document.title = "Debugging time"          // mutate DOM
+Array.from(document.querySelectorAll("button")).map(b => b.textContent)
+fetch("/api/health").then(r => r.json()).then(console.log)
+```
+
+It runs in the **page's context**. You have access to every global the page does. You can inspect variables defined by your scripts (`window.app`, your React app's root if you exposed it), poke at module state, sanity-check expressions.
+
+Beyond `console.log`, the underused tools:
+
+- **`console.table(arr)`** — renders an array of objects as a real table. Sortable columns. Beats reading 40 JSON objects scrolled across the console.
+- **`console.dir(domNode)`** — shows the JS object representation of a DOM node, with all its properties. The default `console.log(domNode)` shows the HTML.
+- **`console.group("label")` / `console.groupEnd()`** — collapsible groups, for structured tracing.
+- **`console.time("label")` / `console.timeEnd("label")`** — micro-benchmark anything. Less ceremony than `Date.now()` math.
+- **`console.trace()`** — print the stack trace at this point without throwing.
+- **`copy(value)`** — copies any value to the clipboard. Useful for taking JSON out of the console.
+
+### Breakpoints — the real superpower
+
+`console.log` tells you *what* a value was. A breakpoint lets you *pause execution* and look at every variable in scope, walk through the next lines one at a time, and step into function calls to follow the logic.
+
+**Setting a breakpoint:**
+1. Open the **Sources** panel (Chrome) or **Debugger** (Firefox).
+2. Find your file in the left tree. (For bundled code, you may need to find it under "webpack://" or the original sourcemap path.)
+3. Click the line number where you want to pause. A blue marker appears.
+4. Reload the page or trigger the code path. The engine pauses on that line.
+
+**Once paused:**
+
+- The right panel shows **Scope** (all variables visible at this line — local, closure, global).
+- The **Call Stack** panel shows how you got here — every function call leading to this line.
+- The buttons at the top control stepping:
+  - **F8 / Resume** — continue running until the next breakpoint.
+  - **F10 / Step Over** — run the current line, pause on the next line (don't go inside function calls).
+  - **F11 / Step Into** — if the current line calls a function, go inside it.
+  - **Shift+F11 / Step Out** — run the rest of this function, pause when it returns.
+
+The shift in mental model: instead of asking "what does this variable equal here?" and adding a log, you ask "what does the program look like at this moment?" and pause. The answer to every "what is X?" question is right in the scope panel.
+
+### `debugger` statement — breakpoint from code
+
+You can set a breakpoint from your code by writing the keyword `debugger;`:
+
+```js
+function checkout(cart) {
+  const total = cart.reduce((s, i) => s + i.price, 0);
+  debugger;        // ← engine pauses here IF devtools are open
+  return total * 1.18;
+}
+```
+
+When devtools are open and the engine hits this line, it pauses as if you'd set a breakpoint visually. When devtools are *closed*, the statement is a no-op. Useful for "I want to pause inside this specific function next time I trigger it" without having to find the file in Sources.
+
+Remove `debugger` statements before committing — linters catch them.
+
+### Conditional and logpoint breakpoints
+
+Right-clicking a line number gives extra options:
+
+- **Conditional breakpoint:** "pause here only if `i === 47`." Massively useful inside loops where the bug only happens on one iteration.
+- **Logpoint:** "log this expression but don't pause." Like `console.log` without modifying source code. The expression evaluates every time the line runs.
+
+Both eliminate the rebuild loop that source-code `console.log`s require.
+
+### Network panel — for every "the API call isn't working" bug
+
+The Network panel logs every request the page makes. For each one you see:
+
+- The URL, method, status code.
+- The request headers and payload.
+- The response headers and body.
+- The timing (how long DNS, connect, server, download each took).
+
+The single most common debugging story: "the data isn't showing up." Open Network panel → trigger the action → find the request → check:
+
+- Did it even go out? If not, the bug is before the fetch (a guard short-circuiting, an event not firing).
+- What status came back? 200 means the server answered; 400/500 means the request was made but rejected.
+- What was the response body? Sometimes you find `{ "error": "missing required field 'email'" }` and the bug is in the request shape, not the response.
+
+The Network panel has more "ohhh" moments per session than any other tool. Use it first when a request is involved.
+
+### Filtering and right-click → "copy as fetch"
+
+The network panel has a filter input. Filter by `Fetch/XHR` to hide CSS/images. Filter by hostname (`/api`) to focus on your backend calls.
+
+Right-click any request → **Copy → Copy as fetch** gives you the JavaScript code that reproduces the request. Paste it into the console to retry with the same headers/body without going through the UI.
+
+### Performance panel — when "it feels slow"
+
+For perceived performance issues, the Performance panel records a few seconds of activity and gives you a flame graph:
+
+1. Open Performance panel → click the record button.
+2. Do the slow thing in the page.
+3. Stop recording.
+
+You get a timeline with frames per second, network activity, JS execution, layout, and paint. The flame graph shows which functions ran and how long they took. Bottom-up view shows "the slowest 10 functions" if you don't want to read the whole graph.
+
+Useful for: "why is this dropdown opening so slowly," "why does scrolling stutter," "why is initial load 4 seconds." Not useful for: "the API is slow" (use Network for that — Performance is for JS-side hot spots).
+
+### Sources panel — "Pretty print" minified code
+
+Production bundles are minified — one line, no whitespace, unreadable. Click the `{}` button at the bottom of the Sources viewer to **Pretty print** the file. Variable names are still mangled (`a`, `b`), but at least there's whitespace and indentation. With source maps (modern bundlers ship them in production for error reporting), the original variable names come back too.
+
+### Application panel — the persistent layer
+
+Storage one click away:
+
+- **localStorage / sessionStorage** — key-value pairs your app saved. Edit them inline (useful for "what if my token were expired?").
+- **Cookies** — including HttpOnly cookies you can see (but not edit; they're set by the server).
+- **IndexedDB** — local database, useful for offline apps.
+- **Service Workers** — registered SWs, with controls to unregister or refresh.
+
+When debugging "why am I logged out on refresh" or "this feature flag isn't working," it's almost always a localStorage / cookie answer.
+
+### Element inspector — try CSS without saving
+
+Right-click any element → **Inspect**. The Elements panel selects it; the Styles pane on the right shows every CSS rule applying to it, with checkboxes to toggle each one.
+
+You can edit values inline — type "20px" in place of "12px" — and the page re-renders immediately. Nothing is saved; reload reverts. This is where you experiment with visual changes before opening your editor.
+
+The companion: **Computed** tab shows the *final* values after the cascade. Useful when you're staring at three competing `padding` rules and want to know which one actually won.
+
+### React DevTools — install this extension
+
+Browser devtools have a React extension (`React Developer Tools`) that adds two panels:
+
+- **Components** — your live React tree. Click any component to see its props, state, hooks. Edit them in place and watch the component re-render.
+- **Profiler** — record a render, see which components re-rendered and how long each took.
+
+For React work this is required, not optional. Install it the first day. Same exists for Vue, Svelte, etc.
+
+### A debugging routine
+
+When something goes wrong, the order to try things in:
+
+1. **Reproduce reliably.** A bug you can't reliably trigger is a bug you can't debug.
+2. **Check the console for errors.** Half of all bugs print a stack trace that points at the line. Read it first.
+3. **Check the Network panel** if the bug involves API/data.
+4. **Set a breakpoint** at the first line you're sure runs, and step forward until something doesn't match expectations.
+5. **Watch the scope** at each step. The variable that's "weird" is your bug.
+6. **Talk through it aloud.** Half of stuck debugging is fixed by saying the problem out loud — to a colleague, to a rubber duck, to a notes file.
+
+If you've done all five and you're still stuck, you've isolated the problem enough to ask for help with specifics: "function X receives the right input, the line that calls Y produces wrong output, here's the stack trace." Way better than "it's broken."
+
+<ExampleProject
+  src="breakpoint-walkthrough"
+  title="A buggy function with three breakpoint candidates"
+  description="A small page with a function that miscomputes a discount. Three candidate breakpoint lines are highlighted; the lesson talks the student through what to check at each one and how scope panel reveals the bug. Open the page, hit F12, follow along."
+/>
+
+<ExampleProject
+  src="network-trace"
+  title="Two fetch calls, one fails — find it in the Network panel"
+  description="A page makes two API calls on load: one succeeds, one 404s. The page renders 'loading...' forever for the failed one. Open Network, find the red request, read the status. Demonstrates the loop you'll run dozens of times a week."
+/>
+
+<Exercise
+  title="Debug a real bug using only devtools"
+  starter={`Open the linked broken page (or use one of the examples above
+with the bug intentionally left in). Without modifying source files,
+use ONLY browser devtools to:
+
+  1. Identify the bug (what is the wrong behaviour?).
+  2. Find the line of code responsible.
+  3. Set a breakpoint on that line.
+  4. Inspect the scope at that line — write down what the variables
+     ARE vs. what they SHOULD be.
+  5. Edit the value in the scope panel (you can! right-click → edit
+     value) to confirm what would fix it.
+  6. Open the Network panel and check whether any failed request
+     contributed to the bug.
+
+Document your investigation in a short paragraph: how you found it,
+which devtools panel was most useful, and what the fix would be
+in code. Don't actually edit the source.`}
+>
+
+- The student opens the page in a browser with devtools open.
+- They identify the bug from observed behavior (not from source code).
+- They locate the responsible line via Sources panel and source map navigation.
+- They set a breakpoint and trigger the code path; the engine pauses.
+- They inspect the Scope panel and identify a variable whose value is wrong.
+- They use the scope panel's edit functionality to change that value and confirm the fix would work.
+- They check the Network panel for any failed/relevant request.
+- The written paragraph describes the investigation in their own words and identifies the source-code change they would make.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `console.log`, `console.table`, and `console.dir`?
+
+**A:** **They render the same value three different ways. Each is best for a different shape.**
+
+- **`console.log(value)`** — generic. Strings print as text; objects print as expandable trees. The default.
+
+- **`console.table(arrayOfObjects)`** — renders as a real table with sortable columns:
+
+  ```js
+  console.table([
+    { name: "Ada", role: "ADMIN" },
+    { name: "Lin", role: "USER" },
+  ]);
+  ```
+
+  Way easier to scan than two object trees stacked. Works on arrays of objects, plain objects (one row per key), and Maps. The single most underused console API.
+
+- **`console.dir(value)`** — show the **JavaScript object** representation. The everyday surprise is on DOM nodes:
+
+  ```js
+  const btn = document.querySelector("button");
+  console.log(btn);    // → <button>Click me</button>   (HTML)
+  console.dir(btn);    // → expandable tree of all the DOM properties (JS object)
+  ```
+
+  When you want to see the available methods/properties on a node, `console.dir`. Same applies to weird objects with custom `toString` — `dir` shows what's actually there.
+
+Other underused console tools worth knowing:
+- `console.group / console.groupEnd` for collapsible structured output.
+- `console.time / console.timeEnd` for quick benchmarks.
+- `console.trace()` to print the call stack without throwing.
+
+These are all 5-second wins. Pick one new method per week, use it for a month, internalize it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When would you reach for a breakpoint instead of `console.log`?
+
+**A:** **Pretty much always. `console.log` tells you what a single value was at one moment. A breakpoint pauses execution so you can see *every* variable in scope and step through the next few lines watching how they change.**
+
+The everyday rhythm:
+
+- **Bug is "this value is wrong"** → breakpoint on the line, look at scope. You don't have to guess which variables matter; they're all listed.
+- **Bug is "this code isn't running at all"** → breakpoint on the line. If execution doesn't pause when you trigger the action, the line isn't running and you know to look upstream.
+- **Bug is "this code runs but the wrong branch"** → breakpoint on the `if`, step over to see which branch the engine takes.
+- **Bug is "this fires three times when it should fire once"** → breakpoint on the line, count how many times it pauses.
+
+Three concrete wins over `console.log`:
+
+1. **Zero edit/reload cycle.** Setting a breakpoint takes one click. Changing what variable to log requires editing source and re-running.
+2. **Scope visibility.** A `console.log(x)` tells you what `x` is. The scope panel shows every variable accessible at that line — local, closure, global. Often the bug is a variable you didn't think to log.
+3. **Step-through.** "What's the value of `total` after the loop?" Press F10 enough times and you watch it grow line by line. With `console.log`, you'd put logs inside and outside the loop, run, scroll the output.
+
+When `console.log` still wins:
+- **Tracing in production.** You can't open devtools on a user's machine; logs go to a logging service.
+- **Long-running observation.** "Log every WebSocket message for 5 minutes" — you don't want to babysit a breakpoint.
+- **Logpoints (right-click → Add logpoint).** A console.log without modifying source code. Same convenience, better tooling.
+
+The graduation from junior to mid-level developer often coincides with this switch: stop reaching for `console.log` first, reach for the debugger.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** A user reports "the page isn't loading the data." How do you start debugging?
+
+**A:** **Open the Network panel first. Almost every "data isn't loading" bug shows up as either a missing request, a failed request, or a successful request with a wrong response.**
+
+The exact loop:
+
+1. **Reproduce the bug** with devtools open, Network panel selected. Filter by **Fetch/XHR** so CSS/images don't drown the signal.
+
+2. **Did the request go out at all?**
+   - **No** → the bug is in your *client* code. The fetch wasn't called. Common causes: an event handler didn't fire, a guard short-circuited (`if (loading) return`), a state update was skipped. Now switch to Sources / set a breakpoint on the line that *should* fire the fetch.
+   - **Yes** → continue.
+
+3. **What's the status code?**
+   - **2xx (typically 200)** → the server answered successfully. Click the request → Response tab → look at the body. Is it the shape your client expects? Bug is likely in how you parse it.
+   - **3xx redirect** → unusual for API calls; check whether you're following redirects when you shouldn't be.
+   - **4xx (400, 401, 403, 404)** → the *server* rejected the request. Click the request → look at the Request tab (your payload) and Response tab (the error). Common stories: wrong URL (404), missing token (401), payload shape wrong (400 with a useful error body).
+   - **5xx** → the server crashed. Server logs are your next stop. Frontend can't fix server bugs.
+   - **(failed) / red** → the network never connected. CORS, mixed-content (HTTPS page → HTTP API), DNS, the user is offline. The Console tab usually has the specific error.
+
+4. **If status is 2xx but the UI still doesn't update**: switch to Sources. Set a breakpoint after the fetch resolves. Step through and watch state updates. Common: state setter not called, key missing from response, conditional render skipping the populated case.
+
+The whole loop usually takes under two minutes. Without devtools, the same diagnosis is "add a bunch of console.logs, rebuild, see if anything points at the issue, repeat" — twenty minutes for the same answer.
+
+Network panel first. Always.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a source map and why does it matter for debugging?
+
+**A:** **A source map is a file the bundler emits alongside the minified bundle that maps minified positions back to original source. With it, devtools shows your readable `.ts` files instead of the compressed JavaScript that actually ships.**
+
+```text
+   user-app.min.js              user-app.min.js.map               src/user.ts
+   1 line, 200KB                 mapping data                      readable original
+   var a=function(b){...}       ←→ position-to-position table  ←→  export function loadUser(id) {...}
+```
+
+What it changes in your day:
+
+- **Breakpoints land on the right line.** Without source maps, you set a breakpoint at "line 47" of an unreadable 1-line bundle. With source maps, you click line 12 of `user.ts` and the debugger pauses on the corresponding minified instruction.
+
+- **Stack traces are readable.** An error throws → the trace shows `loadUser (user.ts:12)` instead of `a (user-app.min.js:1)`. Error monitoring services (Sentry, Rollbar) ingest source maps server-side and present readable stacks even though minified code crashed.
+
+- **Sources panel shows your files.** Modern bundlers emit `webpack://` or `vite://` URLs in Sources panel — you navigate your project structure as if reading the dev build, even though the deployed file is minified.
+
+What it doesn't change:
+
+- The bundle itself is still minified — small downloads, fast parsing. Source maps are loaded only when devtools are open.
+
+The debate around source maps in production:
+
+- **Hidden source maps** (the default in some setups) — upload to your error tracker but don't ship a public URL. Users can't read your source; error monitoring can.
+- **Public source maps** — anyone with devtools can read your original code. Fine for most apps; risky if your bundle contains proprietary logic.
+
+For learning and debugging your own apps, always enable source maps in development AND production. The pre-source-map world (squinting at 200KB of `a;b;c;d;`) is a productivity hole nobody should fall into in 2026.
+
+</InterviewQuestion>

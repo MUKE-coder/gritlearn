@@ -1,0 +1,101 @@
+<!--
+  A buggy discount calculator with three candidate breakpoint lines.
+  The bug: the discount is applied to the SUBTOTAL but the comparison
+  uses dollars, while the price field is in cents — the threshold
+  check triggers on every order over $10 instead of $1000.
+
+  The lesson coaches the student through:
+    - Pause on the threshold check, inspect `subtotal` (in cents)
+    - Realize the threshold should also be in cents
+    - Confirm fix by editing the variable in the scope panel
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Buggy discount — practice breakpoints</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .card { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1.25rem; background: #fafafa; margin-top: 1rem; }
+      .row { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.95rem; }
+      .row.total { border-top: 1px solid #d4d4d8; margin-top: 0.5rem; padding-top: 0.6rem; font-weight: 600; }
+      button { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #15803d; background: #15803d; color: #fff; cursor: pointer; font-weight: 600; }
+      button:hover { background: #166534; }
+      pre { background: #fff; border: 1px solid #e4e4e7; padding: 0.7rem 0.9rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55; overflow-x: auto; }
+      .tip { background: #fef3c7; border: 1px solid #fde68a; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; margin-top: 1rem; }
+      .accent { color: #b45309; font-weight: 600; }
+      mark { background: #fde68a; padding: 0 3px; border-radius: 2px; }
+    </style>
+  </head>
+  <body>
+    <h1>Buggy discount — find it with the debugger</h1>
+    <p>This page calculates an order total. The 10% discount is supposed to apply only on orders <strong>over $1,000</strong> — but it's firing for almost every order. Open devtools, set breakpoints at the marked lines, and use the Scope panel to find the bug.</p>
+
+    <div class="card">
+      <div class="row"><span>Mug × 2</span>     <span id="r1">$24.00</span></div>
+      <div class="row"><span>Notebook × 1</span><span id="r2">$25.00</span></div>
+      <div class="row"><span>Pen × 5</span>     <span id="r3">$12.50</span></div>
+      <div class="row total"><span>Subtotal</span>          <span id="sub">$61.50</span></div>
+      <div class="row total"><span>Discount</span>          <span id="disc">$0.00</span></div>
+      <div class="row total"><span>Final</span>             <span id="fin">$61.50</span></div>
+      <p style="margin-top:0.85rem;"><button id="calc">Recalculate</button></p>
+    </div>
+
+    <h2 style="margin-top: 2rem; font-size: 1rem;">The function — three candidate breakpoint lines:</h2>
+<pre>function checkout(items) {
+  const subtotal = items.reduce(            // <mark>① breakpoint here — what's `subtotal`?</mark>
+    (s, i) =&gt; s + i.priceCents * i.qty, 0
+  );
+
+  let discount = 0;
+  if (subtotal &gt; 1000) {                    // <mark>② breakpoint — compare what to what?</mark>
+    discount = Math.round(subtotal * 0.10);
+  }
+
+  const final = subtotal - discount;        // <mark>③ breakpoint — final values</mark>
+  return { subtotal, discount, final };
+}</pre>
+
+    <div class="tip">
+      <span class="accent">Hint:</span> Set the breakpoint on line ②. Look at the
+      <strong>Scope</strong> panel — what is <code>subtotal</code>? Now look at the literal
+      <code>1000</code> in the comparison. <em>Are they in the same unit?</em> Right-click the value
+      in the Scope panel → <strong>Modify value</strong> to confirm what the fix would do.
+    </div>
+
+    <script>
+      // BUG: priceCents is in cents, but the threshold is `1000` (dollars).
+      // Any order over $10 hits the discount instead of $1000.
+      function checkout(items) {
+        const subtotal = items.reduce((s, i) => s + i.priceCents * i.qty, 0);
+
+        let discount = 0;
+        if (subtotal > 1000) {        // should be > 100_000 (cents) for $1,000
+          discount = Math.round(subtotal * 0.10);
+        }
+
+        const fin = subtotal - discount;
+        return { subtotal, discount, final: fin };
+      }
+
+      const items = [
+        { name: "Mug",      qty: 2, priceCents:  1200 },
+        { name: "Notebook", qty: 1, priceCents:  2500 },
+        { name: "Pen",      qty: 5, priceCents:   250 },
+      ];
+
+      const fmt = (cents) => "$" + (cents / 100).toFixed(2);
+
+      function render() {
+        const out = checkout(items);
+        document.getElementById("sub").textContent  = fmt(out.subtotal);
+        document.getElementById("disc").textContent = fmt(out.discount);
+        document.getElementById("fin").textContent  = fmt(out.final);
+      }
+
+      document.getElementById("calc").addEventListener("click", render);
+      render();
+    </script>
+  </body>
+</html>

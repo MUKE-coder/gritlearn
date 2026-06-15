@@ -1,0 +1,77 @@
+<!--
+  Two API calls on load. One succeeds (jsonplaceholder posts), one
+  intentionally 404s. The UI shows "loading..." for the failed one
+  forever — the lesson is to open the Network panel, find the red
+  request, read the status.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Find the failing request</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; min-height: 9rem; }
+      .col h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+      .col code { font-size: 0.78rem; color: #71717a; display: block; margin-bottom: 0.5rem; }
+      .row { padding: 0.35rem 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+      .loading { color: #71717a; font-style: italic; }
+      .tip { background: #fef3c7; border: 1px solid #fde68a; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; margin-top: 1.5rem; }
+      .accent { color: #b45309; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Two requests, one fails — find it in Network</h1>
+    <p>The page makes two API calls on load. Look at the page first — one side renders, one says "loading…" forever. Then open <strong>devtools → Network</strong>, find the red request, read its status code, and click into it to see what came back.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Posts</h2>
+        <code>GET …/posts?_limit=5</code>
+        <div id="posts" class="loading">loading…</div>
+      </div>
+      <div class="col">
+        <h2>Comments</h2>
+        <code>GET …/this-endpoint-does-not-exist</code>
+        <div id="comments" class="loading">loading…</div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <span class="accent">In Network panel:</span> filter by <strong>Fetch/XHR</strong>.
+      One request returns 200; one returns 404. Click the 404, look at the Response tab
+      — you'll see the server's JSON error body. That's almost always where the bug fix lives:
+      a wrong URL, a missing path segment, a typo.
+    </div>
+
+    <script>
+      // ✅ Real endpoint — returns 5 posts.
+      fetch("https://jsonplaceholder.typicode.com/posts?_limit=5")
+        .then(r => r.json())
+        .then(posts => {
+          const el = document.getElementById("posts");
+          el.classList.remove("loading");
+          el.innerHTML = posts
+            .map(p => `<div class="row">${p.title}</div>`)
+            .join("");
+        })
+        .catch(err => {
+          document.getElementById("posts").textContent = "error: " + err.message;
+        });
+
+      // ❌ Intentionally broken — 404. The .then never fires for valid
+      // data, so the UI stays "loading..." forever. Real bug shape.
+      fetch("https://jsonplaceholder.typicode.com/this-endpoint-does-not-exist")
+        .then(r => r.json())
+        .then(data => {
+          const el = document.getElementById("comments");
+          el.classList.remove("loading");
+          el.innerHTML = data.map(c => `<div class="row">${c.body}</div>`).join("");
+        });
+      // No .catch — the failed parse just dies silently. Common shape;
+      // the user sees "loading..." with no clue why. Network panel reveals it.
+    </script>
+  </body>
+</html>
