@@ -89,6 +89,14 @@ type Config struct {
 	GithubClientID     string
 	GithubClientSecret string
 	OAuthFrontendURL   string // Where to redirect after OAuth callback
+
+	// On-boot admin seed. When SeedAdminsOnBoot=true the server upserts
+	// a single ADMIN user with the configured email + password every
+	// time it starts. Idempotent: if the row exists, the password gets
+	// reset to match the env (so rotating SEED_ADMIN_PASSWORD just works).
+	SeedAdminsOnBoot  bool
+	SeedAdminEmail    string
+	SeedAdminPassword string
 }
 
 // Load reads configuration from environment variables.
@@ -148,6 +156,10 @@ func Load() (*Config, error) {
 		GithubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
 		GithubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
 		OAuthFrontendURL:   getEnv("OAUTH_FRONTEND_URL", "http://localhost:3001"),
+
+		SeedAdminsOnBoot:  getEnv("SEED_ADMINS_ON_BOOT", "false") == "true",
+		SeedAdminEmail:    getEnv("SEED_ADMIN_EMAIL", ""),
+		SeedAdminPassword: getEnv("SEED_ADMIN_PASSWORD", ""),
 	}
 
 	// DatabaseURL is always populated by resolveDatabaseURL() — either from

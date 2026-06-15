@@ -58,6 +58,12 @@ services:
       DESKTOP_LATEST_RELEASED_AT: ${DESKTOP_LATEST_RELEASED_AT:-}
       DESKTOP_LATEST_RELEASE_NOTES: ${DESKTOP_LATEST_RELEASE_NOTES:-}
       DESKTOP_DOWNLOAD_BASE: ${DESKTOP_DOWNLOAD_BASE:-}
+      # Admin seed — see SEED_ADMINS_ON_BOOT in .env. The handler in
+      # internal/database/seed.go is a no-op when email/password are
+      # empty, so unset values fail safe.
+      SEED_ADMINS_ON_BOOT: ${SEED_ADMINS_ON_BOOT:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy

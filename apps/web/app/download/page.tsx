@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { fetchRelease, formatSize, type ReleaseInfo } from "@/lib/platform";
+import { DownloadGrid } from "@/components/download-grid";
 
 export const metadata: Metadata = {
   title: "Download JEditor",
@@ -18,9 +19,6 @@ export const metadata: Metadata = {
 };
 
 // Re-render every 10 minutes — matches the API's in-process cache TTL.
-// The fetch() call inside fetchRelease() uses revalidate: 600 already,
-// but setting this at the route level lets Next.js skip the call
-// entirely when the cached HTML is fresh.
 export const revalidate = 600;
 
 const API_URL =
@@ -31,11 +29,32 @@ export default async function DownloadPage() {
   const released = formatReleaseDate(release.releasedAt);
 
   return (
-    <div className="flex flex-col">
+    <div className="relative flex flex-col">
+      {/* Subtle gradient backdrop matching the landing hero */}
+      <div aria-hidden className="absolute inset-x-0 top-0 -z-10 h-[480px]">
+        <div
+          className="absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 30% 20%, rgba(59,130,246,0.16) 0%, transparent 45%), radial-gradient(circle at 70% 30%, rgba(168,85,247,0.12) 0%, transparent 45%)",
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+            maskImage:
+              "radial-gradient(ellipse at top, black 50%, transparent 85%)",
+          }}
+        />
+      </div>
+
       {/* ─── Header ──────────────────────────────────────────────── */}
       <section className="border-b border-border/40">
-        <div className="mx-auto max-w-4xl px-6 pt-20 pb-12 text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-bg-secondary px-3.5 py-1 text-[12px] text-text-secondary">
+        <div className="mx-auto max-w-4xl px-6 pt-24 pb-14 text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-bg-secondary/80 px-3.5 py-1 text-[12px] text-text-secondary backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
             <span>
               v{release.version}
@@ -43,11 +62,14 @@ export default async function DownloadPage() {
             </span>
           </div>
 
-          <h1 className="text-balance text-[40px] font-bold leading-[1.05] tracking-tight sm:text-[52px]">
-            Download JEditor
+          <h1 className="text-balance text-[42px] font-bold leading-[1.04] tracking-tight sm:text-[56px]">
+            Download{" "}
+            <span className="bg-gradient-to-r from-accent via-accent-hover to-info bg-clip-text text-transparent">
+              JEditor
+            </span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-2xl text-balance text-[16px] leading-relaxed text-text-secondary">
+          <p className="mx-auto mt-6 max-w-2xl text-balance text-[16px] leading-relaxed text-text-secondary">
             Pick the build for your machine. About 80 MB. The whole curriculum
             ships inside — sign up once online, then learn offline forever.
           </p>
@@ -63,59 +85,10 @@ export default async function DownloadPage() {
 
       {/* ─── Per-OS tiles ─────────────────────────────────────────── */}
       <section className="border-b border-border/40">
-        <div className="mx-auto max-w-4xl px-6 py-16">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {release.downloads.map((d) => {
-              const href = d.available
-                ? d.url
-                : release.githubUrl || d.url;
-              return (
-                <a
-                  key={d.platform}
-                  href={href}
-                  className={`group flex items-start gap-4 rounded-xl border bg-bg-secondary p-5 transition-all ${
-                    d.available
-                      ? "border-border hover:border-accent/60 hover:bg-bg-elevated"
-                      : "border-border/60 opacity-75"
-                  }`}
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent group-hover:bg-accent/20 transition-colors">
-                    {d.available ? (
-                      <Download className="h-4 w-4" />
-                    ) : (
-                      <Cpu className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">
-                        {d.label}
-                      </h3>
-                      {!d.available && (
-                        <span className="rounded-full bg-text-muted/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                          Coming soon
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      {d.detail}
-                    </p>
-                    <p className="mt-2 flex items-center gap-2 font-mono text-[11px] text-text-muted">
-                      <span>{d.filename}</span>
-                      {d.size > 0 && (
-                        <>
-                          <span>·</span>
-                          <span>{formatSize(d.size)}</span>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <DownloadGrid release={release} />
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 text-[12px] text-text-muted sm:flex-row">
+          <div className="mt-12 flex flex-col items-center justify-center gap-3 text-[12px] text-text-muted sm:flex-row">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-3.5 w-3.5 text-success" />
               <span>
@@ -139,8 +112,8 @@ export default async function DownloadPage() {
 
       {/* ─── Release notes ────────────────────────────────────────── */}
       {release.releaseNotes && (
-        <section className="border-b border-border/40 bg-bg-secondary/40">
-          <div className="mx-auto max-w-3xl px-6 py-16">
+        <section className="border-b border-border/40 bg-bg-secondary/30">
+          <div className="mx-auto max-w-3xl px-6 py-20">
             <div className="mb-6 flex items-center gap-2 text-sm text-text-secondary">
               <Calendar className="h-4 w-4" />
               <span>
@@ -154,26 +127,36 @@ export default async function DownloadPage() {
       )}
 
       {/* ─── After-download CTA ───────────────────────────────────── */}
-      <section>
-        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-          <h2 className="text-[28px] font-bold tracking-tight">
+      <section className="relative overflow-hidden">
+        <div aria-hidden className="absolute inset-0 -z-10">
+          <div
+            className="absolute inset-0 opacity-25"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 50% 50%, rgba(59,130,246,0.18) 0%, transparent 55%)",
+            }}
+          />
+        </div>
+        <div className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <h2 className="text-balance text-[32px] font-bold leading-[1.05] tracking-tight sm:text-[40px]">
             After you install
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-text-secondary">
+          <p className="mx-auto mt-4 max-w-xl text-[15px] text-text-secondary">
             Sign up takes about thirty seconds. That&apos;s the only step that
             touches the internet — after that the editor and curriculum live on
             your laptop.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white hover:bg-accent-hover transition-colors"
+              className="group inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all hover:-translate-y-0.5"
             >
-              Create your account <ArrowRight className="h-4 w-4" />
+              Create your account
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-5 py-3 text-sm font-semibold text-foreground hover:bg-bg-hover transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:bg-bg-hover transition-all hover:-translate-y-0.5"
             >
               Back to home
             </Link>
@@ -184,10 +167,6 @@ export default async function DownloadPage() {
   );
 }
 
-// formatReleaseDate accepts the API's ISO timestamp and turns it into
-// "Jun 15, 2026" — readable, no time component (release time isn't
-// useful to a marketing visitor). Returns "" on bad input so the
-// surrounding template can drop the "released ..." prefix cleanly.
 function formatReleaseDate(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -200,10 +179,8 @@ function formatReleaseDate(iso: string): string {
 }
 
 // ReleaseNotes renders the GitHub release body. GitHub returns
-// Markdown; we render the lines with a light touch (paragraph
-// splitting, bullet detection) instead of pulling in a Markdown
-// parser — release notes are short and structured, and a hard
-// dependency on react-markdown is overkill for one page.
+// Markdown; we render with a light touch (paragraph splitting, bullet
+// detection) instead of pulling react-markdown for one page.
 function ReleaseNotes({ notes }: { notes: string }) {
   const lines = notes.split(/\r?\n/);
   return (

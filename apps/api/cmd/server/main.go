@@ -41,6 +41,16 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	// On-boot admin seed (idempotent — upserts to match env on every boot).
+	// Gated by SEED_ADMINS_ON_BOOT so prod can opt in once and the dev
+	// loop doesn't get noisy. Failure here is fatal: a deployer who set
+	// the flag expects to be able to log in.
+	if cfg.SeedAdminsOnBoot {
+		if err := database.SeedSystemAdmin(db, cfg.SeedAdminEmail, cfg.SeedAdminPassword); err != nil {
+			log.Fatalf("Failed to seed admin: %v", err)
+		}
+	}
+
 	// ── Phase 4 Services ─────────────────────────────────────────
 
 	// Redis cache

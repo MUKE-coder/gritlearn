@@ -6,45 +6,55 @@ minutes.
 
 ---
 
-## Cycle
+## Quick path (Windows, recommended for the first release)
 
-1. **Build the binaries** locally per OS (Wails cross-compilation is
-   limited, so each OS typically builds on its own machine):
+From the repo root on a Windows machine with `wails` and `gh` on PATH:
 
-   ```bash
-   # Windows
-   cd apps/desktop
-   wails build -platform windows/amd64 -o jeditor-windows-amd64.exe
+```powershell
+# One command — builds, tags, pushes, creates the release.
+.\scripts\release-desktop.ps1 -Version "0.1.0" -Notes "First public preview"
+```
 
-   # macOS Apple Silicon
-   wails build -platform darwin/arm64 -clean
-   # produces build/bin/JEditor.app — package as DMG separately
+The script:
+1. Bumps `apps/desktop/wails.json` to the new version.
+2. Runs `wails build -platform windows/amd64`.
+3. Renames the artifact to `jeditor-windows-amd64.exe`.
+4. Commits the version bump.
+5. Tags `v0.1.0`, pushes the commit + tag, and creates the GitHub release.
 
-   # macOS Intel
-   wails build -platform darwin/amd64 -clean
+Within 10 minutes (or hit `https://api.jbeditor.com/api/desktop/latest?refresh=1`)
+the marketing `/download` page will show the new build.
 
-   # Linux
-   wails build -platform linux/amd64 -o jeditor-linux-amd64.AppImage
-   ```
+Don't have macOS / Linux assets yet? That's fine — the `/download` page
+renders those tiles as "Coming soon" with a link to the GitHub releases
+page. Add them later with `gh release upload`.
 
-2. **Tag + create a GitHub release** with the canonical asset names:
+---
 
-   ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+## Adding macOS / Linux to an existing release
 
-   gh release create v0.2.0 \
-     --title "JEditor v0.2.0" \
-     --notes "## New\n- TypeScript curriculum\n- Phase 1 milestone\n\n## Fixes\n- ..." \
-     jeditor-windows-amd64.exe \
-     jeditor-darwin-arm64.dmg \
-     jeditor-darwin-amd64.dmg \
-     jeditor-linux-amd64.AppImage
-   ```
+Wails cross-compilation is limited, so each OS builds on its own host
+machine. Once you have the artifact, upload it to the existing release:
 
-3. **That's it.** Within 10 minutes (or instantly with
-   `GET /api/desktop/latest?refresh=1`) the API picks up the new
-   release and the marketing site's `/download` page shows it.
+```bash
+# macOS Apple Silicon
+cd apps/desktop
+wails build -platform darwin/arm64 -clean
+# Build a DMG (see https://wails.io/docs/guides/mac-dmg)
+gh release upload v0.1.0 jeditor-darwin-arm64.dmg
+
+# macOS Intel
+wails build -platform darwin/amd64 -clean
+gh release upload v0.1.0 jeditor-darwin-amd64.dmg
+
+# Linux (AppImage)
+wails build -platform linux/amd64 -o jeditor-linux-amd64.AppImage
+gh release upload v0.1.0 jeditor-linux-amd64.AppImage
+```
+
+The API matches assets to OS tiles by substring (case-insensitive),
+so small naming variations are forgiven. Canonical names below are
+preferred but not required.
 
 ---
 

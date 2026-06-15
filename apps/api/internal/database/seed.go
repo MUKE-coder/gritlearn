@@ -5,9 +5,62 @@ import (
 	"log"
 	"time"
 
-	"gritlearn/apps/api/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+
+	"gritlearn/apps/api/internal/models"
 )
+
+// SeedSystemAdmin upserts a single ADMIN user from env at server boot.
+// Idempotent: if the row exists, the password gets reset to match the
+// env so SEED_ADMIN_PASSWORD rotation just works. The BeforeCreate
+// hook hashes on Create; on Update we hash here because there is no
+// BeforeUpdate password hook on the model.
+//
+// Called by cmd/server/main.go when cfg.SeedAdminsOnBoot is true. No-op
+// when email or password are empty so a misconfigured deploy doesn't
+// silently create a useless row.
+func SeedSystemAdmin(db *gorm.DB, email, password string) error {
+	if email == "" || password == "" {
+		log.Println("SEED_ADMIN: email or password empty — skipping")
+		return nil
+	}
+
+	var existing models.User
+	err := db.Where("email = ?", email).First(&existing).Error
+	if err == nil {
+		hashed, herr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if herr != nil {
+			return fmt.Errorf("hashing seed admin password: %w", herr)
+		}
+		if uerr := db.Model(&existing).Updates(map[string]interface{}{
+			"password": string(hashed),
+			"role":     "ADMIN",
+			"active":   true,
+		}).Error; uerr != nil {
+			return fmt.Errorf("updating seed admin %s: %w", email, uerr)
+		}
+		log.Printf("SEED_ADMIN: refreshed %s (role=ADMIN, active=true)", email)
+		return nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return fmt.Errorf("looking up seed admin %s: %w", email, err)
+	}
+
+	admin := models.User{
+		FirstName: "Admin",
+		LastName:  "",
+		Email:     email,
+		Password:  password,
+		Role:      "ADMIN",
+		Active:    true,
+	}
+	if cerr := db.Create(&admin).Error; cerr != nil {
+		return fmt.Errorf("creating seed admin %s: %w", email, cerr)
+	}
+	log.Printf("SEED_ADMIN: created %s (role=ADMIN)", email)
+	return nil
+}
 
 // Seed populates the database with initial data.
 // Add your seeders to this function.
