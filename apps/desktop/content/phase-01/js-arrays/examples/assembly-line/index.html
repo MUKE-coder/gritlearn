@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The assembly line</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .station { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 12px 0; }
+      .station h2 { margin: 0 0 6px; font-family: ui-monospace, monospace; font-size: 14px; color: #4763e4; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-family: ui-monospace, monospace; font-size: 13px; }
+      .row > div { padding: 8px 10px; background: white; border: 1px dashed #d1d5db; border-radius: 6px; }
+      .row .label { font-family: system-ui, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 4px; }
+      .arrow { text-align: center; font-size: 24px; color: #4763e4; margin: -6px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>The assembly line, live</h1>
+    <p>Watch the array flow through three stations. Each station does one thing.</p>
+
+    <div class="station">
+      <h2>input</h2>
+      <div class="row">
+        <div><div class="label">value</div><span id="input"></span></div>
+        <div><div class="label">length</div><span id="inLen"></span></div>
+      </div>
+    </div>
+
+    <div class="arrow">▼</div>
+
+    <div class="station">
+      <h2>.filter(n =&gt; n % 2 === 0)  — keep evens</h2>
+      <div class="row">
+        <div><div class="label">output</div><span id="afterFilter"></span></div>
+        <div><div class="label">length</div><span id="filterLen"></span></div>
+      </div>
+    </div>
+
+    <div class="arrow">▼</div>
+
+    <div class="station">
+      <h2>.map(n =&gt; n * 10)  — multiply by 10</h2>
+      <div class="row">
+        <div><div class="label">output</div><span id="afterMap"></span></div>
+        <div><div class="label">length</div><span id="mapLen"></span></div>
+      </div>
+    </div>
+
+    <div class="arrow">▼</div>
+
+    <div class="station">
+      <h2>.reduce((sum, n) =&gt; sum + n, 0)  — combine into one</h2>
+      <div class="row">
+        <div><div class="label">final result</div><span id="final" style="font-size: 24px; color: #047857;"></span></div>
+        <div><div class="label">type</div><span>number</span></div>
+      </div>
+    </div>
+
+    <script>
+      const input = [1, 2, 3, 4, 5, 6, 7, 8];
+      const afterFilter = input.filter(n => n % 2 === 0);
+      const afterMap    = afterFilter.map(n => n * 10);
+      const final       = afterMap.reduce((sum, n) => sum + n, 0);
+
+      const f = (v) => JSON.stringify(v);
+      document.getElementById("input").textContent       = f(input);
+      document.getElementById("inLen").textContent       = input.length;
+      document.getElementById("afterFilter").textContent = f(afterFilter);
+      document.getElementById("filterLen").textContent   = afterFilter.length;
+      document.getElementById("afterMap").textContent    = f(afterMap);
+      document.getElementById("mapLen").textContent      = afterMap.length;
+      document.getElementById("final").textContent       = final;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,336 @@
+## DOM events and listeners
+
+A page sitting on a screen doesn't do anything by itself. It waits for *events* — a click, a keystroke, a mouse hover, a form submission, a scroll, a window resize. **Event listeners** are how your code says "when X happens, run this." This is where pages become apps. Almost every interactive feature you'll build — buttons, forms, modals, drag-and-drop, search-as-you-type — is some shape of *listen, react, update*.
+
+<Analogy>
+Event listeners are **doorbells and smoke alarms**.
+
+A doorbell sits silently most of the day. It's not running, polling, watching the door — it's just *armed*. When someone presses the button, the bell rings. Connected behind the bell is a behavior: open the door, peek through the peephole, call the dog. The doorbell *fires* and the behavior runs. No one is *waiting* at the door — the doorbell handles the noticing.
+
+DOM events work the same way. You install a listener:
+
+```js
+button.addEventListener("click", () => save());
+```
+
+Translated: "wire up a doorbell on this button. When it's pressed, run save()." You don't sit in a loop checking "was it clicked yet? was it clicked yet?" The browser handles the noticing; your code just supplies the behavior.
+
+Different events are different alarms — a smoke alarm fires on smoke, a doorbell on a press, a phone on a call. The browser fires `click` on clicks, `input` on typing, `submit` on form submits, `scroll` on scrolling. You install one listener per event you care about; ignore the rest. The page can have thousands of potential events; you respond only to the few that matter to your feature.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an event flowing through the DOM from target up through ancestors during bubbling"
+  caption="A click on a button bubbles up the DOM tree. Any ancestor with a listener for that event fires too — until something calls stopPropagation."
+>
+
+```
+   The bubbling path of a click on <button>:
+
+           ┌──────────────────────────┐
+           │  document                │  ← listener here fires last
+           │ ┌──────────────────────┐ │
+           │ │  <body>              │ │  ← also fires
+           │ │ ┌──────────────────┐ │ │
+           │ │ │  <main>          │ │ │
+           │ │ │ ┌──────────────┐ │ │ │
+           │ │ │ │  <form>      │ │ │ │  ← fires (e.g. event delegation)
+           │ │ │ │ ┌──────────┐ │ │ │ │
+           │ │ │ │ │ <button> │ │ │ │ │  ← clicked HERE  (the target)
+           │ │ │ │ └──────────┘ │ │ │ │     fires first
+           │ │ │ └──────────────┘ │ │ │
+           │ │ └──────────────────┘ │ │
+           │ └──────────────────────┘ │
+           └──────────────────────────┘
+                    ▲
+            ─────── bubble ───────
+```
+
+</Illustration>
+
+### Adding a listener
+
+```js
+const btn = document.querySelector("#save");
+
+btn.addEventListener("click", (event) => {
+  console.log("Clicked!");
+});
+```
+
+Three pieces:
+
+- **The element** you're listening on (`btn`).
+- **The event name** as a string (`"click"`).
+- **The callback** that runs when the event fires. It receives an **event object** with details.
+
+You can attach as many listeners as you like — they all run when the event fires.
+
+### Removing a listener
+
+If you'll need to remove it later, save a *reference* to the function:
+
+```js
+function onClick(e) { … }
+
+btn.addEventListener("click", onClick);
+btn.removeEventListener("click", onClick);   // must be the SAME function reference
+```
+
+Anonymous arrow functions can't be removed — there's no name to refer back to. For most "always on" listeners that doesn't matter, but watch for memory leaks in single-page apps that mount and unmount components frequently. The modern alternative: `AbortController`:
+
+```js
+const controller = new AbortController();
+btn.addEventListener("click", onClick, { signal: controller.signal });
+// later — remove all listeners with this signal in one call
+controller.abort();
+```
+
+### The event object
+
+Every listener receives an event object as its first argument. Useful properties:
+
+```js
+btn.addEventListener("click", (e) => {
+  e.target          // the element that was actually clicked (the deepest descendant)
+  e.currentTarget   // the element the listener is attached to
+  e.preventDefault()    // cancel the default behavior (form submit, link nav, etc.)
+  e.stopPropagation()   // stop the event from bubbling up to ancestors
+  e.type            // "click"
+  e.timeStamp       // ms since the page loaded
+  // mouse events:
+  e.clientX         // x coordinate
+  e.clientY
+  e.shiftKey        // true if shift was held
+  e.metaKey         // true if cmd/win key was held
+  // keyboard events:
+  e.key             // "Enter", "a", "ArrowDown"
+  e.code            // physical key code
+});
+```
+
+### Common events
+
+- **`click`** — mouse click or tap.
+- **`input`** — fires on every keystroke in an input/textarea. Modern, prefer this over `keyup`.
+- **`change`** — fires when an input's value commits (blur, dropdown selection).
+- **`submit`** — on a `<form>` when it's submitted. Use `e.preventDefault()` to handle in JS instead of letting the browser POST.
+- **`keydown` / `keyup`** — keyboard events.
+- **`mouseenter` / `mouseleave`** — entering/leaving an element with the mouse.
+- **`focus` / `blur`** — element gains/loses focus.
+- **`scroll`** — scroll position changes.
+- **`resize`** — window size changes (attach to `window`).
+- **`load` / `DOMContentLoaded`** — page finishes loading.
+
+### `preventDefault` — taking over from the browser
+
+Some events have built-in browser behavior. A `<form>` submission posts to the server. A link click navigates. A right-click opens a context menu. To handle these yourself in JS, call `preventDefault()`:
+
+```js
+form.addEventListener("submit", (e) => {
+  e.preventDefault();                  // ← stop the browser's default POST
+  const data = new FormData(form);
+  await fetch("/api/save", { method: "POST", body: data });
+});
+```
+
+Without `preventDefault`, the browser submits the form *and* runs your handler — usually not what you want for a JS-driven page.
+
+### Event delegation: one listener for many children
+
+If you have 1000 list items and each needs a click handler, you don't attach 1000 listeners. You attach **one** on the parent and use the event's `target` to figure out which child was clicked:
+
+```js
+ul.addEventListener("click", (e) => {
+  const li = e.target.closest("li");
+  if (!li) return;       // clicked somewhere that wasn't an li
+  toggleTodo(li.dataset.id);
+});
+```
+
+Why it works: the click bubbles up from the `<li>` to the `<ul>` and fires the listener there. Three big wins:
+
+1. **One listener instead of N.** Faster, less memory.
+2. **New items get the same behavior automatically.** Dynamically-added `<li>`s don't need their own listener attached — the parent's handler covers them.
+3. **Less coupling.** The parent owns the behavior; child markup is just data.
+
+This pattern is used everywhere in real apps — table rows, dropdown menus, lists, grids, the file tree in this very editor.
+
+### Bubbling and `stopPropagation`
+
+Events **bubble** by default — they fire on the target, then on its parent, then its parent's parent, all the way up to `document`. Usually that's fine. Sometimes you want to stop:
+
+```js
+inner.addEventListener("click", (e) => {
+  e.stopPropagation();        // ancestor listeners won't fire
+  // …handle internally
+});
+```
+
+Use `stopPropagation` sparingly — too much makes it hard to reason about which handlers run. Often a guard inside the parent handler (`if (e.target.closest(".inner")) return;`) is cleaner than stopping propagation from the child.
+
+### Custom events
+
+You can create and dispatch your own:
+
+```js
+const event = new CustomEvent("user:saved", { detail: { id: 42 } });
+element.dispatchEvent(event);
+
+// elsewhere
+element.addEventListener("user:saved", (e) => {
+  console.log("user saved:", e.detail.id);
+});
+```
+
+Custom events are useful for decoupling components — one part of the page fires an event, others listen, no direct coupling. Frameworks do this internally; in vanilla pages you reach for it occasionally.
+
+<ExampleProject
+  src="doorbell-buttons"
+  title="Six common events, side by side"
+  description="A page with one input, one button, one form, and one box. Six listeners — click, input, change, submit, mouseenter, keydown — each log to a panel as they fire. Type, click, hover, submit, and watch the events stream in."
+/>
+
+<ExampleProject
+  src="event-delegation"
+  title="A todo list with one click listener for the whole list"
+  description="Add a hundred todo items. One listener on the <ul> handles checking, deleting, and editing for all of them — including items added later. Demonstrates why delegation scales while per-item listeners don't."
+/>
+
+<Exercise
+  title="A keyboard-driven search box"
+  starter={`Create a page with:
+
+  - An <input id="search"> for searching.
+  - An <ul id="results"> showing the filtered results.
+  - An array of ~15 product names baked into the script.
+
+When the user types in the search box (input event):
+  - Trim and lowercase the query.
+  - Filter the products array to those whose lowercase name
+    includes the query.
+  - Render the results into the <ul>.
+
+When the user presses Escape in the search box (keydown event):
+  - Clear the input.
+  - Show the full list again.
+
+When a result is clicked:
+  - Use event delegation on the <ul> (ONE listener, not one
+    per <li>).
+  - Highlight the clicked one with a class.`}
+>
+
+- Uses the `input` event for live filtering (not `keyup`).
+- Uses the `keydown` event with `e.key === "Escape"` for clearing.
+- Renders results by building elements with `createElement` + `textContent`, not `innerHTML`.
+- Uses **one** click listener on the `<ul>` (delegation), not one per `<li>`.
+- The delegation handler uses `e.target.closest("li")` to find the clicked row.
+- Empty search shows the full list.
+- The highlighted class is removed from the previously-highlighted item before adding to the new one.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `addEventListener` and the older `onclick` attribute?
+
+**A:** They do similar things but differ in important ways:
+
+- **`onclick`** (in HTML or via `el.onclick = …`) sets a **single** function as the handler. Setting `el.onclick = …` a second time overwrites the first. Limited to events the browser ships with as properties.
+- **`addEventListener`** can register **multiple** handlers on the same event. It also accepts options (capture phase, once, signal for cleanup) and works for any event type, including custom events.
+
+```js
+btn.onclick = a;
+btn.onclick = b;    // a is gone
+
+btn.addEventListener("click", a);
+btn.addEventListener("click", b);   // both run when clicked
+```
+
+`addEventListener` is the modern default. Inline `onclick="..."` HTML attributes are also bad practice for security (CSP can't easily restrict them) and separation of concerns (mixing behavior into markup). Use `addEventListener` from JS.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `event.preventDefault()` do?
+
+**A:** It **cancels the browser's default behavior** for that event. Many events have built-in browser actions:
+
+- **`submit`** on a `<form>` → browser POSTs to the form's `action`.
+- **`click`** on an `<a href>` → browser navigates to the URL.
+- **Right-click** → browser shows the context menu.
+- **`keydown` on the `Tab` key** → browser moves focus.
+- **Form `input` of bad type** → browser shows a validation popup.
+
+Call `preventDefault()` inside your handler to stop the browser's default and take over yourself:
+
+```js
+form.addEventListener("submit", (e) => {
+  e.preventDefault();             // stop the browser's POST
+  // handle the submission with fetch instead
+});
+```
+
+Without it, the browser does both (your handler runs AND the default fires) — usually causing the page to reload right after your code runs. Forgetting `preventDefault()` on a form submit is one of the most common "why is my page reloading?" bugs.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is event delegation and when do you use it?
+
+**A:** Event delegation is the technique of attaching **one listener to a parent element** that handles events for all of its (current and future) children, instead of attaching one listener per child.
+
+```js
+// NOT delegation — 1000 listeners
+items.forEach((li) => li.addEventListener("click", onClick));
+
+// Delegation — 1 listener on the parent
+ul.addEventListener("click", (e) => {
+  const li = e.target.closest("li");
+  if (!li) return;
+  onClick(li);
+});
+```
+
+It works because events **bubble up** the DOM tree. A click on an `<li>` fires the listener attached to its `<ul>` parent automatically. Three benefits:
+
+1. **Performance.** One listener instead of N. Big savings on large lists.
+2. **Dynamic content.** New items added later are automatically covered — the parent's listener picks up bubbling events from them too.
+3. **Decoupling.** The parent doesn't need to know in advance how many children it'll have.
+
+Use it for any "many children with similar behavior" pattern: todo lists, autocomplete menus, table rows, photo galleries, the file tree in code editors. The standard idiom: `const matched = e.target.closest(".item"); if (!matched) return;`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `event.target` and `event.currentTarget`?
+
+**A:**
+
+- **`event.target`** is the **deepest** element the event happened on — the one the user actually clicked, even if it's a child of the listener's element.
+- **`event.currentTarget`** is the element the **listener is attached to** — what `this` refers to inside the handler (when using a regular `function`).
+
+Critical for delegation. Imagine:
+
+```html
+<ul id="list">
+  <li>Item 1 <button>delete</button></li>
+  <li>Item 2 <button>delete</button></li>
+</ul>
+```
+
+```js
+document.getElementById("list").addEventListener("click", (e) => {
+  e.target          // the <button> the user clicked
+  e.currentTarget   // the <ul> the listener is on
+});
+```
+
+When you handle clicks via delegation, you almost always care about `e.target` (or `e.target.closest(...)` to find a specific ancestor) — that's the *actual* thing clicked. `currentTarget` is useful when you want a stable reference to the listener's element regardless of nesting.
+
+A subtle bug: `e.target` changes as the event bubbles — it's always the deepest descendant. If a delegated handler uses `e.target` and the children have their own children, you can match the wrong thing. `closest(...)` is the safe pattern.
+
+</InterviewQuestion>

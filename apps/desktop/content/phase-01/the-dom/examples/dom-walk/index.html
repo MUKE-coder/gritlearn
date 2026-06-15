@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Walk the DOM tree</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .stage { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .stage * { padding: 8px; border: 1px dashed #d1d5db; margin: 4px; cursor: pointer; transition: background 0.15s; }
+      .stage *:hover { background: #fffbeb; }
+      .stage *.clicked { background: #4763e4; color: white; border-color: #4763e4; }
+      .info { background: #1c2230; color: #e6edf3; padding: 12px; border-radius: 8px; margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; }
+      .info .key { color: #6e8bff; }
+      .info .val { color: #aeb9c7; }
+    </style>
+  </head>
+  <body>
+    <h1>Walk the DOM tree</h1>
+    <p>Click any boxed element. The panel below shows what's around it in the tree.</p>
+
+    <div class="stage" id="stage">
+      <article>
+        article
+        <section>
+          section
+          <h2>h2 (inside section)</h2>
+          <p>p (inside section)</p>
+          <ul>
+            ul
+            <li>li 1</li>
+            <li>li 2</li>
+            <li>li 3</li>
+          </ul>
+        </section>
+        <footer>footer (inside article)</footer>
+      </article>
+    </div>
+
+    <div class="info" id="info">(click anything above)</div>
+
+    <script>
+      const desc = (el) => el ? `${el.tagName.toLowerCase()}` + (el.id ? `#${el.id}` : "") : "null";
+
+      document.getElementById("stage").addEventListener("click", (e) => {
+        document.querySelectorAll(".stage .clicked").forEach((el) => el.classList.remove("clicked"));
+        const el = e.target;
+        el.classList.add("clicked");
+        e.stopPropagation();
+
+        const lines = [
+          ["this",                 desc(el)],
+          ["parentElement",        desc(el.parentElement)],
+          ["firstElementChild",    desc(el.firstElementChild)],
+          ["lastElementChild",     desc(el.lastElementChild)],
+          ["nextElementSibling",   desc(el.nextElementSibling)],
+          ["previousElementSibling", desc(el.previousElementSibling)],
+          ["children count",       el.children.length],
+          ["closest('section')",   desc(el.closest("section"))],
+        ];
+        document.getElementById("info").innerHTML = lines
+          .map(([k, v]) => `<span class="key">${k.padEnd(24, " ")}</span> <span class="val">${v}</span>`)
+          .join("<br />");
+      });
+    </script>
+  </body>
+</html>

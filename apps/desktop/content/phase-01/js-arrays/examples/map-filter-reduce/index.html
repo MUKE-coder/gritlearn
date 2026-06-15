@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>map / filter / reduce</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 16px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+      .pane h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 12px; color: #4763e4; }
+      pre { background: #1c2230; color: #e6edf3; padding: 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; overflow-x: auto; margin: 0 0 10px; }
+      .result { background: white; border: 1px dashed #d1d5db; border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+      th, td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+      th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; background: #f3f4f6; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>map / filter / reduce</h1>
+
+    <h2>Source data</h2>
+    <table id="orders">
+      <thead><tr><th>id</th><th>customer</th><th>total</th><th>status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2>map → extract IDs</h2>
+        <pre>orders
+  .map(o =&gt; o.id);</pre>
+        <div class="result" id="r1"></div>
+      </div>
+
+      <div class="pane">
+        <h2>filter → only paid (status=ok)</h2>
+        <pre>orders
+  .filter(o =&gt; o.status === "ok");</pre>
+        <div class="result" id="r2"></div>
+      </div>
+
+      <div class="pane">
+        <h2>reduce → sum totals</h2>
+        <pre>orders.reduce(
+  (sum, o) =&gt; sum + o.total,
+  0
+);</pre>
+        <div class="result" id="r3"></div>
+      </div>
+
+    </div>
+
+    <script>
+      const orders = [
+        { id: 1, customer: "Aisha",  total:  89.50, status: "ok" },
+        { id: 2, customer: "Brian",  total:  24.00, status: "pending" },
+        { id: 3, customer: "Daniel", total: 312.70, status: "ok" },
+        { id: 4, customer: "Sandra", total:  17.99, status: "failed" },
+        { id: 5, customer: "Emily",  total: 100.00, status: "ok" },
+      ];
+
+      // Render the source table
+      const tbody = document.querySelector("#orders tbody");
+      tbody.innerHTML = orders.map(o =>
+        `<tr><td>${o.id}</td><td>${o.customer}</td><td>$${o.total.toFixed(2)}</td><td>${o.status}</td></tr>`
+      ).join("");
+
+      const ids        = orders.map(o => o.id);
+      const paid       = orders.filter(o => o.status === "ok");
+      const totalSpend = orders.reduce((sum, o) => sum + o.total, 0);
+
+      document.getElementById("r1").textContent = JSON.stringify(ids);
+      document.getElementById("r2").textContent = JSON.stringify(paid, null, 2);
+      document.getElementById("r3").textContent = "$" + totalSpend.toFixed(2);
+    </script>
+  </body>
+</html>

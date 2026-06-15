@@ -1,0 +1,333 @@
+## JS fetch and JSON
+
+A web page on its own can do clever things, but real apps **talk to servers** — fetching user data, posting comments, loading the next page of results. The browser's built-in `fetch()` function is how JavaScript makes HTTP requests. The data that flows back and forth is almost always **JSON** — a compact text format the language reads and writes natively. Together, `fetch` + JSON is the way 99% of frontend code talks to its backend.
+
+<Analogy>
+`fetch()` is **ordering takeout, and JSON is the labeled bag it arrives in**.
+
+You call the restaurant. You tell them what you want ("a request"). Some minutes pass (during which you do other things — you don't sit on hold). The doorbell rings. You open the bag. Inside, every container is labeled: PAD THAI · LARGE · MEDIUM SPICE · NO PEANUTS. You don't have to guess what's in each container; the labels are part of the package. You unpack the food and eat.
+
+`fetch()` is the call. The wait — the round trip across the network — is *asynchronous*; your code does other things while the request is in flight. The response comes back wrapped in JSON, which is structurally a labeled bag of data: keys (the labels) and values (the contents). `await response.json()` is the act of unpacking the bag into a JavaScript object you can use directly.
+
+Three things about the analogy hold:
+
+- **Things can go wrong.** The restaurant might be closed (`fetch` rejects). The food might be wrong (`response.ok` is false). The bag might be empty (`response.json()` parses to something unexpected). Real code handles each.
+- **You don't block.** The whole point of "ordering takeout" instead of "going to the restaurant" is doing something else while you wait. `await` is the modern way to write code that pauses *its* execution without blocking the page.
+- **You unpack carefully.** Trusting the data structure blindly causes bugs. Most teams type-check JSON at the boundary (Zod, TypeScript types, JSON Schema).
+</Analogy>
+
+<Illustration
+  alt="Diagram of a fetch call with request and response showing JSON body parsed into a JavaScript object"
+  caption="fetch() sends an HTTP request, receives a response, response.json() parses the body. Each step is a Promise — async by nature."
+>
+
+```
+   const res = await fetch("/api/users");          ← network call
+                       │
+                       ▼
+                       returns a Response object
+                       (has .status, .ok, .headers,
+                        and a .json() to parse body)
+
+   const data = await res.json();                  ← parse body
+                       │
+                       ▼
+                       JavaScript object you use:
+                       { name: "Aisha", age: 22, ... }
+```
+
+</Illustration>
+
+### JSON: the data shape
+
+JSON (**J**ava**S**cript **O**bject **N**otation) is a text format that mirrors JavaScript's object and array literals — with a few restrictions:
+
+```json
+{
+  "name": "Aisha",
+  "age": 22,
+  "active": true,
+  "skills": ["html", "css"],
+  "profile": null,
+  "address": {
+    "city": "Lisbon",
+    "country": "PT"
+  }
+}
+```
+
+Allowed: objects (`{}`), arrays (`[]`), strings (`""`), numbers, `true`, `false`, `null`.
+**Not** allowed: comments, `undefined`, functions, dates, single quotes, trailing commas.
+
+Convert between JSON strings and JavaScript values:
+
+```js
+JSON.stringify({ name: "Aisha", age: 22 });
+// → '{"name":"Aisha","age":22}'
+
+JSON.parse('{"name":"Aisha","age":22}');
+// → { name: "Aisha", age: 22 }
+```
+
+`JSON.stringify` accepts optional arguments to format prettily:
+
+```js
+JSON.stringify(obj, null, 2);
+// pretty-printed with 2-space indents
+```
+
+### The basic fetch — GET
+
+```js
+async function loadUsers() {
+  const res = await fetch("/api/users");
+  if (!res.ok) {
+    throw new Error(`Failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return data;
+}
+```
+
+Read top to bottom:
+
+1. `fetch(url)` returns a Promise that resolves to a **`Response`** object.
+2. **`res.ok`** is `true` for 200–299 statuses. **`fetch` only rejects on network failure** — a 404 or 500 still resolves but with `ok === false`. You **must** check.
+3. **`res.json()`** parses the response body as JSON and returns *another* Promise resolving to the parsed value.
+
+(`async`/`await` is covered properly in the next lesson. For now: `await x` pauses the function until the Promise resolves, giving back the value.)
+
+### POST with a JSON body
+
+```js
+async function createUser(user) {
+  const res = await fetch("/api/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(user),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed: ${res.status}`);
+  }
+  return res.json();
+}
+```
+
+The options object has the request details:
+
+- **`method`** — `"GET"` (default), `"POST"`, `"PUT"`, `"PATCH"`, `"DELETE"`.
+- **`headers`** — an object of HTTP headers. `Content-Type: application/json` is required when sending JSON.
+- **`body`** — the request payload. Must be a string (or `FormData`, `Blob`, etc.). For JSON, **call `JSON.stringify` yourself** — fetch won't do it.
+
+### Inspecting the response
+
+```js
+res.status        // 200, 404, 500…
+res.statusText    // "OK", "Not Found"
+res.ok            // true if status is 2xx
+res.headers       // a Headers object — res.headers.get("Content-Type")
+res.url           // the final URL (after redirects)
+
+// Body — must pick ONE of these (they consume the body)
+await res.json()       // parse as JSON
+await res.text()       // raw string
+await res.blob()       // binary (images, files)
+await res.formData()   // for multipart responses
+```
+
+Important: a Response's body can only be read **once**. Calling `res.json()` consumes it; a second `res.json()` throws. If you need both raw text and JSON, save the result of one and re-parse.
+
+### Handling errors properly
+
+Three failure modes to plan for:
+
+```js
+try {
+  const res = await fetch("/api/users");
+
+  // 1. The request itself failed (offline, DNS, CORS blocked)
+  // → fetch already threw before we got here
+
+  if (!res.ok) {
+    // 2. The server responded but with an error status
+    throw new Error(`Server returned ${res.status}`);
+  }
+
+  const data = await res.json();
+  // 3. The body wasn't valid JSON
+  // → res.json() threw
+
+  return data;
+} catch (err) {
+  console.error("fetchUsers failed:", err);
+  return [];     // or rethrow, depending on what the caller wants
+}
+```
+
+Real-world API clients also handle:
+
+- **Timeouts** — `fetch` has no default timeout. Use an `AbortController` with `setTimeout`.
+- **Retries** — automatic retry on transient failures (5xx, network errors), usually with backoff.
+- **Auth refresh** — if a 401 means "token expired," try refreshing and retrying.
+
+Most apps eventually wrap `fetch` in a thin layer (or use a library like `axios` or `ky`) that bakes these in.
+
+### Adding query parameters
+
+For GET requests, build the URL with `URLSearchParams`:
+
+```js
+const params = new URLSearchParams({ page: 2, q: "react" });
+const res = await fetch(`/api/search?${params}`);
+```
+
+This handles URL encoding correctly. Don't concatenate manually — `?q=${query}` breaks the moment someone searches "tom & jerry."
+
+### CORS — the cross-origin gotcha
+
+The browser refuses to read responses from a different *origin* (protocol + domain + port) unless the server explicitly allows it via CORS headers. Your local dev page on `localhost:3000` cannot read `localhost:8080/api/...` unless the API responds with `Access-Control-Allow-Origin: *` (or your origin). It looks like fetch is broken; it's actually the browser blocking the read.
+
+In a properly configured project (like this one), the API ships CORS headers for your dev frontends. For experiments with external APIs, you might hit CORS walls — that's not a bug in your fetch call.
+
+<ExampleProject
+  src="labeled-takeout"
+  title="A live API request, demystified"
+  description="A page that fetches a tiny public JSON endpoint and displays the parsed response, the response status, and the raw text. Demonstrates the round trip: request → response → body parsed as JSON → JavaScript object."
+/>
+
+<ExampleProject
+  src="handling-failures"
+  title="What goes wrong, and how to handle it"
+  description="A page with three buttons: 'happy path', 'bad URL', 'wrong endpoint'. Each fetch shows the difference between fetch rejection (network failure), a non-ok response, and a JSON parse error. Demonstrates the try/catch + ok check pattern."
+/>
+
+<Exercise
+  title="Build a tiny GitHub user lookup"
+  starter={`Create a page with an input for a GitHub username and a
+button.
+
+When clicked, your code should:
+
+  1. Read the username from the input.
+  2. Construct the URL: https://api.github.com/users/<name>
+  3. Call fetch.
+  4. If res.ok is false, show "User not found" and stop.
+  5. Parse the JSON body.
+  6. Render the name, avatar (img), bio, public_repos, and
+     followers on the page.
+
+Use async/await and a try/catch. Disable the button while a
+request is in flight. Show "Loading..." while waiting.`}
+>
+
+- The function is `async` and uses `await` for both the fetch and the json call.
+- The code checks `res.ok` before calling `res.json()`.
+- A try/catch wraps both the fetch and the json parsing.
+- The button is disabled during the request and re-enabled in a `finally` block.
+- A loading state ("Loading…" or a spinner) shows between click and response.
+- The rendered HTML uses `textContent` for the name and bio (avoid XSS); the `<img>` `src` is the avatar URL.
+- An empty or non-existent username shows a friendly error, not a crash.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why must you check `response.ok` after a `fetch` call?
+
+**A:** Because `fetch` **does not reject on non-2xx HTTP status codes**. It only rejects when the request itself fails — DNS failure, no network, CORS blocked. A 404 or 500 still **resolves** the Promise with a Response object; you'd miss the error if you don't check.
+
+```js
+const res = await fetch("/api/missing");
+// If the endpoint returns 404, NO error is thrown.
+// res.status === 404, res.ok === false.
+// Calling res.json() at this point might give garbage.
+
+if (!res.ok) {
+  throw new Error(`HTTP ${res.status}`);
+}
+```
+
+This is the single most common `fetch` gotcha. Libraries like `axios` and `ky` reject on 4xx/5xx by default for this reason — but `fetch`, being a low-level API, leaves that decision to you. Always check `res.ok`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is JSON, and how does it relate to a JavaScript object?
+
+**A:** **JSON** (JavaScript Object Notation) is a **text** format for representing data. It's a string. It looks like a JavaScript object literal because that's where the syntax came from, but with restrictions:
+
+- Keys must be in double quotes (`"name"`, not `name`).
+- Strings must use double quotes (no `'single'` or backticks).
+- No comments, no functions, no `undefined`, no trailing commas.
+
+A **JavaScript object** is the in-memory data structure your code works with. It has methods, can hold any type of value, can reference itself.
+
+You convert between them:
+
+```js
+const obj  = { name: "Aisha", age: 22 };
+const text = JSON.stringify(obj);          // '{"name":"Aisha","age":22}' — a string
+const back = JSON.parse(text);             // { name: "Aisha", age: 22 } — an object
+```
+
+JSON is what **travels over the network**, written to files, stored in databases. JavaScript objects are what you **work with in memory**. Conversion happens at the boundary.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `JSON.stringify(obj)` and just sending `obj` as a fetch body?
+
+**A:** `fetch`'s `body` option needs a **string** (or `FormData`, `Blob`, `URLSearchParams`). If you pass a plain JS object directly:
+
+```js
+fetch("/api", { method: "POST", body: { name: "Aisha" } });
+// browser calls toString() on the object → body becomes "[object Object]"
+// server gets garbage
+```
+
+You must explicitly serialize it to a JSON string, AND set the `Content-Type` header so the server knows how to parse it:
+
+```js
+fetch("/api", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Aisha" }),
+});
+```
+
+Both parts matter:
+
+- **`JSON.stringify`** converts the object to the string `'{"name":"Aisha"}'`.
+- **`Content-Type: application/json`** tells the server to parse the body as JSON. Without it, most server middleware ignores the body entirely.
+
+Forgetting one or both is the classic "the server isn't seeing my POST data" bug.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is CORS, and why does it sometimes block your fetch?
+
+**A:** **CORS** (Cross-Origin Resource Sharing) is a browser security policy that limits requests across different **origins**. An origin is the combination of *protocol + host + port* — `https://example.com:443` is one; `http://example.com:80` is a different one; `http://localhost:3000` and `http://localhost:8080` are different.
+
+By default, a browser-side fetch from your `localhost:3000` page to `localhost:8080/api` **is sent**, but the browser **blocks JavaScript from reading the response** unless the server explicitly opts in via headers:
+
+```
+Access-Control-Allow-Origin: http://localhost:3000
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+```
+
+Without those headers, your fetch appears to "fail" — the browser logs a CORS error, your code's `await fetch(...)` throws a `TypeError: Failed to fetch`. It looks like your code is broken; it's actually the *server* not allowing the cross-origin read.
+
+Solutions, in order of preference:
+
+1. **Configure the server** to send proper CORS headers (the right answer; what this project does for its dev frontends).
+2. **Proxy in development** — Vite, Next.js, and Webpack dev servers can proxy `/api` requests through their own origin, sidestepping CORS.
+3. **Same origin** — host frontend and API at the same origin in production.
+
+You **cannot** "fix" CORS from frontend code. The server holds the keys.
+
+</InterviewQuestion>

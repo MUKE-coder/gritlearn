@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Destructuring + spread</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pane h2 { margin: 0 0 6px; font-size: 14px; color: #4763e4; }
+      pre { background: #1c2230; color: #e6edf3; padding: 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; margin: 0; overflow-x: auto; }
+      button { padding: 8px 14px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .reference { font-family: ui-monospace, monospace; font-size: 11px; color: #6b7280; margin-top: 6px; }
+      .equal { font-weight: 700; color: #047857; }
+      .different { font-weight: 700; color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <h1>Destructuring + spread</h1>
+    <p>Click "celebrate birthday" — the new user object replaces the old one via spread, not mutation. The references differ.</p>
+
+    <button id="celebrate">🎂 celebrate birthday</button>
+
+    <div class="row">
+      <div class="pane">
+        <h2>original user</h2>
+        <pre id="origPane"></pre>
+        <div class="reference">refId: <span id="origId"></span></div>
+      </div>
+      <div class="pane">
+        <h2>after spread</h2>
+        <pre id="newPane"></pre>
+        <div class="reference">refId: <span id="newId"></span></div>
+      </div>
+    </div>
+
+    <p>Reference comparison: <span id="cmp"></span></p>
+
+    <h2 style="font-size: 14px; margin-top: 24px;">The pattern</h2>
+    <pre>// IMMUTABLE update — what React expects
+const updated = { ...user, age: user.age + 1 };
+
+// MUTATION — what React DOES NOT detect
+user.age = user.age + 1;</pre>
+
+    <script>
+      let user = { name: "Aisha", age: 22, city: "Lisbon" };
+      let refCounter = 0;
+      const ids = new WeakMap();
+      ids.set(user, ++refCounter);
+
+      function render(orig, updated) {
+        document.getElementById("origPane").textContent = JSON.stringify(orig, null, 2);
+        document.getElementById("newPane").textContent  = JSON.stringify(updated, null, 2);
+        document.getElementById("origId").textContent   = ids.get(orig);
+        document.getElementById("newId").textContent    = ids.get(updated);
+        const same = orig === updated;
+        document.getElementById("cmp").innerHTML = same
+          ? `<span class="equal">orig === updated → true (same reference, React WOULD NOT re-render)</span>`
+          : `<span class="different">orig === updated → false (new reference, React WOULD re-render)</span>`;
+      }
+
+      render(user, user);
+
+      document.getElementById("celebrate").addEventListener("click", () => {
+        const orig = user;
+        // ↓ spread — new object, new reference
+        user = { ...orig, age: orig.age + 1 };
+        ids.set(user, ++refCounter);
+        render(orig, user);
+      });
+    </script>
+  </body>
+</html>

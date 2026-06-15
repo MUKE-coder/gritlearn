@@ -1,0 +1,371 @@
+## Async JavaScript — callbacks, promises, async/await
+
+JavaScript runs on a **single thread**. That sounds like a serious constraint — at any moment, only one piece of your code is executing. The reason the web doesn't feel that way is that the language has a deep, mature story for *not blocking* when something is slow. Fetching from a server takes 200ms. Reading a file takes 30ms. A timer waits a second. During those waits, the page must stay responsive. The mechanism is **asynchronous code** — code that says "start this; come back when it's done" instead of waiting.
+
+<Analogy>
+A Promise is **a restaurant pager**.
+
+You order food at the counter of a busy restaurant. The cashier hands you a buzzing pager and says "your food will be ready when this flashes." You don't stand at the counter blocking the line. You go sit down, talk with your friend, maybe get water — *the pager will signal you*. When it buzzes, you walk up, get your food, and move on.
+
+Three states for the pager:
+
+- **Pending** — you're holding it, food's being prepared.
+- **Fulfilled** — it buzzed; your food is ready.
+- **Rejected** — they ran out; the order failed.
+
+A JavaScript Promise has exactly those three states. `fetch()` hands you a Promise; you're holding the pager. You can attach what should happen when it fulfills (`.then(...)`) or rejects (`.catch(...)`) — that's the "what I do when it buzzes." Meanwhile your code keeps running.
+
+`async`/`await` is **wearing the pager on your wrist**. Instead of registering a callback, you write `await fetch(...)` — your code pauses on that line *for you, locally*, but the rest of the page stays alive. The result drops into the variable; the next line runs. It reads like synchronous code with a magic word.
+
+Callbacks are the old "give the cashier your phone number and they'll text you." It works but composes badly — five steps in a row means five nested call-back-me-when-done's, which become unreadable. Promises and async/await replaced that for almost every case.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a Promise transitioning from pending to fulfilled or rejected, with then and catch handlers"
+  caption="A Promise starts in pending state and transitions exactly once — to fulfilled with a value, or rejected with an error. Handlers fire on each."
+>
+
+```
+                    ┌──────── fulfilled ────► .then(value => …)
+                    │
+   new Promise ─► pending
+                    │
+                    └──────── rejected  ────► .catch(err => …)
+
+
+   With async/await:
+
+   async function getUser() {
+     const res  = await fetch("/api/user");   ← pauses HERE locally
+     const data = await res.json();            ← also pauses HERE
+     return data;
+   }
+```
+
+</Illustration>
+
+### Callbacks — the original async pattern
+
+```js
+// The old "do this when ready" pattern
+setTimeout(() => {
+  console.log("ran after 1 second");
+}, 1000);
+
+// Reading a file in Node.js style:
+fs.readFile("data.txt", (err, content) => {
+  if (err) return console.error(err);
+  console.log(content.toString());
+});
+```
+
+A **callback** is a function you pass to something that runs it later. Works fine for one step. Falls apart for many:
+
+```js
+// "Callback hell"
+fetchUser((user) => {
+  fetchOrders(user.id, (orders) => {
+    fetchItems(orders[0].id, (items) => {
+      renderItems(items, () => {
+        console.log("done");
+      });
+    });
+  });
+});
+```
+
+The pyramid of indentation makes the code hard to read; error handling fragments across every level; you can't easily express "run these in parallel" or "if any one fails, stop." Promises and `async`/`await` solved all three.
+
+### Promises — the modern foundation
+
+A **Promise** is an object representing an async operation that will eventually finish (or fail). You attach handlers:
+
+```js
+fetch("/api/users")
+  .then((res) => res.json())
+  .then((data) => console.log(data))
+  .catch((err) => console.error(err));
+```
+
+Reads as: "fetch users; when that resolves, parse JSON; when that resolves, log; if anything fails along the way, log the error." Each `.then` receives the previous step's resolved value and can return either a value or another promise.
+
+You can also **create** a Promise manually, though you'll rarely need to — most async APIs already return one:
+
+```js
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+wait(1000).then(() => console.log("a second passed"));
+```
+
+### `async` / `await` — the modern shape
+
+`async`/`await` is syntactic sugar over Promises that makes async code read like sync code:
+
+```js
+async function loadUsers() {
+  try {
+    const res  = await fetch("/api/users");
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
+}
+```
+
+Two rules:
+
+1. **`await` only works inside `async` functions** (or at the top level of an ES module).
+2. **`async` functions always return a Promise.** Even if you `return 42`, the caller gets `Promise<42>`. To unwrap, you `await` (or `.then(...)`) the result.
+
+Errors thrown inside an async function become rejections; `try/catch` catches them. This is the modern default; reach for raw `.then(...)` only when you have a reason.
+
+### Running things in parallel: `Promise.all`
+
+Two independent fetches:
+
+```js
+// SERIAL — slow (waits for first before starting second)
+const user   = await fetch("/api/user");
+const posts  = await fetch("/api/posts");
+
+// PARALLEL — fast (both start immediately)
+const [user, posts] = await Promise.all([
+  fetch("/api/user"),
+  fetch("/api/posts"),
+]);
+```
+
+`Promise.all` takes an array of Promises and resolves once **all** have fulfilled, in the order they were passed. If **any** one rejects, the whole thing rejects immediately.
+
+Related:
+
+- **`Promise.allSettled`** — wait for all, **never rejects**. Resolves with an array of `{ status, value | reason }`. Use when you want partial successes.
+- **`Promise.race`** — resolves (or rejects) as soon as the **first** Promise settles. Useful for "fetch with a timeout."
+
+### A common pattern: fetch with timeout
+
+```js
+async function fetchWithTimeout(url, ms = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+`AbortController` is the standard way to cancel an in-flight request. Pair with a timer for a basic timeout.
+
+### The event loop, briefly
+
+You don't need to understand the event loop on day one, but the gist:
+
+1. Synchronous code runs to completion on the main stack.
+2. Async operations (timers, fetches, etc.) get scheduled by the browser.
+3. When they complete, their callbacks go into a queue.
+4. When the main stack is empty, the queue runs.
+
+That's why `setTimeout(fn, 0)` runs `fn` *after* any currently-executing sync code: the stack has to empty first. It's also why a CPU-heavy synchronous loop **does** freeze the page — the event loop can't process anything else until the loop is done. The lesson: keep your synchronous bursts short.
+
+### Pitfalls
+
+#### Forgetting `await`
+
+```js
+async function bad() {
+  const res = fetch("/api/users");   // ← forgot await!
+  const data = await res.json();      // TypeError: res.json is not a function
+  // res is a Promise, not a Response
+}
+```
+
+If you forget `await`, you're holding the Promise, not its value.
+
+#### `async` inside `forEach`
+
+```js
+[1, 2, 3].forEach(async (id) => {
+  const data = await fetch(`/api/${id}`);
+  // these fires don't wait for each other; forEach doesn't await the returned Promise
+});
+console.log("done");  // logs before the fetches finish
+```
+
+`forEach` ignores the Promise returned by the async callback. For sequenced async work, use `for…of` with `await`. For parallel, `Promise.all([…].map(async (x) => …))`.
+
+#### Unhandled rejections
+
+```js
+fetch("/api/users").then(handle);   // no .catch — rejection becomes an unhandled error
+```
+
+Always handle the error side of Promises — either a `.catch(...)` chained on, or a `try/catch` around an `await`. The browser logs unhandled rejections to the console but the user-facing UI just silently fails.
+
+<ExampleProject
+  src="restaurant-pager"
+  title="Three async styles, same task"
+  description="A page that 'fetches' a fake user in three ways: with raw callbacks (setTimeout), with .then promise chains, and with async/await. Side-by-side comparison. Watch how each style handles success and error."
+/>
+
+<ExampleProject
+  src="parallel-vs-serial"
+  title="Promise.all vs sequential awaits"
+  description="A page that runs three 1-second simulated 'fetches' twice — once sequentially (3 seconds total) and once with Promise.all (1 second total). A timer shows the elapsed wall time. Demonstrates exactly why Promise.all matters for independent requests."
+/>
+
+<Exercise
+  title="A multi-step async pipeline"
+  starter={`Write an async function loadDashboard() that:
+
+  1. Fetches the user profile from a (mocked) /api/me endpoint.
+     If it fails, log "could not load user" and stop.
+
+  2. Then fetches two things IN PARALLEL — recent orders and
+     notifications — using Promise.all.
+
+  3. Renders all three on the page.
+
+For this exercise, mock the fetches with setTimeout-based
+Promises:
+
+  const me        = () => wait(300, { name: "Aisha" });
+  const orders    = () => wait(800, [{ id: 1 }, { id: 2 }]);
+  const notifs    = () => wait(500, ["Welcome!"]);
+  const wait = (ms, value) =>
+    new Promise(r => setTimeout(() => r(value), ms));
+
+Print the total elapsed time at the end. Use a try/catch to
+handle failures.`}
+>
+
+- The function is `async`.
+- Step 1 (user) is `await`ed sequentially because steps 2 and 3 depend on knowing the user loaded.
+- Steps 2 and 3 (orders + notifications) run **in parallel** via `Promise.all([orders(), notifs()])`.
+- The total elapsed time is roughly `300 + max(800, 500)` = ~1100ms, not `300 + 800 + 500` = 1600ms.
+- A `try/catch` wraps the whole thing; failures log a clear error.
+- Each render uses `textContent` (not `innerHTML` with un-escaped strings).
+- No callback nesting — the structure reads top-to-bottom.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is a Promise, and what are its three states?
+
+**A:** A **Promise** is an object that represents an asynchronous operation that will eventually complete or fail. It has exactly three states:
+
+1. **Pending** — initial state. The operation is still running.
+2. **Fulfilled** — the operation succeeded; the Promise has a *value*.
+3. **Rejected** — the operation failed; the Promise has a *reason* (usually an Error).
+
+A Promise transitions **exactly once** from pending — to either fulfilled or rejected — and then *never changes again*. That property is what makes them composable: once a Promise is settled, attaching more `.then(...)` handlers still works, they just fire immediately.
+
+You consume them via `.then((value) => ...).catch((err) => ...)` or with `async`/`await` syntax. Almost every modern async API returns a Promise — `fetch`, file reads, database calls, timers in newer code.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `async` / `await` do, and how does it relate to Promises?
+
+**A:** `async`/`await` is **syntactic sugar over Promises** that makes asynchronous code read like synchronous code.
+
+- **`async`** before a function declaration makes the function always return a Promise. Inside, you can use `await`.
+- **`await`** before a Promise *pauses* the function until the Promise settles, then gives back the resolved value. If the Promise rejects, `await` throws — caught by a surrounding `try/catch`.
+
+```js
+// Promise style — works, but nests as you chain
+fetch("/api/users")
+  .then((res) => res.json())
+  .then((data) => console.log(data))
+  .catch((err) => console.error(err));
+
+// async/await style — same thing, flatter
+async function load() {
+  try {
+    const res  = await fetch("/api/users");
+    const data = await res.json();
+    console.log(data);
+  } catch (err) {
+    console.error(err);
+  }
+}
+```
+
+Both compile to roughly the same machine code. The async/await style is the modern default — easier to read, debug, and structure error handling with normal `try/catch`. Reach for raw `.then(...)` only for advanced cases like chaining transformations onto a Promise without an async function.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use `Promise.all` instead of awaiting promises one at a time?
+
+**A:** Use `Promise.all` for **independent** async operations — when the result of one doesn't depend on the others. They run in parallel, total time is roughly the slowest one (not the sum).
+
+```js
+// SERIAL — 300 + 500 + 200 = 1000ms total
+const a = await fetch("/api/a");
+const b = await fetch("/api/b");
+const c = await fetch("/api/c");
+
+// PARALLEL — max(300, 500, 200) ≈ 500ms total
+const [a, b, c] = await Promise.all([
+  fetch("/api/a"),
+  fetch("/api/b"),
+  fetch("/api/c"),
+]);
+```
+
+Big wins when the requests are unrelated — dashboards, "load user + their orders + their notifications" patterns. Two cautions:
+
+1. **`Promise.all` rejects on the first failure.** If you need partial successes, use `Promise.allSettled`.
+2. **`Promise.all` doesn't help if requests depend on each other.** You can't parallelize "get user; then get their orders" because you need the user's id first. Use `await` sequentially for genuinely sequential work.
+
+Always check: are these requests **independent**? If yes — `Promise.all`. If no — sequential `await`s.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's wrong with using `async` inside `forEach`?
+
+**A:** `forEach` ignores the Promise its callback returns. So:
+
+```js
+[1, 2, 3].forEach(async (id) => {
+  const data = await fetch(`/api/items/${id}`);
+  console.log(data);
+});
+console.log("done");
+```
+
+…**logs "done" before any of the fetches finish.** `forEach` calls each callback, sees a Promise come back, discards it, moves on. None of the awaits actually pause the outer flow.
+
+This is a particularly nasty bug because the code *looks* like it should work — `await` is right there. But `forEach`'s contract is "call this function for each item; return nothing." It can't be made to wait.
+
+Fix it one of two ways:
+
+```js
+// SEQUENTIAL — each waits for the previous
+for (const id of [1, 2, 3]) {
+  const data = await fetch(`/api/items/${id}`);
+  console.log(data);
+}
+
+// PARALLEL — all kick off at once, wait for the slowest
+const all = await Promise.all(
+  [1, 2, 3].map(async (id) => {
+    const res = await fetch(`/api/items/${id}`);
+    return res.json();
+  })
+);
+```
+
+`for…of` cooperates with `await`. `forEach` doesn't. ESLint's `no-async-promise-executor` and `no-misused-promises` rules catch this in TypeScript projects.
+
+</InterviewQuestion>

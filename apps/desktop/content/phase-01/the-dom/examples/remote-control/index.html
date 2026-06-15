@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The DOM remote control</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .stage { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin: 16px 0; min-height: 120px; }
+      h2.target { transition: color 0.2s; }
+      p.target { padding: 10px; border-radius: 6px; transition: all 0.2s; }
+      p.target.boxed { background: #fef3c7; border: 1px solid #f59e0b; }
+      ul.target li { padding: 4px 0; }
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+      .controls button { padding: 6px 12px; border: 1px solid #d1d5db; background: white; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: ui-monospace, monospace; }
+      .controls button:hover { background: #4763e4; color: white; border-color: #4763e4; }
+    </style>
+  </head>
+  <body>
+    <h1>The DOM as a remote control</h1>
+    <p>Each button below is one DOM call. Press it; watch the stage change.</p>
+
+    <div class="stage">
+      <h2 id="title" class="target">Hello, world.</h2>
+      <p id="para" class="target">A regular paragraph.</p>
+      <ul id="list" class="target">
+        <li>Original 1</li>
+        <li>Original 2</li>
+      </ul>
+    </div>
+
+    <div class="controls">
+      <button data-fn="setText">title.textContent = "..."</button>
+      <button data-fn="setStyle">title.style.color = "#4763e4"</button>
+      <button data-fn="addClass">para.classList.add("boxed")</button>
+      <button data-fn="removeClass">para.classList.remove("boxed")</button>
+      <button data-fn="addItem">list.appendChild(new &lt;li&gt;)</button>
+      <button data-fn="replaceList">list.innerHTML = "&lt;li&gt;...&lt;/li&gt;"</button>
+      <button data-fn="removePara">para.remove()</button>
+      <button data-fn="reset">reset</button>
+    </div>
+
+    <script>
+      const original = document.querySelector(".stage").innerHTML;
+      let added = 0;
+
+      const handlers = {
+        setText: () => {
+          document.getElementById("title").textContent = "Now this.";
+        },
+        setStyle: () => {
+          document.getElementById("title").style.color = "#4763e4";
+        },
+        addClass: () => {
+          document.getElementById("para").classList.add("boxed");
+        },
+        removeClass: () => {
+          document.getElementById("para").classList.remove("boxed");
+        },
+        addItem: () => {
+          added++;
+          const li = document.createElement("li");
+          li.textContent = `Added item ${added}`;
+          document.getElementById("list").appendChild(li);
+        },
+        replaceList: () => {
+          document.getElementById("list").innerHTML = "<li>Brand new list</li><li>Two items</li>";
+        },
+        removePara: () => {
+          const p = document.getElementById("para");
+          if (p) p.remove();
+        },
+        reset: () => {
+          document.querySelector(".stage").innerHTML = original;
+          added = 0;
+        },
+      };
+
+      document.querySelector(".controls").addEventListener("click", (e) => {
+        const fn = e.target.dataset.fn;
+        if (fn && handlers[fn]) handlers[fn]();
+      });
+    </script>
+  </body>
+</html>

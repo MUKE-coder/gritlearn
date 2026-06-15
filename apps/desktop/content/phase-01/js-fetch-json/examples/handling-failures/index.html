@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Handling fetch failures</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .controls { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+      button { padding: 8px 14px; border: 1px solid #d1d5db; background: white; border-radius: 6px; font-size: 13px; cursor: pointer; font-family: ui-monospace, monospace; }
+      .happy  { border-color: #10b981; color: #047857; }
+      .happy:hover  { background: #ecfdf5; }
+      .bad404 { border-color: #f59e0b; color: #b45309; }
+      .bad404:hover { background: #fffbeb; }
+      .badNet { border-color: #ef4444; color: #b91c1c; }
+      .badNet:hover { background: #fef2f2; }
+      pre { background: #1c2230; color: #e6edf3; padding: 14px; border-radius: 8px; font-size: 12px; line-height: 1.5; min-height: 120px; white-space: pre-wrap; }
+      .ok  { color: #4ade80; }
+      .warn { color: #facc15; }
+      .err { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <h1>Three failure modes</h1>
+    <p>Each button triggers a different fetch outcome. Watch how the error surfaces.</p>
+
+    <div class="controls">
+      <button class="happy"  data-mode="ok">✓ happy path (200)</button>
+      <button class="bad404" data-mode="404">⚠ server returned 404</button>
+      <button class="badNet" data-mode="net">✗ network error</button>
+    </div>
+
+    <pre id="log">(click a button)</pre>
+
+    <p style="font-size: 13px; color: #6b7280; margin-top: 16px;">
+      Notice: only the "network error" case rejects the promise. A 404 still resolves — you have to check <code>res.ok</code> yourself.
+    </p>
+
+    <script>
+      const log = document.getElementById("log");
+
+      function pretend(mode) {
+        if (mode === "ok") {
+          return Promise.resolve({
+            ok: true, status: 200, statusText: "OK",
+            json: () => Promise.resolve({ msg: "hello!" }),
+          });
+        }
+        if (mode === "404") {
+          return Promise.resolve({
+            ok: false, status: 404, statusText: "Not Found",
+            json: () => Promise.resolve({ error: "no such resource" }),
+          });
+        }
+        // network error — fetch itself rejects
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+
+      document.querySelector(".controls").addEventListener("click", async (e) => {
+        const mode = e.target.dataset.mode;
+        if (!mode) return;
+        log.innerHTML = `<span class="warn">→ awaiting fetch (mode=${mode})…</span>`;
+        try {
+          const res = await pretend(mode);
+          // Always check res.ok!
+          if (!res.ok) {
+            log.innerHTML = `<span class="err">fetch resolved, but res.ok is false.</span>
+status: <span class="warn">${res.status} ${res.statusText}</span>
+body: <span class="warn">${JSON.stringify(await res.json())}</span>
+<span class="ok">handled cleanly with the ok check.</span>`;
+            return;
+          }
+          const data = await res.json();
+          log.innerHTML = `<span class="ok">✓ ok!</span>
+status: ${res.status} ${res.statusText}
+body:   ${JSON.stringify(data)}`;
+        } catch (err) {
+          log.innerHTML = `<span class="err">✗ fetch REJECTED.</span>
+caught: <span class="warn">${err.name}: ${err.message}</span>
+<span class="ok">this is what the try/catch is for — network failures.</span>`;
+        }
+      });
+    </script>
+  </body>
+</html>

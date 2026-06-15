@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Event delegation</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .panel { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      ul { list-style: none; padding: 0; margin: 0; max-height: 320px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; background: white; }
+      li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
+      li.done { color: #9ca3af; text-decoration: line-through; }
+      li input[type=checkbox] { margin: 0; }
+      li button { padding: 2px 8px; font-size: 11px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; margin-left: auto; }
+      li:hover { background: #f9fafb; }
+      .controls { display: flex; gap: 8px; margin-top: 12px; }
+      .controls button { padding: 6px 12px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .info { padding: 10px 14px; background: #eef2ff; border-left: 4px solid #4763e4; border-radius: 0 6px 6px 0; margin-top: 14px; font-size: 12px; color: #4338ca; }
+    </style>
+  </head>
+  <body>
+    <h1>One listener, many items</h1>
+    <p>The whole list shares a single click listener on the &lt;ul&gt;. Items added later just work — no per-item wiring.</p>
+
+    <div class="panel">
+      <ul id="list"></ul>
+      <div class="controls">
+        <button id="addOne">add 1</button>
+        <button id="addTen">add 10</button>
+        <button id="clear">clear</button>
+      </div>
+      <div class="info">
+        Listeners on the page: <strong>1</strong> click + <strong>3</strong> button clicks (5 total).<br />
+        Without delegation, this list with <span id="count">0</span> items would need that many listeners.
+      </div>
+    </div>
+
+    <script>
+      const list = document.getElementById("list");
+      let nextId = 1;
+
+      function addItem() {
+        const id = nextId++;
+        const li = document.createElement("li");
+        li.dataset.id = id;
+        li.innerHTML = `
+          <input type="checkbox" />
+          <span>Task ${id}</span>
+          <button data-action="delete">delete</button>
+        `;
+        list.appendChild(li);
+        document.getElementById("count").textContent = list.children.length;
+      }
+
+      // THE ONE LISTENER — handles every li, including future ones.
+      list.addEventListener("click", (e) => {
+        const li = e.target.closest("li");
+        if (!li) return;
+
+        if (e.target.matches('button[data-action="delete"]')) {
+          li.remove();
+          document.getElementById("count").textContent = list.children.length;
+          return;
+        }
+        if (e.target.matches("input[type=checkbox]")) {
+          li.classList.toggle("done", e.target.checked);
+          return;
+        }
+        // clicked anywhere else on the row — toggle the checkbox
+        const cb = li.querySelector("input[type=checkbox]");
+        cb.checked = !cb.checked;
+        li.classList.toggle("done", cb.checked);
+      });
+
+      document.getElementById("addOne").addEventListener("click", addItem);
+      document.getElementById("addTen").addEventListener("click", () => {
+        for (let i = 0; i < 10; i++) addItem();
+      });
+      document.getElementById("clear").addEventListener("click", () => {
+        list.innerHTML = "";
+        document.getElementById("count").textContent = "0";
+      });
+
+      // seed with 3
+      for (let i = 0; i < 3; i++) addItem();
+    </script>
+  </body>
+</html>

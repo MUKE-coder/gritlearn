@@ -1,0 +1,336 @@
+## JS arrays and array methods
+
+An **array** is an ordered list of values. It's the single most common collection shape in JavaScript — every API response, every list of users on the page, every search result, every step of a wizard, every word in a sentence — is an array. Arrays come with a generous set of *methods* (`map`, `filter`, `reduce`, `find`, `some`, `every`) that turn "for-loop the items and accumulate something" into a one-liner. Once you internalize the array method vocabulary, half of all JavaScript reads like a sentence.
+
+<Analogy>
+Array methods are **an assembly line**.
+
+Picture a factory: raw widgets enter on a conveyor belt at one end. Stations along the line do one thing each — *paint each widget red*, *throw out the broken ones*, *box them in pairs*, *count the total*. Each station passes its output to the next station. The line is a sequence of small, single-purpose steps.
+
+Array methods are exactly that. The array is the conveyor belt. Each method (`filter`, `map`, `reduce`) is a station that does one transformation and passes the result to the next. You chain them and read top-to-bottom what happens to the data:
+
+```js
+users
+  .filter(u => u.active)        // throw out the inactive
+  .map(u => u.email)            // paint each one as their email
+  .filter(email => email.endsWith("@gritlearn.dev"))   // throw out external
+  .sort()                        // line them up alphabetically
+```
+
+That's an assembly line, in code. Every step is small, named, and obvious. The alternative — a single `for` loop with conditionals nested inside it — would do the same work but read as a wall of logic. The assembly line wins because each station does one thing and the *flow* is the story.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an array passing through filter, then map, then reduce stations to a single result"
+  caption="An array enters the line, each method transforms it, the final method returns the result. Read the chain top-to-bottom."
+>
+
+```
+   [1, 2, 3, 4, 5, 6]
+         │
+         ▼
+   .filter(n => n % 2 === 0)       → [2, 4, 6]      ← keep evens
+         │
+         ▼
+   .map(n => n * 10)                → [20, 40, 60]   ← multiply each
+         │
+         ▼
+   .reduce((sum, n) => sum + n, 0)  → 120            ← combine into one
+```
+
+</Illustration>
+
+### Creating arrays
+
+```js
+const empty   = [];
+const colors  = ["red", "green", "blue"];
+const mixed   = [1, "two", true, null, { name: "x" }];   // any types
+
+// Array.from — build from an iterable or by length
+const tens    = Array.from({ length: 5 }, (_, i) => (i + 1) * 10);   // [10,20,30,40,50]
+
+// Spread an iterable into a new array
+const chars   = [..."hello"];   // ["h","e","l","l","o"]
+const both    = [...arr1, ...arr2];
+```
+
+Arrays in JavaScript are *not* typed — a single array can hold mixed types — but in practice you'll keep one type per array most of the time.
+
+### The shape of an array
+
+```js
+const fruits = ["apple", "banana", "cherry"];
+
+fruits.length      // 3
+fruits[0]          // "apple"      — zero-indexed
+fruits[2]          // "cherry"
+fruits[3]          // undefined    — out of range; no error
+fruits.at(-1)      // "cherry"     — negative index from the end
+```
+
+### Mutating methods (change the original)
+
+```js
+const nums = [1, 2, 3];
+
+nums.push(4);          // adds to end:    [1,2,3,4]
+nums.pop();            // removes from end and returns it
+nums.unshift(0);       // adds to start:  [0,1,2,3]
+nums.shift();          // removes from start
+nums.splice(1, 1);     // remove starting at idx 1, length 1
+nums.sort();           // sorts in place
+nums.reverse();        // reverses in place
+```
+
+These mutate `nums` itself. **Be careful with mutation in modern code** — React, Redux, and most reactive UIs rely on detecting "did this array change?" by checking *if it's a new reference*. Mutating in place doesn't change the reference, so the UI doesn't re-render. Prefer the non-mutating methods below.
+
+### Non-mutating methods (return a new array)
+
+These are the assembly-line workhorses.
+
+```js
+const numbers = [1, 2, 3, 4, 5];
+
+// MAP — transform each item; same length out
+numbers.map(n => n * 2);        // [2, 4, 6, 8, 10]
+
+// FILTER — keep items matching a condition; smaller or same
+numbers.filter(n => n % 2 === 0); // [2, 4]
+
+// REDUCE — combine all items into one value
+numbers.reduce((acc, n) => acc + n, 0);   // 15
+
+// FIND — get the first matching item (or undefined)
+numbers.find(n => n > 3);       // 4
+
+// FINDINDEX — get the index of the first matching item
+numbers.findIndex(n => n > 3);  // 3
+
+// SOME — true if at least one matches
+numbers.some(n => n > 10);      // false
+
+// EVERY — true if all match
+numbers.every(n => n > 0);      // true
+
+// INCLUDES — true if value is in the array
+numbers.includes(3);            // true
+
+// SLICE — copy a subrange; non-mutating
+numbers.slice(1, 4);            // [2, 3, 4]
+
+// JOIN — combine into a string
+numbers.join(", ");             // "1, 2, 3, 4, 5"
+
+// CONCAT or spread — combine arrays
+[...numbers, 6, 7];             // [1,2,3,4,5,6,7]
+```
+
+### `map` — the most common
+
+```js
+const users = [
+  { id: 1, name: "Aisha" },
+  { id: 2, name: "Brian" },
+];
+
+// Extract a field
+users.map(u => u.name);
+// → ["Aisha", "Brian"]
+
+// Transform shape
+users.map(u => ({ id: u.id, label: u.name.toUpperCase() }));
+// → [{ id: 1, label: "AISHA" }, { id: 2, label: "BRIAN" }]
+```
+
+`map` always returns an array of the *same length* as the input. Use it for "convert each item to something else."
+
+### `filter` — keep some, drop others
+
+```js
+const orders = [
+  { id: 1, paid: true },
+  { id: 2, paid: false },
+  { id: 3, paid: true },
+];
+
+const paid = orders.filter(o => o.paid);
+// → [{id:1, paid:true}, {id:3, paid:true}]
+```
+
+`filter` returns an array with *fewer or the same* number of items. The callback is a predicate — return `true` to keep the item, `false` to drop it.
+
+### `reduce` — collapse to one value
+
+`reduce` is the most powerful and the most intimidating. The pattern: walk the array, building up an *accumulator* one item at a time.
+
+```js
+const total = [1, 2, 3, 4].reduce((acc, n) => acc + n, 0);
+// (acc, n) starts at: (0, 1) → 1
+// then (1, 2) → 3
+// then (3, 3) → 6
+// then (6, 4) → 10
+// → 10
+```
+
+Two arguments: a function `(acc, item) => newAcc` and an initial value for the accumulator. `reduce` returns the final accumulator.
+
+The accumulator can be any type — a number, a string, an array, an object:
+
+```js
+// Count occurrences into an object
+const tags = ["js", "css", "js", "html", "css", "js"];
+const counts = tags.reduce((acc, tag) => {
+  acc[tag] = (acc[tag] || 0) + 1;
+  return acc;
+}, {});
+// → { js: 3, css: 2, html: 1 }
+```
+
+Most things you can do with `reduce`, you can also do with a `for…of` loop and a counter. `reduce` is cleaner once you're comfortable; if it feels hard, write the loop first and refactor.
+
+### Chaining
+
+The real win is chaining:
+
+```js
+const result = users
+  .filter(u => u.active)
+  .map(u => u.lastLogin)
+  .filter(d => d != null)
+  .sort();
+```
+
+Each line is one verb. The flow reads as "active users → their last login → only the non-null ones → sorted."
+
+A warning: **chaining can be slow on huge arrays** because each method walks the entire input. For 100 items it's irrelevant; for 100,000 items, consider folding multiple operations into a single `reduce`. In practice this almost never matters in app code.
+
+<ExampleProject
+  src="assembly-line"
+  title="The assembly line, visualized"
+  description="A page that takes an input array and runs it through filter → map → reduce, showing what each station receives and outputs. Tweak the predicates and watch the chain update."
+/>
+
+<ExampleProject
+  src="map-filter-reduce"
+  title="The three workhorses, side by side"
+  description="One dataset — a small orders list — processed three different ways: map (extract IDs), filter (only paid), reduce (sum the totals). The same idea you'll write a thousand times for real."
+/>
+
+<Exercise
+  title="Build a sales summary"
+  starter={`Given the array:
+
+  const orders = [
+    { id: 1, customer: "Aisha",  total:  89.50, status: "ok" },
+    { id: 2, customer: "Brian",  total:  24.00, status: "pending" },
+    { id: 3, customer: "Daniel", total: 312.70, status: "ok" },
+    { id: 4, customer: "Sandra", total:  17.99, status: "failed" },
+    { id: 5, customer: "Emily",  total: 100.00, status: "ok" },
+  ];
+
+Using ONLY array methods (no for loops), compute and render on
+the page:
+
+  - Total revenue from successful orders only.
+  - The customer with the largest "ok" order.
+  - A comma-separated list of pending customers' names.
+  - The count of orders per status (an object like {ok: 3, ...}).`}
+>
+
+- All four results use array methods — no `for` loop in sight.
+- Total revenue uses `.filter(o => o.status === "ok").reduce((acc, o) => acc + o.total, 0)`.
+- Largest order uses `.filter(...).reduce((biggest, o) => o.total > biggest.total ? o : biggest)`.
+- Pending customer list uses `.filter(...).map(o => o.customer).join(", ")`.
+- Status counts use `.reduce((acc, o) => { acc[o.status] = (acc[o.status] || 0) + 1; return acc; }, {})`.
+- Numbers are formatted to two decimal places for display.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `map` and `forEach`?
+
+**A:** Both call a function for each item in an array, but they're for different intents:
+
+- **`forEach`** runs the function **for its side effect** and returns `undefined`. Use it when you want to *do something* with each item (log it, mutate something else) but don't need a result array.
+- **`map`** runs the function and **collects the return values into a new array** of the same length. Use it when you want to *transform* each item into something new.
+
+```js
+[1, 2, 3].forEach(n => console.log(n));  // logs 3 times, returns undefined
+[1, 2, 3].map(n => n * 2);                // [2, 4, 6]
+```
+
+A common mistake: `arr.forEach(x => result.push(transform(x)))`. That's just `arr.map(transform)` — cleaner, fewer moving parts. If you find yourself pushing into an outside array from inside `forEach`, you wanted `map`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `reduce` do, and what's the second argument for?
+
+**A:** `reduce` walks the array building up an **accumulator** one item at a time. The first argument is a function `(acc, item) => newAcc`. The second argument is the **initial value** of the accumulator.
+
+```js
+[1, 2, 3, 4].reduce((acc, n) => acc + n, 0);  // → 10
+//                                       ↑
+//                                       initial value
+```
+
+Without the second argument, `reduce` uses the first array item as the initial accumulator and starts iterating from index 1. That's fine for sums but breaks when:
+
+1. **The array is empty.** Without an initial value, `reduce` throws a TypeError on an empty array.
+2. **The result type is different from the item type.** Building a tag-count object from strings needs the initial accumulator to be `{}` — you can't use a string as the seed.
+
+The safe habit: **always provide an initial value**. ESLint's `array-callback-return` rule flags missing initial values for this reason.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you NOT use array methods like `map` or `forEach`?
+
+**A:** Two cases:
+
+1. **You need to `break` out of the loop early.** `map`, `filter`, `forEach` always iterate the entire array. To stop iterating, use a regular `for` or `for…of` (with `break`) or use `find`/`some` instead (both short-circuit when a match is found).
+
+2. **You're doing async work inside the body and need to await.** `forEach` ignores the returned Promise:
+
+```js
+[1, 2, 3].forEach(async (id) => {
+  const data = await fetch(`/api/${id}`);
+  // this fires, but forEach doesn't await — the loop "ends" immediately
+});
+
+// Use for…of instead:
+for (const id of [1, 2, 3]) {
+  const data = await fetch(`/api/${id}`);
+  // properly serialized
+}
+
+// Or Promise.all for parallel:
+await Promise.all([1, 2, 3].map((id) => fetch(`/api/${id}`)));
+```
+
+Other cases where for loops can be preferable: very large arrays where you want to fold three operations into one pass (a single `reduce` instead of `filter().map().reduce()`), or when index manipulation is non-trivial. For everyday code: prefer the array methods.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between a mutating method like `sort()` and a non-mutating one like `map()`?
+
+**A:**
+
+- **Mutating** methods (`push`, `pop`, `shift`, `unshift`, `splice`, `sort`, `reverse`) **modify the original array in place**. They return either the removed item, the new length, or the (now-mutated) array itself.
+- **Non-mutating** methods (`map`, `filter`, `slice`, `concat`, `flat`, `flatMap`) **return a brand-new array** and leave the original alone.
+
+Why the distinction matters:
+
+1. **React and other reactive UIs detect change by reference.** A mutated array has the same reference; React doesn't re-render. A new array (from `map`) has a new reference and triggers a re-render. This is why React state updates with arrays should always go through non-mutating methods.
+
+2. **Shared state.** If two parts of the program hold a reference to the same array, mutating it from one place silently changes what the other sees.
+
+The modern safe defaults: `[...arr, newItem]` instead of `arr.push(newItem)`; `arr.filter(x => x.id !== id)` instead of `arr.splice(...)`; `[...arr].sort()` if you need a sorted copy. ES2023 added immutable variants — `toSorted()`, `toReversed()`, `toSpliced()` — that return new arrays without mutating. Use those when you can.
+
+</InterviewQuestion>

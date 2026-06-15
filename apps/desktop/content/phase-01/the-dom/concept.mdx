@@ -1,0 +1,313 @@
+## The DOM — selecting and changing elements
+
+The **Document Object Model** is the browser's in-memory model of your page. Every `<div>`, every `<p>`, every `<button>` is a JavaScript object in the DOM tree, with methods to read its content, change its attributes, add CSS classes, and respond to events. When you said "JavaScript is the muscles that make the body move," the DOM is the *body itself* — the thing your JS muscles flex on. This is where code starts changing the page.
+
+<Analogy>
+The DOM is **a remote control for the page**.
+
+You're sitting in front of a TV. The TV is showing a picture (your rendered HTML). You can't grab the screen and rearrange the pixels with your hand. But you have a **remote** — and the remote has buttons that say "change channel," "raise volume," "turn off." Press a button; the picture changes. The remote translates *intentions* into *changes on the screen*.
+
+The DOM is exactly that remote. The page is the screen. JavaScript doesn't reach into pixels; it talks to the DOM, and the DOM updates the screen. Each DOM "button" is a method or property:
+
+- **Change the channel** → `el.textContent = "New text"`.
+- **Raise the volume** → `el.style.fontSize = "20px"`.
+- **Turn off** → `el.remove()`.
+- **Listen for a button press** → `el.addEventListener("click", …)`.
+
+Every interactive web page works by reaching for these DOM "buttons" in response to user input. React, Vue, and every modern framework eventually do *the same calls* — they just batch and optimize them. Under the framework: the DOM. Above the framework: the DOM. The DOM is the contract.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the DOM tree showing nested element objects"
+  caption="The browser parses HTML into an in-memory tree. Every tag becomes an object. JavaScript reads and modifies those objects to change what's on screen."
+>
+
+```
+   document
+     └── <html>
+           ├── <head>
+           │     ├── <title>
+           │     └── <meta>
+           └── <body>
+                 ├── <h1>            ← each is a JS object you can grab,
+                 ├── <nav>             read, modify, listen on
+                 │     └── <ul>
+                 │           ├── <li>
+                 │           └── <li>
+                 ├── <main>
+                 │     └── <p>
+                 └── <button>
+```
+
+</Illustration>
+
+### Selecting elements
+
+```js
+// By id — fast, returns a single element (or null)
+document.getElementById("save");
+
+// By CSS selector — returns the FIRST match (or null)
+document.querySelector(".btn-primary");
+document.querySelector("#nav > ul > li:first-child");
+
+// By CSS selector — returns ALL matches (a NodeList you can iterate)
+document.querySelectorAll(".card");
+
+// By tag name (returns a "live" HTMLCollection — rarely used)
+document.getElementsByTagName("p");
+
+// By class (also a live HTMLCollection — rarely used)
+document.getElementsByClassName("active");
+```
+
+**Use `querySelector` and `querySelectorAll` for almost everything.** They accept any CSS selector you'd write in a stylesheet, return a static result, and feel consistent. The older `getElementsByX` methods return *live* collections that update as the DOM changes — sometimes useful, often confusing.
+
+`querySelectorAll` returns a `NodeList`, not an array. You can iterate it with `for…of` or `forEach`, but `.map`/`.filter` don't exist on it — convert with `Array.from()` or `[...nodes]` first.
+
+### Reading and writing content
+
+```js
+const el = document.querySelector(".heading");
+
+el.textContent             // → the text content (no HTML)
+el.textContent = "New!"    // overwrite the text
+
+el.innerHTML               // → the inner HTML markup
+el.innerHTML = "<em>Hi</em>"   // overwrite with parsed HTML  ← XSS risk!
+
+el.value                   // → an input's current value
+el.value = "abc"
+
+el.checked                 // → a checkbox's state
+```
+
+**Prefer `textContent` over `innerHTML` for user-provided strings.** `innerHTML` parses the value as HTML, so user input containing `<script>` or `onerror="..."` can execute arbitrary JavaScript on your page — the classic cross-site scripting (XSS) attack. Use `innerHTML` only when you trust the source.
+
+### Attributes and dataset
+
+```js
+el.getAttribute("href")           // read any attribute
+el.setAttribute("href", "/about")
+el.removeAttribute("disabled")
+
+// "data-*" attributes have a special dataset helper
+// <div data-user-id="42" data-role="admin">
+el.dataset.userId        // "42"
+el.dataset.role          // "admin"
+el.dataset.role = "edit" // sets data-role="edit" on the element
+```
+
+`dataset` is the canonical way to attach little bits of state to elements that JS will read.
+
+### Styling and classes
+
+```js
+// Direct inline style — useful, but overrides stylesheet rules
+el.style.color = "red";
+el.style.fontSize = "20px";          // note camelCase: font-size → fontSize
+
+// Classes — the preferred way (let CSS do the styling)
+el.classList.add("active");
+el.classList.remove("loading");
+el.classList.toggle("dark");
+el.classList.contains("active")      // → true / false
+el.classList.replace("foo", "bar");
+```
+
+**Prefer `classList` over inline `style`.** Defining the look in CSS and toggling classes from JS keeps presentation in the stylesheet (where it belongs) and avoids specificity wars with your CSS.
+
+### Creating, inserting, removing elements
+
+```js
+// Build a fresh element
+const li = document.createElement("li");
+li.textContent = "New item";
+li.classList.add("todo");
+
+// Add it to a parent
+const list = document.querySelector("ul.todos");
+list.appendChild(li);          // at the end
+list.prepend(li);              // at the start
+
+// Insert near an existing element
+existing.before(li);
+existing.after(li);
+
+// Remove
+el.remove();                   // remove the element from the DOM
+
+// Replace with a new one
+el.replaceWith(newEl);
+
+// Clone
+const copy = el.cloneNode(true);   // deep clone (include children)
+```
+
+### Tree navigation
+
+Every DOM element has properties for walking the tree:
+
+```js
+el.parentElement
+el.children          // child ELEMENTS only (HTMLCollection)
+el.childNodes        // all child nodes (including text nodes — usually you don't want this)
+el.firstElementChild
+el.lastElementChild
+el.nextElementSibling
+el.previousElementSibling
+el.closest(".card")  // walks up until it finds an ancestor matching the selector
+```
+
+`closest()` is one of the most useful methods for event handling — "find the .card that contains the clicked button."
+
+### A complete tiny example
+
+```js
+const tasks = ["Buy milk", "Finish lesson", "Call mom"];
+
+const list = document.querySelector("ul#tasks");
+tasks.forEach((task) => {
+  const li = document.createElement("li");
+  li.textContent = task;
+  list.appendChild(li);
+});
+```
+
+Six lines render a dynamic list. This pattern — **build an element, set its content, append to a parent** — is the bread-and-butter of every list, grid, dropdown, and result page on the web.
+
+### Why frameworks exist
+
+The DOM is powerful, but the code is **imperative** — you give the browser step-by-step instructions ("now create a button, now append it, now set its text"). When the data changes, you have to figure out *what changed* and write the matching DOM mutations.
+
+React, Vue, and Svelte hide this. You write **declarative** templates that describe what the UI should look like for any given state; the framework calculates the DOM mutations for you. Underneath, they still call `appendChild` and `setAttribute` — they just batch and optimize. Knowing the DOM well makes you a better framework user, because you'll understand what the framework is doing on your behalf.
+
+<ExampleProject
+  src="remote-control"
+  title="A page you can drive with buttons"
+  description="A page with buttons that change the text of a heading, add CSS classes to a paragraph, replace the contents of a list, and remove an element. Every button is one DOM call. Reach for each button and watch the corresponding 'channel' change."
+/>
+
+<ExampleProject
+  src="dom-walk"
+  title="Walk the DOM tree from any element"
+  description="A page with a few nested elements. Click any of them — the script logs the element's parent, siblings, and children via the DOM navigation properties. The same pattern you'll use inside event handlers to find the related element."
+/>
+
+<Exercise
+  title="Build a tiny to-do list"
+  starter={`Create a page with:
+
+  - An <input> for a new task and an Add button.
+  - An <ul id="tasks"> that starts empty.
+  - When the user clicks Add (or presses Enter in the input):
+    1. Take the input's value.
+    2. If it's empty, don't add.
+    3. Create an <li> with that text + a small "✕" delete button.
+    4. Append it to the list.
+    5. Clear the input.
+  - Clicking the delete button removes that li.
+  - Keep a counter elsewhere on the page showing how many tasks
+    are in the list, updated after every add/remove.
+
+Don't use any framework. Just the DOM methods from this lesson.`}
+>
+
+- Uses `createElement` + `textContent` + `appendChild` to add items — not `innerHTML +=`.
+- The new `<li>` contains both the text and a button (`<span>` + `<button>`, or similar structure).
+- Pressing Enter in the input triggers the same logic as the Add button.
+- Empty submissions don't create empty `<li>`s.
+- Clicking the delete button removes the parent `<li>`, not just the button.
+- The task counter updates after every add and every remove (you can either recount with `list.children.length` or maintain a counter variable).
+- No frameworks; no external libraries.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `textContent` and `innerHTML`?
+
+**A:**
+
+- **`textContent`** reads or writes the **plain text** of an element. Any HTML in the assigned value is treated as literal characters: `el.textContent = "<b>hi</b>"` puts the actual string "&lt;b&gt;hi&lt;/b&gt;" in the page.
+- **`innerHTML`** reads or writes the **HTML markup**: `el.innerHTML = "<b>hi</b>"` creates a real `<b>` element with "hi" inside.
+
+**`innerHTML` is dangerous with untrusted strings.** If a user typed `<img src=x onerror="alert('xss')">` into a comment box and you rendered it via `innerHTML`, the `onerror` fires and your page just ran their JS. This is the cross-site scripting (XSS) attack vector. Use `textContent` for any user-supplied data. Use `innerHTML` only for trusted, hand-written markup, or use safe templating that escapes by default (every framework does).
+
+A bonus: `textContent` is faster because it skips HTML parsing.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `document.querySelector` return when no element matches?
+
+**A:** **`null`**. The function returns the first matching element or `null` if there's no match. This is why you should always guard:
+
+```js
+const btn = document.querySelector("#save");
+if (btn) {
+  btn.addEventListener("click", save);
+}
+```
+
+Skipping the check produces the classic `Cannot read properties of null (reading 'addEventListener')` error — almost everyone has hit it at least once. It usually means:
+
+- The selector is wrong (typo, wrong class name, wrong id).
+- The script ran *before* the element existed (script in `<head>` without `defer`).
+- The element was inserted dynamically after this code ran.
+
+`querySelectorAll`, in contrast, returns an empty `NodeList` (not `null`) when nothing matches — so `nodes.forEach(…)` is safe even on an empty result.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use `classList.add` instead of setting `element.style`?
+
+**A:** Almost always. Toggling **CSS classes** keeps presentation in the stylesheet where it belongs:
+
+```js
+// GOOD — toggle a class; CSS defines what .active looks like
+btn.classList.add("active");
+
+// LESS GOOD — inline styles override your stylesheet
+btn.style.background = "blue";
+btn.style.color = "white";
+```
+
+Three reasons:
+
+1. **Separation of concerns.** Styling lives in CSS; behavior lives in JS. Mixing them via inline styles makes redesigns harder.
+2. **Specificity.** Inline styles win over almost any stylesheet rule (only `!important` beats them). Once you set inline styles, you can't easily override them with CSS later — common cause of "why isn't my CSS applying?" bugs.
+3. **State as data.** `classList` makes "is this active?" a single readable boolean (`classList.contains("active")`). Inline styles split state across many properties.
+
+Use inline `style` for values genuinely computed at runtime (a slider's color based on its value, a position based on a drag). For binary states — open/closed, selected/not — toggle a class.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `element.closest(".selector")` do, and why is it useful?
+
+**A:** `closest()` walks **up the DOM tree** from the element, returning the first ancestor (or the element itself) that matches the CSS selector. Returns `null` if no ancestor matches.
+
+```js
+const button = document.querySelector(".delete");
+const card   = button.closest(".card");
+// card is the .card div that contains the button
+```
+
+It's most useful in **event handlers** with delegation: a single click handler on a parent that needs to know which child was clicked.
+
+```js
+document.querySelector("#list").addEventListener("click", (e) => {
+  const item = e.target.closest("li");
+  if (!item) return;
+  // item is the li that contains whatever was clicked
+});
+```
+
+Without `closest`, you'd manually walk `parentElement` until you found the match — same code, less readable. `closest()` is the canonical "find me the container of what was clicked" lookup. Pair with **event delegation** (next lesson) and you can handle thousands of dynamically-created list items with a single listener.
+
+</InterviewQuestion>

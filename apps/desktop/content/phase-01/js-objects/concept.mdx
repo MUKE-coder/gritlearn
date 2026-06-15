@@ -1,0 +1,366 @@
+## JS objects and properties
+
+An **object** is a collection of named values — keys mapped to values, like a labeled record card. If arrays are ordered lists, objects are *bags of labeled fields*. Every JSON API response, every user record, every component prop, every options bag — they're all objects. Mastering objects (and the modern access patterns: destructuring, spread, optional chaining) is what makes most JavaScript code feel natural.
+
+<Analogy>
+An object is **a labeled index card**.
+
+Imagine you keep notes about people you meet. For each one, you write a card with labeled fields: NAME: …, AGE: …, CITY: …, EMAIL: …. Some cards have more fields than others; you can add a new label anytime. To look someone up, you read the card; to update them, you write over the matching field.
+
+JavaScript objects are exactly that. A `user` object has named *properties* (`name`, `age`, `city`) each holding a value. `user.name` reads the field; `user.name = "X"` writes it. You can add a brand-new field at any time (`user.nickname = "Ash"`). You can nest cards inside cards — an object can have an object as a property — and you can store arrays of cards, or arrays of arrays of cards. The structure is whatever your data needs.
+
+This makes objects the universal data shape on the web. JSON itself is built from two things: arrays and objects. Every API response, every database row, every form's data is an object once it lands in JavaScript. Get comfortable here and the rest of the language opens up.
+</Analogy>
+
+<Illustration
+  alt="Diagram of an object with multiple property keys mapping to values of different types"
+  caption="An object is a bag of key-value pairs. Keys are strings (or symbols); values can be any type, including other objects."
+>
+
+```
+   const user = {
+     name:    "Aisha",         ← string value
+     age:     22,              ← number value
+     active:  true,            ← boolean value
+     skills:  ["html", "css"], ← array value
+     profile: {                ← OBJECT value (nested)
+       bio:    "Learning Go",
+       avatar: "/me.jpg",
+     },
+     greet:   () => "hi",      ← FUNCTION value
+   };
+```
+
+</Illustration>
+
+### Creating objects
+
+```js
+// Object literal — the way you'll write 99% of objects
+const user = {
+  name: "Aisha",
+  age: 22,
+  active: true,
+};
+
+// Empty, fill later
+const settings = {};
+settings.theme = "dark";
+
+// Shorthand: when the property name matches the variable name
+const name = "Brian";
+const age = 30;
+const user2 = { name, age };   // same as { name: name, age: age }
+
+// Computed keys
+const key = "lang";
+const config = { [key]: "en" };   // { lang: "en" }
+```
+
+### Reading and writing properties
+
+Two syntaxes for property access:
+
+```js
+user.name             // dot — clean, but requires a valid identifier
+user["name"]          // bracket — works with any string, including spaces or dynamic keys
+
+const key = "age";
+user[key]             // 22 — bracket lets you compute the key at runtime
+```
+
+Writing works the same way:
+
+```js
+user.name = "Brian";          // overwrite an existing property
+user.email = "b@x.com";       // add a brand-new property
+delete user.active;           // remove a property
+```
+
+Reading a property that doesn't exist returns **`undefined`** — no error:
+
+```js
+user.nickname   // undefined
+```
+
+### Common object methods
+
+```js
+const user = { name: "Aisha", age: 22, active: true };
+
+Object.keys(user);      // ["name", "age", "active"]
+Object.values(user);    // ["Aisha", 22, true]
+Object.entries(user);   // [["name", "Aisha"], ["age", 22], ["active", true]]
+
+// Build an object from entries
+Object.fromEntries([["a", 1], ["b", 2]]);   // { a: 1, b: 2 }
+
+// Check if a key exists
+"name" in user                // true
+user.hasOwnProperty("name")   // true
+```
+
+`Object.entries` + array methods is a common combo for "loop the fields":
+
+```js
+Object.entries(user)
+  .filter(([_, v]) => v !== null)
+  .map(([k, v]) => `${k}: ${v}`);
+// → ["name: Aisha", "age: 22", "active: true"]
+```
+
+### Nested objects
+
+Real data is rarely flat:
+
+```js
+const order = {
+  id: 1042,
+  customer: { name: "Aisha", email: "a@x.com" },
+  items: [
+    { sku: "SHOE-1", qty: 1, price: 89.50 },
+    { sku: "HAT-2",  qty: 2, price: 24.00 },
+  ],
+};
+
+order.customer.name              // "Aisha"
+order.items[0].sku               // "SHOE-1"
+order.customer?.email ?? "—"     // safe with optional chaining + default
+```
+
+### Object destructuring — the modern read pattern
+
+Reading multiple fields at once is much nicer with destructuring:
+
+```js
+// OLD WAY
+const name = user.name;
+const age = user.age;
+
+// MODERN
+const { name, age } = user;
+```
+
+You can rename and default:
+
+```js
+const { name: displayName, role = "guest" } = user;
+//        ↑                  ↑
+//        rename             default if undefined
+```
+
+Destructuring nests:
+
+```js
+const order = { customer: { name: "Aisha" }, items: [{ sku: "X" }] };
+const { customer: { name }, items: [first] } = order;
+// name = "Aisha", first = { sku: "X" }
+```
+
+You'll use destructuring constantly — in function parameters, in React props, in async response handling. It's the standard way to "unpack" an object.
+
+### Spread — copy and extend
+
+```js
+const original = { name: "Aisha", age: 22 };
+
+// Make a shallow copy
+const copy = { ...original };
+
+// Copy and override
+const older = { ...original, age: 23 };   // { name: "Aisha", age: 23 }
+
+// Merge multiple objects
+const merged = { ...defaults, ...userPrefs, ...overrides };
+```
+
+`...` is the **spread operator**. Inside an object literal, it spreads another object's properties into this one. Properties listed later **override** earlier ones — that's how the merge pattern works.
+
+Spread is **the immutable update pattern** in React, Redux, and any reactive UI. You don't mutate the original object; you create a new one with the change:
+
+```js
+// MUTATE — wrong in React state
+user.age = 23;
+
+// IMMUTABLE — right
+const updatedUser = { ...user, age: 23 };
+```
+
+### Optional chaining and nullish coalescing on objects
+
+You met these in the operators lesson; they shine on objects:
+
+```js
+const url = user?.profile?.avatar?.url ?? "/default.png";
+```
+
+Read: "if `user`, then its `profile`, then its `avatar`, then its `url`; otherwise `/default.png`." Safe at every nullable step.
+
+### Objects vs `Map`
+
+JavaScript also has a `Map` data structure:
+
+```js
+const m = new Map();
+m.set("name", "Aisha");
+m.get("name");        // "Aisha"
+m.has("name");        // true
+m.size;               // 1
+```
+
+`Map` allows **any type as a key** (objects, numbers, anything), preserves insertion order, and has a `.size` property. Objects only allow strings or symbols as keys.
+
+In day-to-day JavaScript, you'll use **objects** for known fixed-shape data ("a user has name, age, email") and **Map** for collections that grow dynamically with arbitrary keys (caches, lookup tables, "id → record" indexes).
+
+<ExampleProject
+  src="user-record"
+  title="An object editor — read, write, add, delete"
+  description="A page that renders an object and lets you click any property to edit it, add a new one, or delete one. Uses Object.entries + array methods. The state mutates the object directly so you can see read/write happening in real time."
+/>
+
+<ExampleProject
+  src="destructure-spread"
+  title="Destructuring and spread, applied"
+  description="A small page showing the immutable update pattern used everywhere in React. Click 'celebrate birthday' — the user's age increments via spread, not mutation. The original reference and the updated one are shown side by side so you can see they're different objects."
+/>
+
+<Exercise
+  title="Build a shopping cart calculator"
+  starter={`Given:
+
+  const cart = {
+    customer: "Aisha",
+    items: [
+      { name: "Shoes", price: 89.50, qty: 1 },
+      { name: "Hat",   price: 24.00, qty: 2 },
+      { name: "Socks", price:  9.99, qty: 3 },
+    ],
+    discount: 0.10,   // 10% off
+  };
+
+Write a single function summarize(cart) that returns:
+
+  {
+    customer:   "Aisha",
+    itemCount:  6,                  // sum of qty
+    subtotal:   ...,                // sum of price * qty
+    discount:   ...,                // subtotal * cart.discount
+    total:      ...,                // subtotal - discount
+    formatted:  "$X.XX",            // total as a string
+  }
+
+Use destructuring in the function parameter. Use array methods
+on cart.items. Use a template literal for the formatted string.`}
+>
+
+- The function destructures `{ customer, items, discount }` in its parameter.
+- `itemCount` uses `.reduce((acc, item) => acc + item.qty, 0)`.
+- `subtotal` uses `.reduce((acc, item) => acc + item.price * item.qty, 0)`.
+- The returned object uses property shorthand where possible (`{ customer, itemCount, ... }`).
+- `formatted` uses a template literal with `.toFixed(2)` on the total.
+- The function doesn't mutate `cart` — every value is computed and returned.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between dot notation (`user.name`) and bracket notation (`user["name"]`)?
+
+**A:** Both read or write a property on an object, but:
+
+- **Dot notation** requires the key to be a valid identifier — letters, digits, `_`, `$`, no spaces, can't start with a digit. `user.name`, `user.firstName`.
+- **Bracket notation** accepts **any string** (including spaces and weird characters) and any expression that evaluates to a string at runtime:
+
+```js
+user["first name"]    // dot can't do this
+user["age"]           // works
+const key = "name";
+user[key]             // computed key — only bracket can do this
+```
+
+The big use case: **dynamic keys** you don't know at write time. Looping fields, building props from variables, accessing a key based on a user choice. Otherwise prefer dot — it's shorter and more readable.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How do you copy an object in JavaScript?
+
+**A:** Three common ways:
+
+```js
+// 1. Spread — shallow copy
+const copy = { ...user };
+
+// 2. Object.assign — older equivalent
+const copy = Object.assign({}, user);
+
+// 3. structuredClone — deep copy, modern
+const deepCopy = structuredClone(user);
+```
+
+The big subtlety is **shallow vs deep**:
+
+- **Shallow copy** (`{...obj}`, `Object.assign`) copies top-level fields. Nested objects and arrays are shared between the copies — mutating `copy.profile.bio` also mutates `user.profile.bio`.
+- **Deep copy** (`structuredClone`) recursively copies everything. The two objects share nothing.
+
+For React state and most use cases, **shallow with spread is what you want**. When you need a true clone, `structuredClone()` is the modern way (replaces the old `JSON.parse(JSON.stringify(obj))` hack which breaks on dates, functions, and circular references).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Explain the spread operator on objects and why it's the React immutable update pattern.
+
+**A:** Inside an object literal, `...obj` **expands the properties of `obj` into the new literal**. Combined with overrides, it produces a copy-with-changes pattern:
+
+```js
+const updated = { ...user, age: 23 };
+```
+
+Read as: "take all of user's properties, then override `age` to 23, in a brand-new object." The original `user` is untouched.
+
+This pattern is load-bearing in React state because React detects "did this state change?" by comparing **references**. Mutating an object (`user.age = 23`) leaves the reference the same, so React doesn't re-render. Returning a new object (`{ ...user, age: 23 }`) is a new reference, so React notices and re-renders.
+
+The same logic applies to Redux reducers, Zustand stores, and most reactive frameworks: **never mutate state; spread + override**. The spread operator is the everyday tool that makes this practical — without it you'd have to call `Object.assign({}, user, {age:23})` for every update.
+
+One thing to remember: spread is **shallow**. Nested objects are shared between the original and copy. To update nested state immutably, you spread at each level:
+
+```js
+const updated = {
+  ...user,
+  profile: { ...user.profile, bio: "new" }
+};
+```
+
+For deeply nested state, this gets verbose — that's why libraries like Immer exist, which give you mutating syntax that compiles to immutable updates under the hood.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When would you use a `Map` instead of an object?
+
+**A:** Both are key-value stores, but they serve different purposes:
+
+| | Object | `Map` |
+|---|---|---|
+| Key types | String or Symbol only | **Any type** (objects, numbers, NaN) |
+| Iteration order | Insertion order, but unreliable for old engines | **Guaranteed insertion order** |
+| Size | `Object.keys(obj).length` | `.size` directly |
+| Prototype-related bugs | Yes — `__proto__`, inherited keys | No prototype, immune |
+| Iteration syntax | `for…in`, `Object.entries` | `for…of` directly |
+| Performance | Optimized for fixed shape | Optimized for frequent add/remove |
+
+Reach for **`Map`** when:
+
+1. **Keys are not strings.** "Lookup this object's metadata" — keying by the object itself.
+2. **You're adding/removing keys frequently** — caches, lookup tables that grow at runtime.
+3. **You want guaranteed insertion order** even on older engines.
+4. **You don't want prototype-related surprises** — e.g. `obj.constructor` is a key you didn't add.
+
+Use **objects** when the shape is known and stable — a user record, a config bag, a function options parameter. That's 90% of the time.
+
+For typed contexts (TypeScript), `Record<K, V>` covers fixed-shape "object as dictionary" cleanly; `Map<K, V>` is preferred when you want first-class collection methods.
+
+</InterviewQuestion>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Promise.all vs serial</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; min-height: 220px; }
+      .pane h2 { margin: 0 0 6px; font-family: ui-monospace, monospace; font-size: 13px; }
+      .serial   { color: #b45309; }
+      .parallel { color: #047857; }
+      pre { background: #1c2230; color: #e6edf3; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; margin: 0 0 10px; }
+      button { padding: 8px 14px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .timer { font-family: ui-monospace, monospace; font-size: 24px; font-weight: 700; margin-top: 8px; }
+      .log { font-family: ui-monospace, monospace; font-size: 11px; color: #6b7280; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Promise.all vs serial awaits</h1>
+    <p>Both panes run three "fetches" that each take 1 second. Watch the total elapsed time.</p>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2 class="serial">serial awaits</h2>
+        <pre>const a = await wait(1000);
+const b = await wait(1000);
+const c = await wait(1000);
+// total ≈ 3000ms</pre>
+        <button data-mode="serial">run serial</button>
+        <div class="timer" id="t1">—</div>
+        <div class="log" id="l1"></div>
+      </div>
+
+      <div class="pane">
+        <h2 class="parallel">Promise.all</h2>
+        <pre>const [a, b, c] = await Promise.all([
+  wait(1000),
+  wait(1000),
+  wait(1000),
+]);
+// total ≈ 1000ms</pre>
+        <button data-mode="parallel">run parallel</button>
+        <div class="timer" id="t2">—</div>
+        <div class="log" id="l2"></div>
+      </div>
+
+    </div>
+
+    <script>
+      const wait = (ms, label) => new Promise((r) =>
+        setTimeout(() => r({ ms, label, finished: performance.now() }), ms)
+      );
+
+      document.querySelector(".row").addEventListener("click", async (e) => {
+        const mode = e.target.dataset.mode;
+        if (!mode) return;
+        e.target.disabled = true;
+        const t = document.getElementById(mode === "serial" ? "t1" : "t2");
+        const l = document.getElementById(mode === "serial" ? "l1" : "l2");
+        t.textContent = "running...";
+        l.textContent = "";
+
+        const t0 = performance.now();
+        let logLines = [];
+        const log = (msg) => {
+          logLines.push(`${Math.round(performance.now() - t0)}ms — ${msg}`);
+          l.textContent = logLines.join("\n");
+        };
+
+        if (mode === "serial") {
+          log("start a");
+          await wait(1000, "a"); log("got a");
+          log("start b");
+          await wait(1000, "b"); log("got b");
+          log("start c");
+          await wait(1000, "c"); log("got c");
+        } else {
+          log("start all three");
+          await Promise.all([
+            wait(1000, "a").then(() => log("got a")),
+            wait(1000, "b").then(() => log("got b")),
+            wait(1000, "c").then(() => log("got c")),
+          ]);
+        }
+
+        t.textContent = Math.round(performance.now() - t0) + " ms";
+        e.target.disabled = false;
+      });
+    </script>
+  </body>
+</html>
