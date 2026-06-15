@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "phases": [
     {
       "id": "phase-01",
@@ -79,7 +79,7 @@
         { "slug": "phase-02/http-deeper", "title": "HTTP deeper: methods, status codes, headers", "available": true },
         { "slug": "phase-02/what-is-an-api", "title": "What an API is", "available": true },
         { "slug": "phase-02/json-in-depth", "title": "JSON in depth", "available": true },
-        { "slug": "phase-02/milestone-refactor", "title": "Milestone: Refactor the Phase 1 app", "available": false }
+        { "slug": "phase-02/milestone-refactor", "title": "Milestone: Refactor the Phase 1 app", "available": true }
       ]
     },
     {

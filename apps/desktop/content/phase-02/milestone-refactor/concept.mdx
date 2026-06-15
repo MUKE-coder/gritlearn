@@ -1,0 +1,418 @@
+## Milestone — refactor the Phase 1 app
+
+You shipped a real app at the end of Phase 1 — a portfolio site or a weather mini-app, live on a URL, code on GitHub. It worked. Phase 2 gave you twenty concepts the rest of your team takes for granted: scope, closures, immutability, modules, error handling, version control, debugging, clean code, HTTP, APIs, JSON. The milestone is to go *back* to that same app and rebuild it with those tools. Same brief, dramatically cleaner code, opened as a proper GitHub PR with multiple small reviewable commits — exactly the way you'd ship work at a real company.
+
+<Analogy>
+This milestone is **a chef going back to the first dish they ever served — and remaking it after a year at culinary school**.
+
+Picture a young cook on their first day at a restaurant. They make a pasta dish — it's edible, it sells, the customers don't complain. But every step is a little off: the salt is dumped in late, the timing of the sauce is sloppy, the plate is overfilled. The dish *works*. It just doesn't work the way a trained chef would do it.
+
+One year of school later, the same cook makes the same dish. The recipe is identical — same ingredients, same flavors, same plating goal. Everything else is different. The mise en place is ready before the burner is lit. The pan goes on the heat at the exact moment the water comes to a boil. The salt is layered in three small additions, tasted between each. The plate is wiped clean before service. The customer eats the same dish, but the *experience of cooking it* is unrecognizable. Predictable, controlled, repeatable.
+
+That's this milestone. The portfolio or the weather app you shipped at the end of Phase 1 is the first-day pasta. It works. Customers (your visitors) don't notice the rough edges. But the code has every junior pattern from a developer who *just started*:
+
+- One big component file with everything inline. (No modules.)
+- Inline event handlers with hardcoded magic numbers. (No closures, no constants.)
+- `fetch` calls everywhere with no error handling. (No `try`/`catch`.)
+- State mutated in place (`array.push`, `obj.x = 5`). (No immutability discipline.)
+- One commit, "added stuff," straight to `main`. (No Git workflow.)
+- No types beyond what TypeScript made you add to compile.
+
+You're now going to remake that dish with everything you learned in Phase 2 — without changing what the user sees. The page looks the same. The brief is the same. But your code is unrecognizable: modules, closures, pure helpers, typed API client with custom errors, immutable state updates, a clean Git PR history that lets a reviewer follow your reasoning step by step.
+
+Three reasons this is *the* most important exercise of Phase 2:
+
+1. **Refactoring is what you'll actually do at work.** Most senior engineers spend more time improving existing code than writing greenfield. The skill is "see code that works but can be better, and make it better without breaking it." This milestone is your first deliberate practice of that loop.
+
+2. **You'll feel the techniques pay off.** Reading the Closures concept and *believing* closures are useful is one thing. Replacing a global counter with a closure-backed factory in your own real code — and seeing your tests still pass — is another. The "wait, that *was* easier" moment locks in the concept.
+
+3. **The PR is your portfolio's most reviewable artifact.** A senior engineer reading your GitHub profile in 2027 will read this PR's commits. Small commits with good messages, a clear description, before/after screenshots, a clean refactor — this is what a senior PR looks like. Practice the shape now.
+
+The exit criterion isn't "different." It's *better, smaller, more readable, with no regressions*. Same Lighthouse scores. Same user-visible behavior. Different code under the hood.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the Phase 1 app's code on the left and the Phase 2 refactored version on the right, with the techniques annotated"
+  caption="Same brief. Same UX. Different code shape — modules, closures, pure helpers, typed API."
+>
+
+```
+   PHASE 1 (what you shipped)              PHASE 2 (this milestone)
+
+   src/                                    src/
+     app/page.tsx                            app/page.tsx              ← thin: orchestrates components
+       ┌─────────────────────┐               components/
+       │ const [city, ...] = │                 SearchBar.tsx            ← typed props, isolated
+       │ fetch(...).then(... │                 ForecastCard.tsx
+       │   .then(...)        │                 ForecastStrip.tsx
+       │ var TAX = 0.18      │                 ErrorBoundary.tsx
+       │ for (let i = 0;     │               lib/
+       │ result.push(...)    │                 apiClient.ts            ← typed fetch wrapper + Error classes
+       │ ...                 │                 types.ts                ← Zod schemas for boundary validation
+       │ (300 lines)         │                 format.ts               ← pure functions: format, parse, calc
+       └─────────────────────┘               hooks/
+                                               useForecast.ts          ← closes over apiClient, exposes state
+                                             constants.ts              ← named constants, no magic numbers
+
+   One file. One commit.                   Multiple focused files. One PR, multiple commits.
+   "Added stuff."                           Each commit: one named concern.
+
+   1 Lighthouse score                      Same Lighthouse score.
+   Customer doesn't care.                  Reviewer does.
+```
+
+</Illustration>
+
+### The brief — same as Phase 1, with refactor rules
+
+Your starting point is **your own Phase 1 milestone repo**. The deployed URL stays live the whole time; you'll merge the refactor PR at the end and re-deploy.
+
+**Step 1: Branch.** Create a fresh feature branch on your repo:
+
+```bash
+git checkout main && git pull
+git checkout -b refactor/phase-2-cleanup
+```
+
+This is your refactor branch. Every commit goes here; `main` stays untouched until the PR merges.
+
+**Step 2: Apply the techniques.** Work through each Phase 2 concept and look for the matching mess in your code:
+
+| Phase 2 concept       | What to look for in Phase 1 code                                              |
+| --------------------- | ------------------------------------------------------------------------------ |
+| **modules**            | One mega-file? Split it. One component per file.                              |
+| **closures**           | Global mutable state? Replace with a factory or hook.                          |
+| **higher-order fns**   | `for` loops? Use `.map`/`.filter`/`.reduce`.                                  |
+| **immutability**       | `array.push`, `obj.x = ...`? Use spread.                                      |
+| **error handling**     | Raw `fetch` with no try/catch? Wrap in a typed `apiClient`.                   |
+| **JSON in depth**      | API responses used as `any`? Add Zod schemas at the boundary.                 |
+| **HTTP literacy**      | Treating every non-2xx as a single "error"? Branch by status.                  |
+| **clean code**         | Magic numbers, bad names, monster functions? Extract, rename.                  |
+| **debugging devtools** | Reach for `console.log` for everything? Run Lighthouse — fix the wins.        |
+
+**Step 3: Commit small.** Every concern is its own commit:
+
+```bash
+git commit -m "refactor: extract types to lib/types.ts"
+git commit -m "refactor: wrap fetch in typed apiClient with custom errors"
+git commit -m "refactor: replace useState array.push with immutable spread"
+git commit -m "refactor: extract pricing constants to constants.ts"
+git commit -m "refactor: split page.tsx into 4 components"
+git commit -m "refactor: add Zod validation at the API boundary"
+git commit -m "fix: handle 404 separately from network errors in search bar"
+git commit -m "perf: memoize forecast list with useMemo"
+git commit -m "test: add unit tests for pure formatting helpers"
+git commit -m "docs: update README with new architecture"
+```
+
+Ten commits. Each one is a small, focused change a reviewer could approve in 5 minutes. This is the Git habit; the milestone makes you practice it.
+
+**Step 4: Open a PR.** From the branch, push to GitHub and open a real PR titled "Phase 2 refactor — apply Phase 2 techniques to the Phase 1 app." Use a PR template:
+
+```markdown
+## What
+Refactors the Phase 1 milestone app using everything from Phase 2:
+modules, closures, immutability, typed API client, error classes,
+Zod validation, small focused commits.
+
+## Why
+Practice the Phase 2 techniques on real code. Capstone for Phase 2.
+
+## What changed visually
+Nothing. UI is identical; Lighthouse scores match.
+
+## What changed internally
+- Split monolith page.tsx into 4 focused components.
+- Replaced raw fetch with typed apiClient + custom Error classes.
+- Added Zod schemas at the API boundary.
+- Replaced array.push state updates with immutable spread.
+- Extracted magic numbers to constants.ts.
+- Added 12 unit tests for pure helpers.
+
+## Test plan
+- [ ] All existing flows still work (search, render, error state).
+- [ ] Lighthouse score on mobile: ≥ original.
+- [ ] `tsc --noEmit` clean.
+- [ ] `pnpm test` passes.
+- [ ] No console.logs in production code.
+```
+
+**Step 5: Self-review.** Open the PR's "Files changed" tab. Read your own diff like a stranger. Leave yourself comments where you'd ask "why this?" — then push commits that answer them in the code.
+
+**Step 6: Merge and re-deploy.** Squash-merge (or merge-commit, your team's convention). Vercel auto-redeploys. Visit the live URL. It looks identical. Internally, the engine is unrecognizable.
+
+### What "done" looks like — the senior-PR checklist
+
+The milestone is complete when your PR has:
+
+- [ ] **Branch named** `refactor/phase-2-cleanup` (or similar).
+- [ ] **Multiple commits** (at least 6). Each with a `<type>: <summary>` message.
+- [ ] **PR description** with what / why / test plan.
+- [ ] **No visual regressions.** Live URL renders identically.
+- [ ] **Lighthouse mobile** scores match or beat the Phase 1 baseline (Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95).
+- [ ] **`tsc --noEmit`** passes clean with no errors.
+- [ ] **No `var`** in any file. Only `const` and `let`.
+- [ ] **Modules:** the main page file is at most ~80 lines. Sub-components in their own files.
+- [ ] **Typed API client** with at least one custom `Error` subclass.
+- [ ] **Zod (or hand-rolled) schema** validating the API response at the boundary.
+- [ ] **No magic numbers** in business logic. Named constants in a `constants.ts` or at module top.
+- [ ] **No `console.log`** left in production code paths. (CI step optional: a lint rule that fails the build.)
+- [ ] **`README.md`** updated to describe the new architecture.
+
+This is the same checklist a tech lead would use to review your work in a real company. Pass it, and you've practiced the shape of professional output.
+
+### Why this specific milestone shape
+
+Three deliberate design choices in the brief:
+
+1. **Same app, not a new one.** Building a new app would test "can you write code?" — you already proved that in Phase 1. Refactoring tests "can you *improve* code?" — a different skill, the daily reality of senior work.
+
+2. **PR-shaped, not solo-shaped.** No code review on a milestone (you're the only developer). But the PR shape — branch, multiple commits, description, self-review — is what you'll do for every change at a real job. Practice the shape.
+
+3. **Same Lighthouse scores.** A refactor that breaks performance is a regression, not progress. The constraint forces you to verify your changes don't accidentally degrade anything — exactly the discipline production work requires.
+
+### Common pitfalls — and how to avoid them
+
+- **Scope creep.** "While I'm refactoring, let me also add dark mode." STOP. Refactor first, ship; add features in separate PRs. Mixed concerns make review impossible.
+- **One big "refactor everything" commit.** Useless for review. Split into 6-10 focused commits, each one a coherent step.
+- **No tests.** Hard to refactor confidently without something verifying you didn't break behavior. Even a few "snapshot" tests of the rendered output are enough.
+- **Magical fixes.** "I rewrote the fetch logic and it just works now." If you can't explain what changed and why it's better, it's not a refactor — it's a rewrite that might be hiding a bug. Refactors preserve behavior intentionally; rewrites are something else.
+- **Skipping the README update.** If the architecture changed, the README needs to reflect it. The next person to clone the repo (including future you) reads README first.
+
+### What's next after this milestone
+
+Phase 2 is done. You've now got the JavaScript-language-fluent, Git-fluent, API-fluent, refactor-capable foundation that bridges "I can write a working app" and "I can ship like a professional." Phase 3 (Backend with Go) takes you to the other side of the API call — building the server your frontend was talking to. Phase 4 (Mobile with Expo) ports your skills to native apps. Phase 5 (Desktop with Wails) — the toolkit this very platform is built on. Phase 6 (CS Foundations) is the interview-shaped capstone.
+
+Each phase reinforces what you learned earlier. This milestone is the bridge.
+
+<ExampleProject
+  src="before-after-refactor"
+  title="A real component refactored — see the diff"
+  description="A 60-line monolithic React component (the kind you might've shipped in Phase 1) refactored using Phase 2 techniques into a thin orchestrator plus 3 focused helpers. Same behavior; one file became four, each one short and named for what it does."
+/>
+
+<ExampleProject
+  src="typed-api-client"
+  title="A production-shape apiClient — fetch + Zod + custom Error classes"
+  description="A small but real wrapper around fetch that validates the response with Zod, throws typed errors (NetworkError, ApiError, ValidationError), and lets the caller branch with instanceof. The shape every fetch in your refactor will route through."
+/>
+
+<Exercise
+  title="Ship the Phase 2 refactor PR on your own repo"
+  starter={`Open your Phase 1 milestone repo. Walk through these steps:
+
+  1. PLAN. List 5-10 specific things you want to change. Stick to
+     refactor scope. Examples:
+       - Extract the API client to a separate module
+       - Replace the for loop in the favorites filter with .filter
+       - Add error handling for the network failure case
+       - Split page.tsx into 4 components
+       - Add a Zod schema for the API response
+     Don't add features (that's a different PR). Don't redesign
+     (that's a different PR).
+
+  2. BRANCH.
+       git checkout main && git pull
+       git checkout -b refactor/phase-2-cleanup
+
+  3. WORK. Make changes in small focused commits. Aim for at least
+     6 commits, each one a single concern with a clear message.
+     Push frequently:
+       git push -u origin refactor/phase-2-cleanup
+
+  4. RUN. After every commit (or every few commits):
+       pnpm dev               # does the app still work?
+       pnpm build             # does it still build?
+       pnpm tsc --noEmit       # do types still check?
+       pnpm test              # do tests still pass?
+     If anything broke, fix in the next commit. Don't barrel forward
+     with red CI.
+
+  5. SELF-REVIEW. On GitHub, open the PR. Read the diff like a
+     stranger. For every section where you can't immediately tell
+     "this is better," push another commit improving it.
+
+  6. WRITE THE DESCRIPTION. Use the template from the lesson:
+     what / why / what changed visually (nothing) / what changed
+     internally / test plan checklist.
+
+  7. RUN LIGHTHOUSE. Open the deployed preview URL (Vercel makes
+     one per PR). Run mobile Lighthouse. Compare to your Phase 1
+     baseline. Match or beat.
+
+  8. MERGE. Squash-and-merge (or merge-commit). Watch the deploy
+     succeed. Open the live URL on your phone. Confirm it looks
+     identical.
+
+  9. POST. On your CV / LinkedIn / portfolio:
+     "Refactored a deployed app using Phase 2 techniques (modules,
+     typed API client, immutable state, error handling). PR with
+     10 focused commits; zero visual regressions; Lighthouse
+     unchanged."
+
+The PR link goes in your portfolio. A senior engineer reading it
+will see what a year's worth of growth looks like.`}
+>
+
+- A new branch was created off `main` on the Phase 1 repo.
+- At least **six** focused commits exist on the branch — each with `<type>: <summary>` format.
+- A **PR was opened** with a real description (what / why / test plan).
+- The PR description states "no visual changes" and the deployed preview confirms this.
+- `tsc --noEmit` passes clean. `pnpm test` (if tests existed) still passes.
+- The page file (or main file) is shorter and references components/helpers from new modules.
+- A **typed API client** exists in a separate file with at least one custom Error subclass.
+- A **Zod schema** (or hand-rolled validator) is applied at the API response boundary.
+- **Magic numbers** are replaced with named constants in a constants file or at module top.
+- **No `console.log`** appears in production code paths (test files OK).
+- Lighthouse mobile scores match or beat the Phase 1 baseline.
+- The PR is **merged** (squash or merge commit), the branch is deleted, and the live URL works.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a refactor, and how is it different from a rewrite?
+
+**A:** **A refactor improves code's *internal* structure without changing its *external* behavior. A rewrite throws away the old code and writes new code that does the same thing — usually with no preservation guarantees.**
+
+```text
+REFACTOR                              REWRITE
+────────                              ───────
+Same inputs → same outputs.            "I tried to do the same thing."
+Tests stay green.                      Tests need to be rewritten.
+Risk is low.                           Risk is high.
+Commits are small.                     Commits are huge.
+You can pause halfway.                 You can't ship halfway.
+```
+
+Three concrete attributes that make something a refactor:
+
+1. **No new functionality.** If you find yourself adding features, that's a separate PR. The refactor should be a no-op from the user's perspective.
+
+2. **Behavior preserved.** Same inputs produce the same outputs. Tests (if you have them) stay green. Manual checks of the UI look the same.
+
+3. **Code shape changes.** That's the point. You're moving code around — extracting helpers, splitting files, renaming variables, swapping `for` for `.map` — because the result is more maintainable.
+
+The classic phrase: "I'll know it's a refactor when, if you took the diff and reverted it, the app would still work exactly the same."
+
+When to refactor vs. rewrite:
+
+- **Refactor** when the existing code works but is hard to maintain. Most situations.
+- **Rewrite** when the existing code's *design* is fundamentally wrong — wrong language, wrong framework, wrong data model. Rare. High-risk; often "the rewrite never ships" because every small bug fix in production diverges from the rewrite.
+
+The famous Joel Spolsky essay "Things You Should Never Do, Part I" (2000) argues against rewrites: "the single worst strategic mistake any software company can make: deciding to rewrite the code from scratch." A bit dated but the principle holds — refactor in place; rewrite only when you absolutely have to.
+
+For your Phase 2 milestone, this is a refactor in the strict sense: the user-facing app stays identical. The internals change.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why split your refactor into multiple small commits instead of one big commit?
+
+**A:** **Three reasons: easier review, safer revert, better blame trail.**
+
+1. **Easier review.** Even if the PR is just you reviewing yourself, a 600-line diff in one commit is too much to hold in your head at once. Ten 50-line commits, each focused on one concern, can be reviewed step by step — you understand each transformation before moving to the next.
+
+2. **Safer revert.** Production breaks the day after you ship. Your changelog says "Phase 2 refactor." If everything's one commit, you have to revert *all* of it — losing the unrelated improvements. With small commits, you `git bisect` to find which one introduced the bug and revert only that.
+
+3. **Better `git blame`.** Six months later, someone runs `git blame` on a confusing line. With one big commit, the message says "Phase 2 refactor" and provides no context. With small commits, the message points at *exactly* what conceptual change introduced the line.
+
+The general habit: **a commit = one coherent change with a one-sentence message**. Examples for the milestone:
+
+```text
+refactor: extract types to lib/types.ts
+refactor: wrap fetch in typed apiClient
+refactor: replace useState array.push with immutable spread
+fix: handle 404 separately from network errors
+test: add unit tests for pure formatting helpers
+docs: update README with new architecture
+```
+
+Six commits; six clear concerns. A reviewer (or future you) can understand each one in 30 seconds.
+
+The opposite anti-pattern: one commit per typo, ten commits per minute. The rule is "one *coherent change* per commit" — not "every Ctrl+S is a commit." If you renamed a variable and that change spans 4 files, the rename is one commit, no matter how many files it touched.
+
+Tools that help:
+- `git add -p` (patch mode) — stage hunks of a file separately, so you can commit half of a file's changes as one commit and the rest as another.
+- `git rebase -i` — interactively squash/split/reorder commits *before* pushing. Useful for cleaning up a messy WIP history into a clean reviewable sequence.
+
+The two tools together let you produce clean small commits even when your actual work was tangled and exploratory.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** You're about to refactor a 300-line component. How do you stay safe?
+
+**A:** **Four safety nets, applied in order: tests, types, branches, commits.**
+
+**1. Tests.** Before touching the code, write enough tests that you'd notice if the behavior changed. Don't aim for 100% coverage — aim for "the visible behaviors are pinned down."
+
+```js
+// Before refactoring, write tests for the existing shape
+test("renders the search bar on initial load", () => { ... });
+test("shows 'loading' while the fetch is in flight", () => { ... });
+test("renders results after successful fetch", () => { ... });
+test("shows an error message on 404", () => { ... });
+```
+
+If you can't write the test because the code is hard to test, **that's the first refactor to do** — extract the testable bit.
+
+**2. Types.** If the codebase has TypeScript, strict mode catches a huge percentage of refactor mistakes:
+- Rename a function → every call site lights up.
+- Change a return type → every consumer's expectations fail.
+- Add a required argument → every caller fails to compile.
+
+Run `tsc --noEmit` between commits; it's faster than running the test suite for "did I break something obvious?"
+
+**3. Branches.** Never refactor on `main`. Branch first. If the refactor goes badly, you delete the branch and nothing changes — `main` is untouched. This is "experimentation is cheap" in practice.
+
+**4. Commits.** Small, focused commits. After every commit:
+- Run the tests.
+- Run the type check.
+- Run the app manually for ~30 seconds.
+
+If something broke, you know it broke *in this commit* — small, focused, easy to fix or revert. With big commits, "something broke" gives you no signal about where.
+
+The full habit: **branch → write tests → commit a small change → run tests/types/app → commit the next small change → repeat → open PR**. The discipline is small; the safety is large.
+
+When you don't have tests at the start: write a few quick "render & screenshot" tests, or a few simple unit tests for the most critical functions. Even 20% test coverage is enough to catch most "did I accidentally break something" issues. Refactoring totally untested code is high-risk; you basically can't refactor confidently without *some* verification.
+
+The famous "no test, no refactor" rule isn't always literal — you can refactor untested code carefully — but it's a useful starting bias.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does the Phase 2 milestone require the same Lighthouse score as Phase 1?
+
+**A:** **To force you to verify the refactor didn't accidentally degrade anything. Same Lighthouse score = same observable quality. Worse Lighthouse score = your "improvement" made the app worse for users.**
+
+Three concrete things a refactor can break without you noticing:
+
+1. **Bundle size.** Splitting your monolithic component into 5 files looks cleaner — but if you didn't tree-shake correctly, you might've imported all of Lodash to use one helper. The Lighthouse Performance score drops because the bundle ballooned.
+
+2. **Accessibility regressions.** Replacing inline `<button>` elements with a styled `<div>` for "cleaner code" loses the screen-reader semantics. Lighthouse Accessibility score drops.
+
+3. **Render performance.** Adding a `useMemo` "for safety" can actually *hurt* performance if the dependency calculation is more expensive than the value it caches. Or wrapping every callback in `useCallback` increases re-render allocations. Lighthouse INP (Interaction to Next Paint) gets worse.
+
+The Lighthouse score is the **objective check** that you didn't accidentally introduce any of these. You can *believe* the refactor is better; the score *proves* the user experience didn't suffer.
+
+The exact thresholds in the milestone brief:
+- **Performance ≥ 90 mobile** (or "same as Phase 1 baseline").
+- **Accessibility ≥ 95.**
+- **Best Practices ≥ 95.**
+
+If you can't hit these post-refactor, *something* you did made it worse. Find it and fix it. Sometimes it's:
+- A new component that imports the whole Material-UI library for one icon.
+- A new useEffect that fires on every render because deps weren't right.
+- A new image that's not optimized.
+
+Lighthouse tells you which category dropped; the audit details point at the specific issue.
+
+The general principle: **observable behavior is the contract.** A refactor is, by definition, a no-op from the user's perspective. The Lighthouse score is the metric that captures "did the user experience stay the same?" If your refactor breaks the score, you broke the contract — that's a regression, not a refactor.
+
+This is also why production teams gate every PR on automated Lighthouse checks (or similar): the framework catches the kinds of refactors that *look* better in code review but ship worse to users.
+
+</InterviewQuestion>

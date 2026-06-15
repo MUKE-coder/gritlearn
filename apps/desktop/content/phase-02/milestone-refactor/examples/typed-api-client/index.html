@@ -1,0 +1,167 @@
+<!--
+  A real apiClient shape — fetch + Zod-like validation + custom Error
+  classes. Two buttons run two scenarios (404 / success) and the trace
+  panel shows the typed flow: which Error class was thrown vs. which
+  schema parsed cleanly.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Production-shape apiClient — fetch + validate + typed errors</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 820px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.84rem; line-height: 1.6;
+        margin: 0.5rem 0; overflow-x: auto; white-space: pre;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .accent  { color: #fbbf24; }
+      .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+      .btns button {
+        padding: 0.55rem 1rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-weight: 600; font-size: 0.88rem;
+      }
+      .btns button:hover { background: #f4f4f5; }
+      .btns button.primary { background: #15803d; color: #fff; border-color: #15803d; }
+      .trace {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.6;
+        margin-top: 0.5rem; min-height: 8rem; max-height: 20rem; overflow-y: auto;
+      }
+      .trace .row { padding: 2px 0; }
+      .trace .ok    { color: #7fff5b; }
+      .trace .err   { color: #f87171; }
+      .trace .muted { color: #71717a; }
+      .trace .info  { color: #38bdf8; }
+    </style>
+  </head>
+  <body>
+    <h1>The apiClient — what's in the wrapper</h1>
+    <p>The fetch-wrapper shape every real frontend has. Validates with Zod (here, a tiny hand-rolled checker so the example needs no deps); throws typed errors the caller can branch with <code>instanceof</code>.</p>
+
+    <h2>The shape</h2>
+<pre><span class="comment">// lib/errors.ts — custom Error classes</span>
+<span class="keyword">export class</span> NetworkError    <span class="keyword">extends</span> <span class="keyword">Error</span> { <span class="keyword">name</span> = <span class="string">"NetworkError"</span>; }
+<span class="keyword">export class</span> NotFoundError   <span class="keyword">extends</span> <span class="keyword">Error</span> { <span class="keyword">name</span> = <span class="string">"NotFoundError"</span>; }
+<span class="keyword">export class</span> ValidationError <span class="keyword">extends</span> <span class="keyword">Error</span> { <span class="keyword">name</span> = <span class="string">"ValidationError"</span>; }
+<span class="keyword">export class</span> ApiError        <span class="keyword">extends</span> <span class="keyword">Error</span> {
+  <span class="keyword">constructor</span>(<span class="keyword">public</span> status: <span class="keyword">number</span>, msg: <span class="keyword">string</span>) { <span class="keyword">super</span>(msg); }
+}
+
+<span class="comment">// lib/apiClient.ts</span>
+<span class="keyword">export async function</span> apiGet&lt;T&gt;(url: <span class="keyword">string</span>, schema: Schema&lt;T&gt;): <span class="keyword">Promise</span>&lt;T&gt; {
+  <span class="keyword">let</span> res: <span class="keyword">Response</span>;
+  <span class="keyword">try</span> {
+    res = <span class="keyword">await</span> fetch(url);
+  } <span class="keyword">catch</span> {
+    <span class="keyword">throw new</span> NetworkError(<span class="string">"Network unreachable"</span>);
+  }
+  <span class="keyword">if</span> (res.status === 404) <span class="keyword">throw new</span> NotFoundError(url);
+  <span class="keyword">if</span> (!res.ok)            <span class="keyword">throw new</span> ApiError(res.status, <span class="keyword">await</span> res.text());
+
+  <span class="keyword">const</span> json = <span class="keyword">await</span> res.json();
+  <span class="keyword">const</span> parsed = schema.safeParse(json);
+  <span class="keyword">if</span> (!parsed.success) <span class="keyword">throw new</span> ValidationError(parsed.error);
+  <span class="keyword">return</span> parsed.data;
+}</pre>
+
+    <h2>Try it</h2>
+    <div class="btns">
+      <button class="primary" data-scenario="ok">happy path — success</button>
+      <button data-scenario="404">404 — NotFoundError</button>
+      <button data-scenario="bad-shape">unexpected response shape — ValidationError</button>
+      <button data-scenario="offline">network failure — NetworkError</button>
+    </div>
+
+    <div class="trace" id="trace"></div>
+
+    <script>
+      // ── A tiny Zod-like schema implementation, just for the demo ──
+      function obj(shape) {
+        return {
+          safeParse(value) {
+            if (typeof value !== "object" || value === null) {
+              return { success: false, error: "not an object" };
+            }
+            for (const [k, expectedType] of Object.entries(shape)) {
+              if (typeof value[k] !== expectedType) {
+                return { success: false, error: `field "${k}" should be ${expectedType}, got ${typeof value[k]}` };
+              }
+            }
+            return { success: true, data: value };
+          },
+        };
+      }
+
+      const UserSchema = obj({ id: "number", name: "string", email: "string" });
+
+      // ── Errors ──
+      class NetworkError extends Error    { constructor(m) { super(m); this.name = "NetworkError"; } }
+      class NotFoundError extends Error   { constructor(m) { super(m); this.name = "NotFoundError"; } }
+      class ApiError extends Error        { constructor(s, m) { super(m); this.name = "ApiError"; this.status = s; } }
+      class ValidationError extends Error { constructor(m) { super(m); this.name = "ValidationError"; } }
+
+      // ── apiClient ──
+      async function apiGet(url, schema, opts = {}) {
+        let res;
+        try {
+          if (opts.offline) throw new Error("offline");
+          res = await fetch(url);
+        } catch {
+          throw new NetworkError("Network unreachable");
+        }
+        if (res.status === 404) throw new NotFoundError(url);
+        if (!res.ok) throw new ApiError(res.status, "Server error");
+        let json;
+        try { json = await res.json(); }
+        catch { throw new ValidationError("response was not JSON"); }
+        if (opts.fakeShape) json = { wrong: "shape" };
+        const parsed = schema.safeParse(json);
+        if (!parsed.success) throw new ValidationError(parsed.error);
+        return parsed.data;
+      }
+
+      // ── Scenarios ──
+      const trace = document.getElementById("trace");
+      function log(cls, msg) {
+        const row = document.createElement("div");
+        row.className = "row " + cls;
+        row.textContent = msg;
+        trace.prepend(row);
+      }
+      function clear() { trace.innerHTML = ""; }
+
+      async function run(scenario) {
+        clear();
+        log("muted", "─── scenario: " + scenario + " ───");
+        try {
+          let opts = {};
+          let url  = "https://jsonplaceholder.typicode.com/users/1";
+          if (scenario === "404")        url = "https://jsonplaceholder.typicode.com/users/9999";
+          if (scenario === "bad-shape")  opts.fakeShape = true;
+          if (scenario === "offline")    opts.offline = true;
+
+          log("info", "→ apiGet(" + url + ", UserSchema)");
+          const user = await apiGet(url, UserSchema, opts);
+          log("ok", "✓ success — typed User: " + JSON.stringify({ id: user.id, name: user.name }));
+        } catch (err) {
+          if (err instanceof NotFoundError)   log("err", "✗ caught NotFoundError → show 'City/User not found' to the user");
+          else if (err instanceof ValidationError) log("err", "✗ caught ValidationError → log to Sentry, show generic error");
+          else if (err instanceof ApiError)   log("err", "✗ caught ApiError (status " + err.status + ") → show server-error UI");
+          else if (err instanceof NetworkError) log("err", "✗ caught NetworkError → show 'check your connection'");
+          else                                 log("err", "✗ caught unknown error: " + err.message);
+        }
+      }
+
+      document.querySelectorAll("button[data-scenario]").forEach((b) =>
+        b.addEventListener("click", () => run(b.dataset.scenario))
+      );
+    </script>
+  </body>
+</html>

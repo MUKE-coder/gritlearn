@@ -1,0 +1,202 @@
+<!--
+  Side-by-side: a 60-line monolithic React component (the kind a
+  Phase 1 student might've shipped) refactored into a thin orchestrator
+  plus three focused helpers.
+
+  Same behavior, different shape. The right side reads top-to-bottom
+  like prose; the left side requires holding the whole thing in your
+  head.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Phase 2 refactor — one component, before and after</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1100px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.85rem; background: #fafafa; }
+      .col.bad  { border-color: #fda4af; background: #fef2f2; }
+      .col.good { border-color: #86efac; background: #ecfdf5; }
+      .badge {
+        display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 999px;
+        font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 0.4rem;
+      }
+      .badge.bad  { background: #dc2626; color: #fff; }
+      .badge.good { background: #16a34a; color: #fff; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.76rem; line-height: 1.55;
+        white-space: pre; overflow-x: auto; margin: 0.4rem 0; max-height: 22rem; overflow-y: auto;
+      }
+      .file-label {
+        font-size: 0.72rem; color: #71717a; font-family: ui-monospace, monospace;
+        margin-top: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .annot {
+        font-size: 0.85rem; padding: 0.5rem 0.75rem; border-left: 3px solid #71717a;
+        background: #fff; border-radius: 4px; margin-top: 0.5rem; color: #52525b;
+      }
+      .annot.bad { border-color: #dc2626; color: #991b1b; background: #fef2f2; }
+      .annot.good { border-color: #16a34a; color: #166534; background: #ecfdf5; }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .accent  { color: #fbbf24; }
+    </style>
+  </head>
+  <body>
+    <h1>One component — before and after the Phase 2 refactor</h1>
+    <p>Same Weather lookup. Same UI. Left: what a Phase 1 student typically ships. Right: the same logic after the Phase 2 techniques.</p>
+
+    <div class="grid">
+
+      <!-- ── BEFORE ── -->
+      <div class="col bad">
+        <h2>❌ Before <span class="badge bad">phase 1</span></h2>
+        <div class="file-label">apps/web/app/page.tsx — 110 lines, one file, all here</div>
+<pre>"use client";
+<span class="keyword">import</span> { useState, useEffect } <span class="keyword">from</span> <span class="string">"react"</span>;
+
+<span class="keyword">export default function</span> WeatherPage() {
+  <span class="keyword">const</span> [city, setCity] = useState(<span class="string">""</span>);
+  <span class="keyword">const</span> [data, setData] = useState&lt;<span class="keyword">any</span>&gt;(<span class="keyword">null</span>);
+  <span class="keyword">const</span> [loading, setLoading] = useState(<span class="keyword">false</span>);
+  <span class="keyword">const</span> [error, setError] = useState&lt;string | null&gt;(<span class="keyword">null</span>);
+
+  <span class="keyword">const</span> search = <span class="keyword">async</span> () =&gt; {
+    setLoading(<span class="keyword">true</span>);
+    setError(<span class="keyword">null</span>);
+    <span class="keyword">try</span> {
+      <span class="keyword">const</span> res = <span class="keyword">await</span> fetch(<span class="string">`https://geocoding-api.open-meteo.com/v1/search?name=${city}`</span>);
+      <span class="keyword">const</span> json = <span class="keyword">await</span> res.json();
+      <span class="comment">// no validation, no error class, json could be anything</span>
+      <span class="keyword">if</span> (!json.results || json.results.length === 0) {
+        setError(<span class="string">"City not found"</span>);
+        setLoading(<span class="keyword">false</span>);
+        <span class="keyword">return</span>;
+      }
+      <span class="keyword">const</span> hit = json.results[0];
+      <span class="keyword">const</span> fcRes = <span class="keyword">await</span> fetch(<span class="string">`https://api.open-meteo.com/v1/forecast?latitude=${hit.latitude}&longitude=${hit.longitude}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`</span>);
+      <span class="keyword">const</span> fc = <span class="keyword">await</span> fcRes.json();
+      <span class="comment">// for-loop pushes into days array (mutation)</span>
+      <span class="keyword">const</span> days = [];
+      <span class="keyword">for</span> (<span class="keyword">let</span> i = 0; i &lt; 5; i++) {
+        days.push({
+          day: fc.daily.time[i],
+          max: fc.daily.temperature_2m_max[i],
+          min: fc.daily.temperature_2m_min[i],
+        });
+      }
+      setData({ location: hit, current: fc.current, days });
+    } <span class="keyword">catch</span> (e: <span class="keyword">any</span>) {
+      setError(e.message);
+    }
+    setLoading(<span class="keyword">false</span>);
+  };
+
+  <span class="keyword">const</span> codeLabel = (code: <span class="keyword">number</span>) =&gt; {
+    <span class="keyword">if</span> (code === 0) <span class="keyword">return</span> <span class="string">"Clear"</span>;
+    <span class="keyword">if</span> (code &lt;= 3) <span class="keyword">return</span> <span class="string">"Cloudy"</span>;
+    <span class="keyword">if</span> (code &lt;= 67) <span class="keyword">return</span> <span class="string">"Rainy"</span>;
+    <span class="keyword">return</span> <span class="string">"Stormy"</span>;
+  };
+
+  <span class="keyword">return</span> (
+    &lt;div&gt;
+      &lt;input value={city} onChange={(e) =&gt; setCity(e.target.value)} /&gt;
+      &lt;button onClick={search}&gt;Search&lt;/button&gt;
+      {loading && &lt;p&gt;loading…&lt;/p&gt;}
+      {error && &lt;p&gt;{error}&lt;/p&gt;}
+      {data && (
+        &lt;&gt;
+          &lt;div&gt;{data.location.name}: {<span class="keyword">Math</span>.round(data.current.temperature_2m)}° {codeLabel(data.current.weather_code)}&lt;/div&gt;
+          {data.days.map((d: <span class="keyword">any</span>) =&gt; (
+            &lt;div key={d.day}&gt;{<span class="keyword">Math</span>.round(d.max)}° / {<span class="keyword">Math</span>.round(d.min)}°&lt;/div&gt;
+          ))}
+        &lt;/&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</pre>
+        <div class="annot bad">Single file. `any` everywhere. Raw fetch. `for` loop with push (mutation). Magic numbers (0, 3, 67). No error class. No Zod. The reviewer can't tell where one concern ends and another begins.</div>
+      </div>
+
+      <!-- ── AFTER ── -->
+      <div class="col good">
+        <h2>✓ After <span class="badge good">phase 2</span></h2>
+
+        <div class="file-label">apps/web/app/page.tsx — 25 lines, table of contents</div>
+<pre>"use client";
+<span class="keyword">import</span> { useForecast } <span class="keyword">from</span> <span class="string">"@/hooks/useForecast"</span>;
+<span class="keyword">import</span> { SearchBar }  <span class="keyword">from</span> <span class="string">"@/components/SearchBar"</span>;
+<span class="keyword">import</span> { ErrorMsg }   <span class="keyword">from</span> <span class="string">"@/components/ErrorMsg"</span>;
+<span class="keyword">import</span> { CurrentCard } <span class="keyword">from</span> <span class="string">"@/components/CurrentCard"</span>;
+<span class="keyword">import</span> { ForecastStrip } <span class="keyword">from</span> <span class="string">"@/components/ForecastStrip"</span>;
+
+<span class="keyword">export default function</span> WeatherPage() {
+  <span class="keyword">const</span> { search, state } = useForecast();
+  <span class="keyword">return</span> (
+    &lt;div&gt;
+      &lt;SearchBar onSearch={search} /&gt;
+      {state.kind === <span class="string">"loading"</span> && &lt;p&gt;loading…&lt;/p&gt;}
+      {state.kind === <span class="string">"error"</span>   && &lt;ErrorMsg error={state.error} /&gt;}
+      {state.kind === <span class="string">"success"</span> && (
+        &lt;&gt;
+          &lt;CurrentCard data={state.data} /&gt;
+          &lt;ForecastStrip days={state.data.days} /&gt;
+        &lt;/&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</pre>
+
+        <div class="file-label">apps/web/lib/apiClient.ts</div>
+<pre><span class="keyword">import</span> { ForecastSchema, GeoSchema } <span class="keyword">from</span> <span class="string">"./schemas"</span>;
+<span class="keyword">export class</span> NetworkError <span class="keyword">extends</span> <span class="keyword">Error</span> { name = <span class="string">"NetworkError"</span>; }
+<span class="keyword">export class</span> NotFoundError <span class="keyword">extends</span> <span class="keyword">Error</span> { name = <span class="string">"NotFoundError"</span>; }
+<span class="keyword">export class</span> ApiError <span class="keyword">extends</span> <span class="keyword">Error</span> {
+  <span class="keyword">constructor</span>(<span class="keyword">public</span> status: <span class="keyword">number</span>, msg: <span class="keyword">string</span>) { <span class="keyword">super</span>(msg); }
+}
+<span class="keyword">export async function</span> geocode(city: <span class="keyword">string</span>) {
+  <span class="keyword">const</span> res = <span class="keyword">await</span> fetch(...);
+  <span class="keyword">if</span> (!res.ok) <span class="keyword">throw new</span> ApiError(res.status, <span class="string">"Geocode failed"</span>);
+  <span class="keyword">const</span> data = GeoSchema.parse(<span class="keyword">await</span> res.json());
+  <span class="keyword">if</span> (data.results.length === 0) <span class="keyword">throw new</span> NotFoundError(city);
+  <span class="keyword">return</span> data.results[0];
+}</pre>
+
+        <div class="file-label">apps/web/hooks/useForecast.ts (truncated)</div>
+<pre><span class="keyword">export function</span> useForecast() {
+  <span class="keyword">const</span> [state, setState] = useState&lt;FetchState&gt;({ kind: <span class="string">"idle"</span> });
+  <span class="keyword">const</span> search = <span class="keyword">async</span> (city: <span class="keyword">string</span>) =&gt; {
+    setState({ kind: <span class="string">"loading"</span> });
+    <span class="keyword">try</span> {
+      <span class="keyword">const</span> hit = <span class="keyword">await</span> geocode(city);
+      <span class="keyword">const</span> fc  = <span class="keyword">await</span> forecast(hit);
+      setState({ kind: <span class="string">"success"</span>, data: { location: hit, ...fc } });
+    } <span class="keyword">catch</span> (err) {
+      <span class="keyword">if</span> (err <span class="keyword">instanceof</span> NotFoundError) setState({ kind: <span class="string">"error"</span>, error: <span class="string">"City not found"</span> });
+      <span class="keyword">else if</span> (err <span class="keyword">instanceof</span> ApiError)    setState({ kind: <span class="string">"error"</span>, error: <span class="string">`API ${err.status}`</span> });
+      <span class="keyword">else</span>                                  setState({ kind: <span class="string">"error"</span>, error: <span class="string">"Network unreachable"</span> });
+    }
+  };
+  <span class="keyword">return</span> { search, state };
+}</pre>
+        <div class="annot good">5 files. Discriminated union state. Custom Error classes branched with instanceof. Pure transform helpers. Zod at the boundary. Page.tsx reads as a table of contents.</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top: 2rem;">What changed (and what didn't)</h2>
+    <ul>
+      <li><strong>Behavior:</strong> identical. Same URL, same UI, same Lighthouse score.</li>
+      <li><strong>Files:</strong> 1 → 5 (page, apiClient, schemas, useForecast, plus 4 components).</li>
+      <li><strong>Error handling:</strong> typed Error subclasses, branched with <code>instanceof</code>.</li>
+      <li><strong>Validation:</strong> Zod schemas catch API shape changes at the boundary.</li>
+      <li><strong>Mutation:</strong> the for/push loop became <code>.map</code>.</li>
+      <li><strong>State:</strong> discriminated union <code>{ kind: "idle" | "loading" | "error" | "success" }</code> instead of three separate booleans.</li>
+    </ul>
+  </body>
+</html>
