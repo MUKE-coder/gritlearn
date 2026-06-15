@@ -1,0 +1,140 @@
+<!--
+  Before/after of the "server components as children" pattern.
+  Before: client imports server, accidentally turning everything client.
+  After: page composes them; server stays server.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The composition pattern — before and after</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1000px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col {
+        border: 2px solid; border-radius: 10px; padding: 1rem; background: #fff;
+      }
+      .col.bad  { border-color: #fda4af; background: #fef2f2; }
+      .col.good { border-color: #86efac; background: #ecfdf5; }
+      .col h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+      .label {
+        display: inline-block; font-family: ui-monospace, monospace;
+        font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;
+        font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+        margin-bottom: 0.4rem;
+      }
+      .label.svr { background: #1e293b; color: #ededee; }
+      .label.cli { background: #fbbf24; color: #18181b; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.65rem 0.85rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; line-height: 1.55;
+        margin: 0.4rem 0; white-space: pre; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .accent  { color: #fbbf24; }
+      .verdict {
+        margin-top: 0.6rem; padding: 0.55rem 0.85rem; border-radius: 4px;
+        font-size: 0.85rem;
+      }
+      .verdict.bad  { background: #fef2f2; color: #991b1b; border-left: 3px solid #dc2626; }
+      .verdict.good { background: #ecfdf5; color: #166534; border-left: 3px solid #16a34a; }
+      .file {
+        font-size: 0.72rem; color: #71717a; font-family: ui-monospace, monospace; margin-top: 0.6rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The "server components as children" pattern</h1>
+    <p>Same goal: an interactive filter wrapping an expensive list. Left column gets it wrong; right column gets it right.</p>
+
+    <div class="grid">
+
+      <!-- ── WRONG ── -->
+      <div class="col bad">
+        <h2>❌ Before — client imports server</h2>
+
+        <div class="file">// app/page.tsx</div>
+        <span class="label svr">server</span>
+<pre><span class="keyword">import</span> { Filters } <span class="keyword">from</span> <span class="string">"@/components/Filters"</span>;
+
+<span class="keyword">export default async function</span> Page() {
+  <span class="keyword">return</span> &lt;Filters /&gt;;
+}</pre>
+
+        <div class="file">// components/Filters.tsx</div>
+        <span class="label cli">client</span>
+<pre><span class="string">"use client"</span>;
+<span class="keyword">import</span> { useState } <span class="keyword">from</span> <span class="string">"react"</span>;
+<span class="keyword">import</span> { ExpensiveList } <span class="keyword">from</span> <span class="string">"./ExpensiveList"</span>;
+<span class="comment">// ❌ importing the server component here</span>
+<span class="comment">//    forces it to become a client component too</span>
+
+<span class="keyword">export function</span> Filters() {
+  <span class="keyword">const</span> [filter, setFilter] = useState(<span class="string">"all"</span>);
+  <span class="keyword">return</span> (
+    &lt;div&gt;
+      &lt;FilterControls value={filter} onChange={setFilter} /&gt;
+      &lt;ExpensiveList filter={filter} /&gt; <span class="comment">{/* now ships as client JS */}</span>
+    &lt;/div&gt;
+  );
+}</pre>
+
+        <div class="verdict bad">
+          <strong>Result:</strong> The 500-item ExpensiveList ships as JavaScript (~50 KB).
+          Its rendering, formatters, date parsers all run in the browser.
+          Page is slow to hydrate. Lighthouse bundle-size warning.
+        </div>
+      </div>
+
+      <!-- ── RIGHT ── -->
+      <div class="col good">
+        <h2>✓ After — server passed as children</h2>
+
+        <div class="file">// app/page.tsx</div>
+        <span class="label svr">server</span>
+<pre><span class="keyword">import</span> { Filters } <span class="keyword">from</span> <span class="string">"@/components/Filters"</span>;
+<span class="keyword">import</span> { ExpensiveList } <span class="keyword">from</span> <span class="string">"@/components/ExpensiveList"</span>;
+<span class="comment">// ✓ both imported HERE (server context)</span>
+
+<span class="keyword">export default async function</span> Page() {
+  <span class="keyword">const</span> items = <span class="keyword">await</span> getExpensiveData();
+  <span class="keyword">return</span> (
+    &lt;Filters&gt;
+      &lt;ExpensiveList items={items} /&gt; <span class="comment">{/* server-rendered */}</span>
+    &lt;/Filters&gt;
+  );
+}</pre>
+
+        <div class="file">// components/Filters.tsx</div>
+        <span class="label cli">client</span>
+<pre><span class="string">"use client"</span>;
+<span class="keyword">import</span> { useState } <span class="keyword">from</span> <span class="string">"react"</span>;
+<span class="comment">// ✓ no import of ExpensiveList — receives it as children</span>
+
+<span class="keyword">export function</span> Filters({ children }: { children: <span class="keyword">React</span>.ReactNode }) {
+  <span class="keyword">const</span> [filter, setFilter] = useState(<span class="string">"all"</span>);
+  <span class="keyword">return</span> (
+    &lt;div&gt;
+      &lt;FilterControls value={filter} onChange={setFilter} /&gt;
+      {children} <span class="comment">{/* rendered on server, slotted in here */}</span>
+    &lt;/div&gt;
+  );
+}</pre>
+
+        <div class="verdict good">
+          <strong>Result:</strong> ExpensiveList stays a server component. Its 50 KB doesn't ship as JS.
+          The page sends finished HTML for the list + 200 bytes of client JS for the filter.
+          Lightning-fast hydration.
+        </div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-top: 2rem; font-size: 1rem;">Why this works</h2>
+    <p>The rule: when a client component <em>imports</em> a server component, the server one gets bundled with it (and becomes client). When a client component receives a server component as <em>children</em> (a value), no import happens — the framework rendered it elsewhere and just slots it into the JSX.</p>
+    <p>The shape you'll write a hundred times in real apps: <code>&lt;ClientWrapper&gt;&lt;ServerHeavyThing /&gt;&lt;/ClientWrapper&gt;</code>. Compose at the boundary; keep the heavy server work as children.</p>
+  </body>
+</html>

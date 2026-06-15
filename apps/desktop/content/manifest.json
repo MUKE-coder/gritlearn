@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "phases": [
     {
       "id": "phase-01",
@@ -92,9 +92,9 @@
         { "slug": "phase-03/pages-app-router", "title": "The App Router", "available": true },
         { "slug": "phase-03/layouts-nested-routes", "title": "Layouts and nested routes", "available": true },
         { "slug": "phase-03/linking-navigation", "title": "Linking and navigation", "available": true },
-        { "slug": "phase-03/server-vs-client", "title": "Server components vs client components", "available": false },
-        { "slug": "phase-03/rendering-strategies", "title": "Rendering strategies (SSR, SSG, client)", "available": false },
-        { "slug": "phase-03/data-fetching", "title": "Data fetching in Next.js", "available": false },
+        { "slug": "phase-03/server-vs-client", "title": "Server components vs client components", "available": true },
+        { "slug": "phase-03/rendering-strategies", "title": "Rendering strategies (SSR, SSG, ISR, client)", "available": true },
+        { "slug": "phase-03/data-fetching", "title": "Data fetching in Next.js", "available": true },
         { "slug": "phase-03/route-handlers", "title": "Route handlers (API routes)", "available": false },
         { "slug": "phase-03/server-actions", "title": "Server actions", "available": false },
         { "slug": "phase-03/what-is-a-database", "title": "What a database is", "available": false },

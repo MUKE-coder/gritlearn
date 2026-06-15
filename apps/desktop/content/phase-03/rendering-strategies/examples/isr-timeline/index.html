@@ -1,0 +1,138 @@
+<!--
+  ISR timeline simulation. 15 requests over 90s with revalidate=30.
+  Shows which served cached vs. triggered a background regenerate.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ISR in action — timeline</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 800px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      .controls { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .controls button {
+        padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600;
+      }
+      .controls button.alt { background: #fff; color: #15803d; }
+      .timeline {
+        margin-top: 1rem; background: #0a0a0d; padding: 0.9rem 1.1rem; border-radius: 8px;
+        font-family: ui-monospace, monospace; font-size: 0.84rem; color: #ededee; line-height: 1.7;
+      }
+      .req { display: grid; grid-template-columns: 50px 140px 1fr 100px; gap: 0.5rem; padding: 2px 0; }
+      .req .time { color: #71717a; }
+      .req .url  { color: #38bdf8; }
+      .req .out  { color: #7fff5b; }
+      .req .out.regen { color: #fbbf24; }
+      .req .data { color: #a78bfa; font-size: 0.78rem; }
+      .legend {
+        margin-top: 0.7rem; font-size: 0.85rem; color: #555;
+      }
+      .legend span { display: inline-block; padding: 1px 8px; border-radius: 999px; margin-right: 0.5rem; font-family: ui-monospace, monospace; font-size: 0.78rem; }
+      .legend .ok { background: #16a34a; color: #fff; }
+      .legend .regen { background: #b45309; color: #fff; }
+      .summary {
+        margin-top: 1.5rem; padding: 0.85rem 1rem; background: #ecfdf5; border-left: 3px solid #16a34a;
+        border-radius: 4px; font-size: 0.92rem; color: #166534;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ISR in action — 15 requests, revalidate = 30s</h1>
+    <p>Simulates 15 requests over 90 seconds. Watch which ones serve cached HTML (fast) and which trigger a background regenerate (also fast — the background work doesn't block the response).</p>
+
+    <div class="controls">
+      <button id="play">▶ Replay simulation</button>
+      <button id="reset" class="alt">Reset</button>
+    </div>
+
+    <h2>Timeline</h2>
+    <div class="timeline" id="timeline"></div>
+
+    <div class="legend">
+      <span class="ok">CACHED</span> served instantly from the stored HTML
+      <span class="regen">REGEN</span> background regeneration triggered (response still instant)
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <script>
+      // 15 requests with timestamps in seconds since 0
+      const requests = [];
+      for (let i = 0; i < 15; i++) {
+        // every ~6 seconds
+        requests.push({ t: Math.floor(i * 6 + Math.random() * 4), id: i + 1 });
+      }
+      requests.sort((a, b) => a.t - b.t);
+
+      const REVALIDATE = 30;
+      const timelineEl = document.getElementById("timeline");
+      const summaryEl  = document.getElementById("summary");
+
+      async function play() {
+        timelineEl.innerHTML = "";
+        let lastBuilt = -REVALIDATE - 1;   // force first request to render
+        let dataVersion = 1;
+        let cached = 0, regen = 0, firstRender = 0;
+
+        for (const r of requests) {
+          await new Promise((res) => setTimeout(res, 250));
+
+          const row = document.createElement("div");
+          row.className = "req";
+          const age = r.t - lastBuilt;
+          let kind, dataShown;
+
+          if (lastBuilt < 0) {
+            // First request — has to render
+            kind = "REGEN (initial)";
+            row.querySelector?.(""); // ignore
+            dataShown = "v" + dataVersion;
+            lastBuilt = r.t;
+            firstRender++;
+          } else if (age >= REVALIDATE) {
+            // Cache stale — serve cached, regenerate in background, increment version
+            kind = "REGEN";
+            dataShown = "v" + dataVersion + " (stale, regenerating…)";
+            dataVersion++;
+            lastBuilt = r.t;
+            regen++;
+          } else {
+            kind = "CACHED";
+            dataShown = "v" + dataVersion;
+            cached++;
+          }
+
+          row.innerHTML = `
+            <div class="time">+${r.t}s</div>
+            <div class="url">GET /products</div>
+            <div class="out ${kind.startsWith("REGEN") ? "regen" : ""}">${kind}</div>
+            <div class="data">${dataShown}</div>
+          `;
+          timelineEl.appendChild(row);
+        }
+
+        summaryEl.innerHTML = `
+          <strong>${requests.length} requests:</strong>
+          ${cached} served from cache (instant),
+          ${regen} triggered a background regenerate (also instant for the user),
+          ${firstRender} was the initial render.
+          <br><br>
+          <strong>Cache hit rate:</strong> ${Math.round(cached / requests.length * 100)}%.
+          Without ISR (pure SSR), all ${requests.length} would have done full server-side rendering.
+        `;
+      }
+
+      function reset() {
+        timelineEl.innerHTML = "";
+        summaryEl.innerHTML = "";
+      }
+
+      document.getElementById("play").addEventListener("click", play);
+      document.getElementById("reset").addEventListener("click", reset);
+      play();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,137 @@
+<!--
+  Walk through "page fetches data, renders, error handling, suspense" —
+  the whole shape in one annotated example.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The await-fetch pattern, end to end</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 820px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .file {
+        font-size: 0.74rem; color: #71717a; font-family: ui-monospace, monospace;
+        margin-top: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1.1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin: 0.4rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .accent  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .note {
+        font-size: 0.88rem; padding: 0.6rem 0.95rem; border-radius: 4px; margin-top: 0.6rem;
+        background: #fef9c3; border-left: 3px solid #fbbf24; color: #92400e;
+      }
+      .note.good { background: #ecfdf5; border-color: #16a34a; color: #166534; }
+      .step-marker {
+        display: inline-block; padding: 1px 8px; background: #15803d; color: #fff;
+        border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The await-fetch pattern, end to end</h1>
+    <p>A real "page fetches data, renders, handles errors and loading" walkthrough.</p>
+
+    <h2><span class="step-marker">1</span> The page — async server component</h2>
+    <div class="file">app/products/page.tsx</div>
+<pre><span class="keyword">import</span> { Suspense } <span class="keyword">from</span> <span class="string">"react"</span>;
+<span class="keyword">import</span> { ProductGrid } <span class="keyword">from</span> <span class="string">"@/components/ProductGrid"</span>;
+<span class="keyword">import</span> { RecentReviews } <span class="keyword">from</span> <span class="string">"@/components/RecentReviews"</span>;
+
+<span class="keyword">export default async function</span> ProductsPage() {
+  <span class="comment">// Parallel fetches — both start at the same time</span>
+  <span class="keyword">const</span> [products, featured] = <span class="keyword">await</span> <span class="keyword">Promise</span>.all([
+    fetch(<span class="string">"https://api.example.com/products"</span>).then(r =&gt; r.json()),
+    fetch(<span class="string">"https://api.example.com/featured"</span>).then(r =&gt; r.json()),
+  ]);
+
+  <span class="keyword">return</span> (
+    &lt;main className=<span class="string">"p-8"</span>&gt;
+      &lt;h1&gt;Products&lt;/h1&gt;
+      &lt;ProductGrid products={products} featured={featured} /&gt;
+
+      &lt;Suspense fallback={&lt;p&gt;Loading recent reviews…&lt;/p&gt;}&gt;
+        &lt;RecentReviews /&gt; <span class="comment">{/* a slower component, streams in */}</span>
+      &lt;/Suspense&gt;
+    &lt;/main&gt;
+  );
+}</pre>
+    <div class="note good">The page itself awaits its primary data — no useEffect, no loading state for the products. The RecentReviews component (which fetches its own data) is wrapped in Suspense so it can stream in later without blocking the page.</div>
+
+    <h2><span class="step-marker">2</span> The slow child — its own server component</h2>
+    <div class="file">components/RecentReviews.tsx</div>
+<pre><span class="comment">// also a server component (no "use client")</span>
+<span class="keyword">export async function</span> RecentReviews() {
+  <span class="keyword">const</span> reviews = <span class="keyword">await</span> fetch(<span class="string">"https://api.example.com/reviews"</span>, {
+    next: { revalidate: 60 } <span class="comment">// ISR — cache for 60s</span>
+  }).then(r =&gt; r.json());
+
+  <span class="keyword">return</span> (
+    &lt;section&gt;
+      &lt;h2&gt;Recent reviews&lt;/h2&gt;
+      &lt;ul&gt;
+        {reviews.map((r: Review) =&gt; (
+          &lt;li key={r.id}&gt;{r.body}&lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+    &lt;/section&gt;
+  );
+}</pre>
+    <div class="note">Each fetch can have its own cache strategy. Products is full-fresh; reviews are ISR with 60s revalidation.</div>
+
+    <h2><span class="step-marker">3</span> The loading shell</h2>
+    <div class="file">app/products/loading.tsx</div>
+<pre><span class="keyword">export default function</span> Loading() {
+  <span class="keyword">return</span> (
+    &lt;main className=<span class="string">"p-8"</span>&gt;
+      &lt;div className=<span class="string">"animate-pulse h-8 w-32 bg-gray-200 rounded"</span> /&gt;
+      &lt;div className=<span class="string">"mt-4 grid grid-cols-3 gap-4"</span>&gt;
+        {[1,2,3,4,5,6].map(i =&gt; (
+          &lt;div key={i} className=<span class="string">"h-40 bg-gray-200 rounded animate-pulse"</span> /&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/main&gt;
+  );
+}</pre>
+    <div class="note">Shown automatically while page.tsx is rendering. Implicit Suspense boundary around the whole route.</div>
+
+    <h2><span class="step-marker">4</span> The error boundary</h2>
+    <div class="file">app/products/error.tsx</div>
+<pre><span class="string">"use client"</span>; <span class="comment">// error.tsx must be a client component</span>
+
+<span class="keyword">export default function</span> Error({
+  error,
+  reset,
+}: { error: Error; reset: () =&gt; <span class="keyword">void</span> }) {
+  <span class="keyword">return</span> (
+    &lt;main className=<span class="string">"p-8 text-red-700"</span>&gt;
+      &lt;h1&gt;Couldn't load products&lt;/h1&gt;
+      &lt;p&gt;{error.message}&lt;/p&gt;
+      &lt;button
+        onClick={reset}
+        className=<span class="string">"mt-4 rounded bg-red-100 px-4 py-2"</span>
+      &gt;
+        Try again
+      &lt;/button&gt;
+    &lt;/main&gt;
+  );
+}</pre>
+    <div class="note">If page.tsx (or any server component in the route) throws, this is rendered in its place. The layout around it still shows.</div>
+
+    <h2 style="margin-top: 2rem;">What you don't see in the user's network panel</h2>
+    <ul>
+      <li>No XHR / fetch calls to a separate API for the products data — it was server-fetched.</li>
+      <li>The HTML response contains the products data already rendered.</li>
+      <li>The "Loading recent reviews…" fallback streams in first; the real content replaces it within the same response.</li>
+      <li>If the products fetch fails, the error UI ships instead of broken HTML.</li>
+    </ul>
+  </body>
+</html>

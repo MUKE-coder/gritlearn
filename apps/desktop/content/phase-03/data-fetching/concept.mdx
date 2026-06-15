@@ -1,0 +1,594 @@
+## Data fetching in Next.js
+
+Most pages need data — from a database, an API, a CMS. In the App Router, the modern way is shockingly simple: `await fetch(...)` (or call any async function) directly inside a server component. The framework handles caching, deduplication, and the request-response lifecycle for you. No `useEffect`, no React Query, no `getServerSideProps`. Just `await`. Once you've internalized that pattern, building data-driven pages becomes the most natural-feeling part of writing the app.
+
+<Analogy>
+Data fetching in a server component is **picking ingredients straight from the pantry while you cook**.
+
+Imagine you're a chef preparing dinner. The old way of getting ingredients meant placing an order with a courier — write down what you need, hand off the request, wait for the delivery, then continue cooking when it arrives. Each ingredient was its own round trip, and if you forgot to order something, the meal stalled. That's data fetching in a traditional SPA: `useEffect` schedules a fetch, the component renders empty while waiting, then re-renders with the data, then loading spinners flash off. Three round trips for three ingredients means three flashes for the user.
+
+In the App Router's server components, the chef walks into a stocked pantry and grabs the ingredients in person. No order forms, no waiting between trips. The cooking is one continuous flow:
+
+```tsx
+export default async function MealPage() {
+  const flour = await pantry.get("flour");
+  const eggs  = await pantry.get("eggs");
+  const milk  = await pantry.get("milk");
+  return <Pancakes flour={flour} eggs={eggs} milk={milk} />;
+}
+```
+
+You stand at the prep station; the pantry is steps away; you grab what you need; you cook. The diner never sees a half-prepped plate — by the time the meal goes out, it's done.
+
+Three properties this gives you that the old way didn't:
+
+1. **No "loading" state for the page itself.** The component doesn't render until all its data is fetched. The HTML the user receives already has the data baked in. No skeleton screens for things the server could have just included.
+
+2. **Direct access to private resources.** Inside a server component, you can call your database client directly. You can use environment variables. You can read service-account credentials. None of it leaks to the browser — only the rendered HTML does. The pantry doesn't get shown to the diner.
+
+3. **Automatic deduplication and caching.** If two components on the same page both call `getCurrentUser()`, the framework only calls it *once*. The result is cached and reused. You write naive code (just `await` what you need); the framework optimizes.
+
+The caching part is the bit that surprises React veterans. `fetch` in a server component is *not* the same as `fetch` in the browser — it's extended to cache responses automatically, share cached entries across requests, and let you control freshness with a `revalidate` option. That's how the same `await fetch("/api/products")` can serve thousands of users per second without hammering the API: the first call fetches, the rest hit the cache.
+
+The framing for the rest of this concept: server components turn data fetching into ordinary function calls. Forget the ceremony of `useEffect` + state + loading-flags. Just `await`. The framework handles the rest.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing client-side fetch (useEffect) vs server-side fetch (await in a server component)"
+  caption="Same data, two paths. The server-component version skips the entire loading-state lifecycle."
+>
+
+```
+   CLIENT-SIDE (the old SPA way)              SERVER-COMPONENT (App Router)
+   ──────────────────────────────              ─────────────────────────────
+
+   1. Server sends empty shell                  1. Server runs the page
+   2. Browser parses HTML                          - awaits fetch
+   3. Browser loads JS                              - awaits another fetch
+   4. JS mounts the component                       - renders React tree
+   5. useEffect runs                            2. Server sends HTML with data
+   6. fetch /api/products  ←→  server           3. Browser parses HTML
+   7. JSON arrives in browser                       (DONE — user sees content)
+   8. setState (products = data)
+   9. React re-renders
+   10. Loading skeleton replaced with content
+
+   Total: 6-8 round trips                        Total: 1 round trip
+   "Loading…" visible: 800-2000ms                "Loading…" visible: 0ms
+```
+
+</Illustration>
+
+### The minimum example
+
+```tsx
+// app/products/page.tsx — server component
+export default async function ProductsPage() {
+  const res = await fetch("https://api.example.com/products");
+  const products = await res.json();
+  return (
+    <ul>
+      {products.map((p: Product) => (
+        <li key={p.id}>{p.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+That's a complete, working, production-quality page. The function is `async`; the framework awaits it during rendering; the result is sent as HTML.
+
+Two things to internalize:
+
+1. **The component is `async`.** Server components can be async functions. They're awaited during rendering. The framework handles the lifecycle.
+
+2. **No `useState`, no `useEffect`, no React Query.** The data comes from the await; the page renders with it. The "loading state" doesn't exist for this page — the server doesn't reply until the data is ready.
+
+### Caching — `fetch` is extended
+
+In a server component, the global `fetch` is extended. By default, every `fetch` call result is cached:
+
+```tsx
+const res = await fetch("https://api.example.com/products");
+// First call: hits the API.
+// Subsequent calls (same URL, same options): return cached result.
+```
+
+This means you can write naive code:
+
+```tsx
+export default async function ProductsPage() {
+  const products = await fetch("/api/products").then(r => r.json());
+  const featured = await fetch("/api/featured").then(r => r.json());   // separate API call
+  return <ProductGrid products={products} featured={featured} />;
+}
+```
+
+Both fetches are cached. If two different pages on your site both call `/api/products`, the second one gets the cached response. The framework handles cross-request deduplication and intra-page memoization for you.
+
+To control caching, pass options:
+
+```tsx
+// Always fresh — never cache (SSR behavior)
+fetch("/api/live-scores", { cache: "no-store" });
+
+// Cache for at most 60 seconds (ISR behavior)
+fetch("/api/products", { next: { revalidate: 60 } });
+
+// Cache indefinitely (SSG behavior — default for plain fetch)
+fetch("/api/about-us", { cache: "force-cache" });
+```
+
+The same three options that determined the page's rendering strategy live on individual fetch calls. You can mix them — a page that fetches one piece of data fresh, one piece cached.
+
+### Parallel fetches
+
+When you have two unrelated fetches, run them in parallel:
+
+```tsx
+export default async function Page() {
+  // ❌ Sequential — each blocks the next (slower)
+  const products = await fetch("/api/products").then(r => r.json());
+  const featured = await fetch("/api/featured").then(r => r.json());
+
+  // ✓ Parallel — both start at once (faster)
+  const [products, featured] = await Promise.all([
+    fetch("/api/products").then(r => r.json()),
+    fetch("/api/featured").then(r => r.json()),
+  ]);
+
+  return <ProductGrid products={products} featured={featured} />;
+}
+```
+
+If each call takes 200ms, sequential is 400ms; parallel is 200ms. Always parallelize when the fetches don't depend on each other's results.
+
+### Database calls — same shape
+
+The pattern isn't limited to `fetch`. Any async function works — including database queries:
+
+```tsx
+import { db } from "@/lib/db";
+
+export default async function ProductsPage() {
+  const products = await db.product.findMany({
+    where: { active: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return <ProductGrid products={products} />;
+}
+```
+
+This is the everyday shape with Prisma (covered in later concepts). The `db.product.findMany` call runs on the server, hits PostgreSQL, returns the list. No API layer needed for the server-to-server hop — the page IS the server.
+
+### Per-request data — cookies, headers, params
+
+For data that depends on the request (the current user, region, query params), use the request-aware helpers:
+
+```tsx
+import { cookies, headers } from "next/headers";
+
+export default async function Dashboard() {
+  const sessionId = cookies().get("session")?.value;
+  const userAgent = headers().get("user-agent");
+  const user = await getUserBySession(sessionId);
+
+  return <DashboardUI user={user} />;
+}
+```
+
+These helpers automatically opt the page into SSR (because their result varies per request). Use them when you need per-user, per-request, or per-cookie data.
+
+For dynamic route params, they come in via the function args:
+
+```tsx
+// app/blog/[slug]/page.tsx
+export default async function BlogPost({
+  params,
+}: { params: { slug: string } }) {
+  const post = await getPost(params.slug);
+  return <article>{post.body}</article>;
+}
+```
+
+Search params (`?q=hello`) come in via the `searchParams` prop:
+
+```tsx
+export default async function SearchPage({
+  searchParams,
+}: { searchParams: { q?: string } }) {
+  const results = await search(searchParams.q ?? "");
+  return <SearchResults results={results} />;
+}
+```
+
+### Streaming and Suspense
+
+For pages with multiple data sources where you don't want everything to block, wrap parts in `<Suspense>`:
+
+```tsx
+import { Suspense } from "react";
+
+export default function Dashboard() {
+  return (
+    <>
+      <FastSection />
+      <Suspense fallback={<p>Loading stats…</p>}>
+        <SlowStats />          {/* takes 800ms to fetch — streams in later */}
+      </Suspense>
+      <Suspense fallback={<p>Loading feed…</p>}>
+        <SlowFeed />            {/* takes 500ms — streams in too */}
+      </Suspense>
+    </>
+  );
+}
+```
+
+The fast section renders immediately; the slow sections show fallbacks while their data fetches. As each finishes, its content streams in. The user sees most of the page right away; the slow bits fill in.
+
+This is huge for perceived performance. Without Suspense, the entire page would wait for the slowest fetch. With Suspense, the user sees the fast content first, then the slow content fills in *progressively*.
+
+### Loading states with `loading.tsx`
+
+For an entire page's loading state, use `loading.tsx` in the route folder:
+
+```tsx
+// app/dashboard/loading.tsx
+export default function Loading() {
+  return <div className="animate-pulse">Loading dashboard…</div>;
+}
+```
+
+The framework shows this while `page.tsx` is rendering. Implicitly wrapping the page in `<Suspense>` — same mechanism, framework-style.
+
+### Error states with `error.tsx`
+
+If your data fetch throws, `error.tsx` catches it:
+
+```tsx
+// app/dashboard/error.tsx
+"use client";
+
+export default function Error({
+  error,
+  reset,
+}: { error: Error; reset: () => void }) {
+  return (
+    <div>
+      <h1>Something went wrong</h1>
+      <p>{error.message}</p>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+Note `"use client"` — error boundaries must be client components. The reset button re-attempts the render.
+
+### Client-side fetching — when you need it
+
+For data that's user-interactive (typing in a search box, real-time polling), client-side fetching is still right. The two go-to libraries:
+
+**SWR** (from Vercel — same team as Next.js):
+
+```tsx
+"use client";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+export function LiveStats() {
+  const { data, isLoading } = useSWR("/api/stats", fetcher, {
+    refreshInterval: 5000,
+  });
+
+  if (isLoading) return <p>Loading…</p>;
+  return <p>{data.activeUsers} users online</p>;
+}
+```
+
+**TanStack Query** (more features, larger):
+
+```tsx
+"use client";
+import { useQuery } from "@tanstack/react-query";
+
+export function LiveStats() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => fetch("/api/stats").then(r => r.json()),
+    refetchInterval: 5000,
+  });
+
+  if (isLoading) return <p>Loading…</p>;
+  return <p>{data.activeUsers} users online</p>;
+}
+```
+
+Both handle caching, refetching, deduplication, optimistic updates. Use SWR for simple needs, TanStack Query for complex apps with many concurrent requests.
+
+The rule of thumb: **server fetch for initial page data, client fetch (SWR/TanStack) for interactive updates**. Don't reach for client fetching when the server can render it.
+
+### Revalidation on demand
+
+Sometimes you want to invalidate cached data programmatically — after a mutation, after a webhook fires. Use `revalidatePath` or `revalidateTag`:
+
+```tsx
+"use server";
+import { revalidatePath } from "next/cache";
+
+export async function deletePost(id: string) {
+  await db.post.delete({ where: { id } });
+  revalidatePath("/blog");      // re-render any cached version of /blog
+}
+```
+
+After this server action runs, the cached `/blog` page is invalidated; the next request regenerates it. Powers the "mutate and see fresh data" workflow.
+
+`revalidateTag` is similar but for tagged fetches — useful when many pages share the same underlying data source.
+
+### What `await` doesn't do
+
+A few things that *don't* work in server components, even though they're async:
+
+- **`useState`** — server components can't have state. The whole point.
+- **Browser-only APIs** — `window`, `document`, `localStorage`. Move that code to a client component.
+- **Hooks from third-party React libraries** that need browser APIs.
+
+If you reach for any of those, the component needs to be a client component, and data fetching switches to the client-side pattern (SWR, useEffect, etc.).
+
+<ExampleProject
+  src="fetch-in-server-component"
+  title="The await-fetch pattern, end-to-end"
+  description="A complete server component that fetches from a public API, renders the result, handles loading via Suspense, handles errors via error.tsx. The whole 'page that shows API data' loop in one walkthrough."
+/>
+
+<ExampleProject
+  src="dedupe-and-cache"
+  title="Watch the cache deduplicate identical fetches"
+  description="A simulation of two components on the same page each calling `getCurrentUser()`. Without dedup: two DB queries. With Next.js's automatic memoization: one DB query, used by both. The trace logs every step."
+/>
+
+<Exercise
+  title="Build a fetching page with parallel calls, Suspense, and error handling"
+  starter={`In your Next.js project, build app/dashboard/page.tsx:
+
+  1. PARALLEL FETCHES. Use Promise.all to fetch three things at once:
+     - https://jsonplaceholder.typicode.com/posts?_limit=3 (recent posts)
+     - https://jsonplaceholder.typicode.com/users?_limit=3  (top users)
+     - https://jsonplaceholder.typicode.com/comments?_limit=3 (comments)
+
+  2. Use the data in three sections of the page (Recent Posts / Top Users
+     / Latest Comments) with Tailwind for the grid layout.
+
+  3. SUSPENSE BOUNDARY. Extract one section (say "Latest Comments") into
+     its own server component, and wrap it in <Suspense>. Add an
+     artificial delay (await new Promise(r => setTimeout(r, 1500))) so
+     you can see the streaming in action.
+
+  4. LOADING.TSX. Add app/dashboard/loading.tsx that shows a global
+     loading state.
+
+  5. ERROR.TSX. Add app/dashboard/error.tsx (mark it "use client") with
+     a "Try again" button.
+
+  6. INTENTIONALLY BREAK IT. Try fetching from
+     https://this-domain-does-not-exist.invalid/x — confirm error.tsx
+     catches it.
+
+  7. Read the Network panel as you load the page. Notice:
+     - Only ONE HTML response is sent (this is the server component world)
+     - The page already has all three sections of data inside.
+     - Suspense-wrapped section streams in slightly later.
+     - When the broken fetch is in play, the error UI replaces only the
+       page, not the layout.`}
+>
+
+- `app/dashboard/page.tsx` is a server component (no "use client").
+- Three fetches run in parallel via `Promise.all`.
+- Three sections render the fetched data.
+- One section is wrapped in `<Suspense fallback={...}>` with an artificial delay to demonstrate streaming.
+- `app/dashboard/loading.tsx` exists and is rendered while the page is loading.
+- `app/dashboard/error.tsx` exists, is marked "use client", and renders a reset button.
+- Intentionally breaking a fetch triggers the error boundary, leaving the layout intact.
+- Viewing source shows all the fetched data is already in the HTML response (server-rendered).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why can you `await` inside a server component but not a client component?
+
+**A:** **Because server components run on the server during rendering — the framework awaits them as part of the render pipeline. Client components run in the browser; they go through React's normal render cycle, which doesn't allow async functions.**
+
+A server component is essentially:
+
+```tsx
+export default async function Page() {
+  const data = await getData();
+  return <UI data={data} />;
+}
+```
+
+The framework, during the render pass on the server, calls this function and awaits the result. The HTML is sent once everything resolves. From the framework's perspective, it's no different from calling any other async function.
+
+A client component looks similar but isn't:
+
+```tsx
+"use client";
+export default async function Page() {        // ❌ doesn't work
+  const data = await getData();
+  return <UI data={data} />;
+}
+```
+
+This fails because React's client-side render expects components to return JSX synchronously. The browser's React doesn't have a "wait until your async function resolves before painting" mechanism for components. Client components have to use `useEffect` + `useState` (or libraries built on them, like SWR) to fetch async data — start the fetch in an effect, store the result in state, re-render when it arrives.
+
+The reason for the difference: server components are rendered to *static HTML* before the browser ever sees them. The framework can take as long as it needs — wait for the database, wait for an API, render anything. The browser just receives the final HTML. Client components are rendered to a *live React tree* in the browser, which doesn't pause for async returns the same way.
+
+The practical implication: **fetch data in server components when you can; only fall back to client-side fetching when the data is user-interactive (typing in a search box) or polling (real-time updates).** Most pages can do all their initial data work on the server.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the default caching behavior of `fetch` in a server component?
+
+**A:** **`fetch` results are cached indefinitely by default. The same URL with the same options returns the cached response, even across multiple requests and across page renders.**
+
+```tsx
+const products = await fetch("https://api.example.com/products");
+// First call: hits the API.
+// Every subsequent call (anywhere in the app, same URL): cached.
+```
+
+This is the same behavior as `cache: "force-cache"` — the most aggressive cache mode. It makes pages that read this data effectively static (SSG behavior).
+
+To change the behavior, pass cache options:
+
+```tsx
+// Don't cache — always fresh (SSR)
+fetch("/api/live", { cache: "no-store" });
+
+// Cache for at most N seconds (ISR)
+fetch("/api/products", { next: { revalidate: 60 } });
+
+// Default: cache forever (until a manual revalidate or rebuild)
+fetch("/api/about");
+```
+
+The "cache forever" default is great for static content (about page, marketing copy, never-changing data). It's wrong for live data — `fetch("/api/balance")` without `cache: "no-store"` would show the same balance to every user forever until you redeploy. The mistake is silent and surprises React developers used to vanilla browser `fetch`, which doesn't cache.
+
+A safer pattern for "important data that should always be fresh":
+
+```tsx
+// lib/api.ts
+export async function getBalance(userId: string) {
+  return fetch(`/api/balance/${userId}`, {
+    cache: "no-store",       // ← force fresh
+  }).then((r) => r.json());
+}
+```
+
+Wrap your important fetches; never rely on the default.
+
+For data that's the same across the request (a `getCurrentUser()` called by 3 components on the same page), the framework also dedupes — it'll only fetch once even without caching. That's a different mechanism (per-render dedup) but it stacks with the cross-render cache.
+
+The rules of thumb:
+
+- **Static content (about pages, docs, footer data)** — default cache (forever) is fine.
+- **Periodically-updated content (blog list, product catalog)** — `{ next: { revalidate: N } }`.
+- **Real-time / per-user data** — `{ cache: "no-store" }`.
+
+When in doubt about a fetch in a server component, decide which of those three buckets it falls in and set the option accordingly.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `<Suspense>` do in a Next.js page?
+
+**A:** **It marks a part of the React tree as "this part is allowed to render its fallback while data is loading; everything else can render right away." It enables streaming — the page sends pieces as they become ready instead of waiting for everything.**
+
+```tsx
+export default function Dashboard() {
+  return (
+    <>
+      <FastSection />                     {/* renders immediately */}
+      <Suspense fallback={<p>Loading stats…</p>}>
+        <SlowStats />                     {/* renders later when fetch resolves */}
+      </Suspense>
+      <FasterSection />                   {/* renders immediately too */}
+    </>
+  );
+}
+```
+
+What happens without Suspense:
+
+- The page waits for `SlowStats` to fetch before any of the page can render.
+- The whole page is held up for 800ms (whatever the slowest fetch takes).
+- User sees a blank screen for 800ms, then everything at once.
+
+What happens with Suspense:
+
+- `FastSection` and `FasterSection` render and stream to the browser immediately.
+- Where `SlowStats` would be, `Loading stats…` is sent in its place.
+- The server holds the connection open; when `SlowStats` finishes fetching, its rendered HTML is appended to the response.
+- The browser sees the fallback first, then the real content fills in.
+- User sees most of the page right away; the slow part fills in progressively.
+
+Perceived performance — what the user notices — is dramatically better with Suspense around slow sections. Studies show users perceive a page where 90% renders in 200ms + the rest in 800ms as "fast"; a page where everything renders in 800ms as "slow." Same total time, different user experience.
+
+Three patterns where Suspense shines:
+
+1. **A page with multiple data sources of varying speed.** The fast ones render immediately; the slow ones stream.
+2. **Above-the-fold content vs. below-the-fold.** Wrap the below-the-fold in Suspense — the user sees the top while the bottom is fetched.
+3. **Independent sections.** Three dashboard widgets that each fetch independently — wrap each in its own Suspense so they're independently streamed.
+
+`loading.tsx` in a route folder implicitly wraps the page in `<Suspense>` — same mechanism, framework-style. Suspense boundaries inside the page give you finer control.
+
+A common mistake: wrapping the entire page in `<Suspense>` with a single fallback. That's the same as the no-Suspense behavior — nothing renders until everything's ready. The win comes from wrapping *parts* so the rest of the page renders earlier.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Should you use server fetching or client fetching (SWR / TanStack Query)?
+
+**A:** **Server fetching for the initial page data (everything that needs to be in the first response). Client fetching for interactive data that updates after the user does something or polls in real time.**
+
+The two have different strengths:
+
+```text
+SERVER FETCH (await in server component)        CLIENT FETCH (SWR / TanStack)
+─────────────────────────────────────           ──────────────────────────────
+✓ In the first HTML response                    ✗ Not in the first HTML (SEO impact)
+✓ SEO-friendly                                   ✓ Refreshes on demand
+✓ No loading state visible to user               ✓ Optimistic updates
+✓ Direct DB access (secure)                      ✓ Polling, real-time
+✗ Can't update after page loads                  ✗ Each component fetches separately
+                                                    (unless you set up React Query etc.)
+```
+
+The hybrid pattern that emerges in real apps:
+
+```tsx
+// Initial render: server fetch
+// app/dashboard/page.tsx
+export default async function Dashboard() {
+  const [user, stats] = await Promise.all([
+    getUser(),
+    getInitialStats(),       // server-fetched, in HTML
+  ]);
+  return (
+    <>
+      <DashboardHeader user={user} />
+      <StatsLive initialStats={stats} />   {/* client component, hydrates with initial data */}
+    </>
+  );
+}
+
+// Client component: keep stats fresh after initial load
+"use client";
+export function StatsLive({ initialStats }: { initialStats: Stats }) {
+  const { data } = useSWR("/api/stats", fetcher, {
+    fallbackData: initialStats,   // ← use server-fetched data while client hasn't loaded
+    refreshInterval: 5000,
+  });
+  return <StatsCards stats={data} />;
+}
+```
+
+The page renders the initial stats from the server fetch (instant, SEO, no loading state). After hydration, SWR takes over — polls every 5 seconds, updates the UI without a page refresh. Best of both worlds.
+
+The decision rule:
+
+- **Data needed in initial HTML for SEO or fast first paint?** → server fetch.
+- **Data that updates after the user interacts (search, filter, mutate)?** → client fetch with SWR / TanStack.
+- **Data that needs to poll in real time?** → client fetch with `refreshInterval` / `refetchInterval`.
+- **Both?** → server-fetch the initial value, client-fetch from then on, pass the initial as `fallbackData`.
+
+Use both. The framework lets you mix; mixing is the point.
+
+</InterviewQuestion>

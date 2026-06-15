@@ -1,0 +1,566 @@
+## Server components vs client components
+
+Every component you write in a Next.js app runs in one of two places: on the **server** (default) or in the **browser** (opt-in with `"use client"`). The choice is the most important architectural decision in the App Router. Server components can `await` data, hit databases, and ship zero JavaScript to the browser. Client components run JavaScript in the browser — that's what makes them able to use `useState`, `onClick`, and `useEffect`. Most of your UI should be server components; the parts that need *interactivity* become client components nested inside.
+
+<Analogy>
+Server components and client components are **the prep cooks vs. the dining-room servers in a kitchen**.
+
+A restaurant has two kinds of staff. **Prep cooks** work in the kitchen — out of sight of customers. They have access to the walk-in fridge, the deliveries, the recipe book, the buyer's notes. They do the slow, careful work: chopping mise en place, simmering stocks, plating dishes. By the time food leaves the kitchen, it's *ready* — the diner sees a finished plate, not a half-prepped tomato. The prep work was real, but invisible.
+
+**Dining-room servers** work in the dining room — in front of customers. They can't reach into the walk-in or the spice rack. But they can respond to *the diner*: take orders, refill water, react to "I changed my mind, the soup instead." They handle every interaction that happens *after* the plate arrives. They're the only staff the diner can actually talk to.
+
+A Next.js app works the exact same way:
+
+**Server components** are the prep cooks:
+- Run on the server. Out of the user's sight.
+- Have direct access to the kitchen — the database, the file system, secret env variables, third-party APIs with private keys.
+- Produce *finished HTML*: the rendered React tree, ready to send. No JavaScript ships to the browser for the server component itself.
+- Can `await` data inside their body. `async function Page() { const users = await db.users.findMany(); return ... }` works because the page itself runs on the server.
+
+**Client components** are the dining-room servers:
+- Run in the browser. The user can interact with them.
+- Have access to the browser environment: `window`, `document`, `localStorage`, click events.
+- Can use the React hooks that require this environment: `useState`, `useEffect`, `useRef`, all of them.
+- Marked with `"use client"` at the top of the file.
+
+The mental model that unlocks the App Router: **most of your UI is a server component; you make a piece a client component only when it specifically needs the browser**. The page itself is a server component. The big "ProductGrid" that renders 50 cards is a server component (it fetches the data once and renders 50 cards as HTML). One small piece inside each card — the "Add to cart" button — is a client component (it needs `onClick`).
+
+The numbers that fall out of this: in a healthy app, 80-95% of components are server components. The "Add to cart" button is 200 lines of JavaScript shipped to the browser. The product card rendering it lives in is zero. You ship the *minimum* JavaScript needed for interactivity, and the rest is HTML — fast to download, fast to parse, great for SEO.
+
+Three concrete rules that flow from this:
+
+1. **Don't reach for `"use client"` reflexively.** If your component doesn't have `useState`, `useEffect`, `onClick`, or another browser API, it doesn't need to be a client component. Leaving it as a server component saves bytes.
+
+2. **`"use client"` cascades down.** When a component is marked `"use client"`, every component it *imports* and uses is also treated as a client component (it has to be, since it now runs in the browser). To keep server components on a page, render them as `children` of a client component — see the composition pattern below.
+
+3. **Server components can't do interactivity, period.** Try to put `onClick` on a server component and you'll get a build error. The framework forces the split.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a page tree showing server components, client components, and where the boundary sits"
+  caption="Default: server. Add 'use client' to opt into the browser. The boundary is per file."
+>
+
+```
+   THE PAGE (a server component by default)
+   ──────────────────────────────────────────
+
+   app/products/page.tsx                                 [SERVER]
+   ┌──────────────────────────────────────────────┐
+   │ export default async function ProductsPage() {│
+   │   const products = await db.product.findMany();  ← runs on server
+   │   return (                                    │
+   │     <Layout>                                 [SERVER]
+   │       <Filters initialState={...} />         [CLIENT — "use client" inside]
+   │       <ProductGrid>                          [SERVER]
+   │         {products.map(p =>                   │
+   │           <ProductCard key={p.id} p={p}>     [SERVER]
+   │             <AddToCartButton id={p.id} />    [CLIENT — onClick]
+   │           </ProductCard>                     │
+   │         )}                                   │
+   │       </ProductGrid>                         │
+   │     </Layout>                                │
+   │   );                                         │
+   │ }                                            │
+   └──────────────────────────────────────────────┘
+
+   ┌─ Server pieces render as HTML, ship 0 KB of JS ──────┐
+   │  Page, Layout, ProductGrid, ProductCard              │
+   ├─ Client pieces ship JS to the browser ───────────────┤
+   │  Filters (~5 KB), AddToCartButton (~200 bytes)       │
+   └──────────────────────────────────────────────────────┘
+```
+
+</Illustration>
+
+### Server components — the default
+
+Anything you write in `app/` without `"use client"` is a server component:
+
+```tsx
+// app/blog/page.tsx — server component
+import { getPosts } from "@/lib/posts";
+
+export default async function BlogPage() {
+  const posts = await getPosts();   // direct DB call — runs on the server
+  return (
+    <ul>
+      {posts.map((p) => (
+        <li key={p.id}>{p.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+What's notable:
+
+1. **The function is `async`.** Server components can be async. The framework awaits them during rendering.
+2. **`await` works at the top level of the body.** Fetch data, call APIs, query the database — all directly. No `useEffect`, no `useState`, no race conditions.
+3. **The function doesn't ship to the browser.** The output (the rendered HTML) does. The data-fetching logic stays on the server.
+
+What server components *can't* do:
+
+- **Use React hooks that require state or effects.** No `useState`, no `useEffect`, no `useRef` (for state purposes), no `useContext`.
+- **Handle browser events.** No `onClick`, `onChange`, `onSubmit` props that point to functions.
+- **Access browser APIs.** No `window`, no `document`, no `localStorage`.
+
+If you need any of those → you need a client component.
+
+### Client components — opt in with `"use client"`
+
+```tsx
+// components/AddToCartButton.tsx
+"use client";
+
+import { useState } from "react";
+
+export function AddToCartButton({ productId }: { productId: string }) {
+  const [adding, setAdding] = useState(false);
+
+  async function handleClick() {
+    setAdding(true);
+    await fetch(`/api/cart`, { method: "POST", body: JSON.stringify({ productId }) });
+    setAdding(false);
+  }
+
+  return (
+    <button onClick={handleClick} disabled={adding}>
+      {adding ? "Adding…" : "Add to cart"}
+    </button>
+  );
+}
+```
+
+The `"use client"` directive at the top of the file is the marker. Anything in this file (and any component this file imports as a sub-component) runs in the browser.
+
+What client components *can* do:
+
+- **Use every React hook.** `useState`, `useEffect`, `useRef`, `useContext`, `useReducer`, custom hooks.
+- **Handle events.** `onClick`, `onChange`, `onSubmit`, etc.
+- **Access browser APIs.** `window`, `document`, `localStorage`, `navigator`.
+- **Use third-party React libraries** that rely on hooks (Zustand, React Query, Framer Motion, most of the React ecosystem).
+
+What client components *can't* do:
+
+- **`await` data directly.** They can `fetch` inside `useEffect` (just like a normal React app), but they can't `await` at the top level of the body.
+- **Read server-only environment variables.** Anything in `process.env.SOMETHING_PRIVATE` is `undefined` in client components. Use a server component to read secrets, then pass safe data as props.
+- **Import server-only packages.** Database clients, file-system APIs, anything that doesn't run in the browser. If a client component imports one, the build will fail.
+
+### The boundary is per file
+
+`"use client"` lives at the *top of a file*, not on a single component. Once it's there, every component declared in that file is a client component. Components defined in *other* files are independent — they decide their own kind.
+
+```tsx
+// components/AddToCartButton.tsx
+"use client";
+export function AddToCartButton() { /* client */ }
+
+// components/ProductCard.tsx  ← no "use client"
+import { AddToCartButton } from "./AddToCartButton";
+
+export function ProductCard() {
+  return (
+    <div>
+      <h3>Product name</h3>
+      <AddToCartButton />     {/* this is fine — the button declares itself client */}
+    </div>
+  );
+}
+```
+
+`ProductCard` stays a server component even though it renders a client component. The boundary is the *file*; rendering across the boundary is fine.
+
+### The composition pattern — server components as children
+
+There's one gotcha: when a client component *imports* a server component, that server component gets *converted* to a client component (it has to — it's being used in a client context). To keep a server component as a server component, pass it *as children* (or as props) rather than importing it directly.
+
+**Wrong** — the server component becomes client:
+
+```tsx
+// Filters.tsx
+"use client";
+import { ProductGrid } from "./ProductGrid";   // ❌ ProductGrid was a server component
+
+export function Filters() {
+  const [filters, setFilters] = useState(...);
+  return (
+    <div>
+      <FilterControls />
+      <ProductGrid filters={filters} />   {/* now ProductGrid runs in the browser */}
+    </div>
+  );
+}
+```
+
+**Right** — the server component stays server, passed as `children`:
+
+```tsx
+// page.tsx (server)
+import { Filters } from "@/components/Filters";
+import { ProductGrid } from "@/components/ProductGrid";
+
+export default async function Page() {
+  return (
+    <Filters>
+      <ProductGrid />          {/* server component — runs on server */}
+    </Filters>
+  );
+}
+
+// Filters.tsx (client)
+"use client";
+export function Filters({ children }: { children: React.ReactNode }) {
+  const [filters, setFilters] = useState(...);
+  return (
+    <div>
+      <FilterControls />
+      {children}             {/* children was rendered on the server already */}
+    </div>
+  );
+}
+```
+
+This is the **server components as children** pattern. Memorize the shape — you'll write it dozens of times in a real app. The page (server) renders the client component AND the server component, then passes the server component into the client component as `children`. The client component renders its own state plus the children — the children stay server-rendered.
+
+### Server-only and client-only packages
+
+Some packages are marked "server-only" by their authors — they break if imported in the browser. The `server-only` import is a marker that makes the build fail loudly:
+
+```ts
+// lib/db.ts
+import "server-only";
+
+import { PrismaClient } from "@prisma/client";
+export const db = new PrismaClient();
+```
+
+Now if any client component accidentally imports `@/lib/db`, the build fails with a clear error. Save yourself from accidentally bundling your database client.
+
+The reverse — `client-only` — does the opposite:
+
+```ts
+// lib/analytics.ts
+import "client-only";
+// imports that only work in the browser
+```
+
+Both are import statements that take no actual functionality — they're guards. Use them for any file that should be one or the other.
+
+### Default to server, opt into client
+
+The whole architecture rewards "default to server, opt into client." Each time you reach for `"use client"`, ask:
+
+- Does this component genuinely need state, effects, or browser APIs?
+- Could the interactive bit be *just* that bit — a small client component nested inside an otherwise server component?
+
+The smaller you make your client components, the less JavaScript ships to the browser. The faster the page loads. The less you pay for hydration. The better your Lighthouse score. The framework is designed to reward this discipline.
+
+A common mistake from React-Vite veterans: putting `"use client"` at the top of `app/page.tsx` "to keep things simple." It works — but you've thrown away the framework's biggest performance win. The whole page now ships as client JS; data fetching has to go through API endpoints instead of direct database calls; SEO degrades. Resist. Keep the page server; nest client components inside only where needed.
+
+<ExampleProject
+  src="server-tree-decision"
+  title="A decision tree — should this component be server or client?"
+  description="A small flowchart you can walk through for any component you're about to write. Six yes/no questions; you arrive at 'server' or 'client' with reasoning. Run it on three real components from your own project to feel the pattern."
+/>
+
+<ExampleProject
+  src="composition-pattern"
+  title="The 'server component as children' pattern, before and after"
+  description="Two versions of the same page. Before: a client component imports a server component, accidentally turning everything client (5KB of JS shipped). After: the page composes them, passing the server component as children (200 bytes of JS shipped). Same UI, big difference."
+/>
+
+<Exercise
+  title="Build a product page with mixed server + client components"
+  starter={`Build a product page that respects the server/client split.
+
+  app/products/[id]/page.tsx (server component):
+    1. async function — fetches a fake product:
+         const product = { id: params.id, name: "Mug", priceCents: 12500, stock: 5 };
+       (later, this becomes a real DB call. For now, hardcode.)
+    2. Renders the product details (name, price, stock) as plain JSX.
+    3. Renders an <AddToCartButton productId={product.id} /> below.
+    4. Renders a <RecentlyViewed /> server component below that
+       (it fetches its own data — also hardcoded for now).
+
+  components/AddToCartButton.tsx (client component):
+    - "use client" at the top.
+    - useState for "adding" loading state.
+    - onClick handler that simulates a fetch with setTimeout.
+    - Renders a <button> with "Add to cart" / "Adding..." / "Added!".
+
+  components/RecentlyViewed.tsx (server component):
+    - Async function that returns 3 fake product links.
+    - Renders an unordered list of <Link href={...}>{name}</Link>.
+
+  components/ReviewsList.tsx (server component, but with a client filter):
+    - Server component that fetches 5 fake reviews.
+    - Renders them with a client component <RatingFilter> ABOVE,
+      where RatingFilter is "use client" and lets the user toggle
+      a "show only 5-star" checkbox.
+    - The filter receives the reviews as children — the
+      composition pattern.
+
+  Render the order:
+    Product details
+    Add to cart button
+    Recently viewed
+    Reviews (with filter)
+
+  Test:
+    - View source on the rendered page (Network → first response).
+      You should see the product name, price, stock, recently viewed,
+      and reviews all in the HTML. Only the AddToCartButton and
+      RatingFilter ship as JS.
+    - Click "Add to cart". See it transition through the states.
+    - Toggle the filter. See the reviews filter without a server
+      round-trip.`}
+>
+
+- `app/products/[id]/page.tsx` is a server component (no "use client"); fetches the product directly in the body.
+- `components/AddToCartButton.tsx` is a client component with "use client", `useState`, and an `onClick` handler.
+- `components/RecentlyViewed.tsx` is a server component (no "use client") that fetches its own data inside an async function.
+- `components/ReviewsList.tsx` uses the composition pattern — the client filter wraps server-rendered review children.
+- Viewing source shows all the data is in the HTML; only the two interactive pieces ship as JS.
+- The student can articulate which components are server and which are client, and why.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `"use client"` do at the top of a file?
+
+**A:** **It marks every component in that file as a client component — they run in the browser and can use React hooks like `useState`, `useEffect`, and event handlers like `onClick`.**
+
+```tsx
+"use client";
+
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>{count}</button>;
+}
+```
+
+What changes when a file is marked `"use client"`:
+
+1. **Hooks become available.** `useState`, `useEffect`, etc. work as expected. Without `"use client"`, calling `useState` in a component is a build error.
+
+2. **Event handlers work.** `onClick`, `onChange`, `onSubmit` can take real functions. In a server component, they can only take *server actions* (covered later).
+
+3. **Browser APIs are accessible.** `window`, `document`, `localStorage`, `navigator`. In a server component, none of these exist.
+
+4. **The file ships to the browser.** Its JavaScript is bundled and downloaded. Server components stay on the server; their code never ships.
+
+5. **The component can't `await` data at the top level.** No `async function Component() { const data = await fetch(...); }` — that pattern is server-only. Client components fetch inside `useEffect` or with React Query / SWR.
+
+What `"use client"` does NOT mean:
+
+- It doesn't mean "this is a React Vite component." Client components still run inside the Next.js architecture; they're just the interactive layer.
+- It doesn't mean the component renders only on the client. The first render still happens on the server (so the user sees content immediately) — then the browser "hydrates" by attaching the JS. This is **Server-Side Rendering (SSR)** of a client component, which is different from a Server Component (no JS at all).
+
+The mental rule: `"use client"` is the boundary between the static, fast, no-JS server world and the interactive, dynamic, browser-shipped client world. Put it where interactivity begins; keep server components above and around it for everything else.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Can server components have `onClick` handlers?
+
+**A:** **No. Server components run on the server; there's no browser to handle the click. Trying to put `onClick` on a server component is a build error.**
+
+```tsx
+// app/page.tsx — server component (default)
+export default function Page() {
+  return (
+    <button onClick={() => alert("hi")}>   {/* ❌ build error */}
+      Click me
+    </button>
+  );
+}
+```
+
+The build error is the framework refusing to ship a contradiction. The component runs on the server, so the function `() => alert("hi")` never reaches the browser. The browser would render `<button>Click me</button>` with no handler attached. Rather than silently break, Next.js errors out.
+
+To make it work, you need to extract the interactive part into a client component:
+
+```tsx
+// app/page.tsx — server component
+import { ClickyButton } from "@/components/ClickyButton";
+
+export default function Page() {
+  return <ClickyButton />;
+}
+
+// components/ClickyButton.tsx — client component
+"use client";
+
+export function ClickyButton() {
+  return <button onClick={() => alert("hi")}>Click me</button>;
+}
+```
+
+The split: the page stays server (static HTML, zero JS), and only the small interactive button ships as JavaScript.
+
+The exception worth knowing about: server components *can* pass **server actions** as `onClick` handlers — special functions marked `"use server"` that run on the server when triggered:
+
+```tsx
+// app/page.tsx — server component, with a server action
+export default function Page() {
+  async function handleClick() {
+    "use server";
+    // runs on the server when clicked
+  }
+  return <button onClick={handleClick}>Run on server</button>;
+}
+```
+
+This is a more advanced pattern (covered in the server-actions concept). For typical client interactivity (open a menu, update local state, animate something), you still need a client component.
+
+The general rule: **interactivity = client component, full stop.** Server components are for rendering data into HTML; once a user needs to click something that changes UI state, that piece is a client component.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is "server components as children" the recommended composition pattern?
+
+**A:** **Because importing a server component into a client component file forcibly converts the server component to a client component. Passing it as `children` keeps it server-rendered.**
+
+The trap:
+
+```tsx
+// Filters.tsx
+"use client";
+import { ExpensiveList } from "./ExpensiveList";   // ❌ ExpensiveList was a server component
+
+export function Filters() {
+  const [filter, setFilter] = useState("all");
+  return (
+    <div>
+      <FilterControls value={filter} onChange={setFilter} />
+      <ExpensiveList filter={filter} />            {/* now this ships as JS */}
+    </div>
+  );
+}
+```
+
+`ExpensiveList` was defined as a server component. But because `Filters` (a client component) imports it directly, it gets bundled with `Filters` into the client bundle. The "expensive" rendering — maybe a 500-item list with formatting helpers, date parsers, big lookup tables — now runs in the browser. Bundle size bloats; the page is slow to hydrate.
+
+The fix — compose at a higher level:
+
+```tsx
+// page.tsx — server component
+import { Filters } from "@/components/Filters";
+import { ExpensiveList } from "@/components/ExpensiveList";
+
+export default async function Page() {
+  const items = await getExpensiveData();
+  return (
+    <Filters>
+      <ExpensiveList items={items} />            {/* rendered on server */}
+    </Filters>
+  );
+}
+
+// Filters.tsx — client component
+"use client";
+export function Filters({ children }: { children: React.ReactNode }) {
+  const [filter, setFilter] = useState("all");
+  return (
+    <div>
+      <FilterControls value={filter} onChange={setFilter} />
+      {children}                                   {/* server-rendered, passed through */}
+    </div>
+  );
+}
+```
+
+Now `ExpensiveList` is rendered on the server (by the page) and passed *as a React node* into `Filters`. From `Filters`' perspective, it's just `children` — a value, not a component to import. The server-rendered HTML for `ExpensiveList` survives intact.
+
+Why this works:
+
+- The page is a server component, so importing `ExpensiveList` keeps it server.
+- `Filters` only receives the *result* of `ExpensiveList` (a React tree), not the *component definition*. There's nothing to bundle.
+- The boundary is the *import statement*. If a client file imports a server component, conversion happens. If it receives one as `children`, no conversion.
+
+The shape you'll write a hundred times:
+
+```tsx
+<ClientWrapper>
+  <ServerHeavyThing />
+</ClientWrapper>
+```
+
+The wrapper handles interactivity; the heavy server-rendered tree slots in as `children`. The framework's documentation calls this the "moving client components down" or "passing server components into client components" pattern. Memorize the shape; it's the everyday way to keep your client bundles small.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why are server components secure for things like reading database credentials?
+
+**A:** **Because their code never leaves the server. The JavaScript file containing the secret-reading logic isn't bundled and shipped to the browser — it runs once on the server, produces HTML, and only the HTML reaches the user.**
+
+A concrete example:
+
+```tsx
+// app/admin/page.tsx — server component
+import { db } from "@/lib/db";
+
+export default async function AdminPage() {
+  const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY;   // server-only env var
+  const users = await db.user.findMany();                // direct DB query
+  const charges = await stripe(STRIPE_SECRET).charges.list();
+
+  return (
+    <table>
+      {users.map((u) => <tr key={u.id}>{u.email}</tr>)}
+    </table>
+  );
+}
+```
+
+What ships to the user's browser:
+
+```html
+<table>
+  <tr>ada@x.com</tr>
+  <tr>lin@x.com</tr>
+</table>
+```
+
+That's it. The Stripe call, the DB query, the env var, the credentials, the SQL — none of it leaks to the user. They never see the function. They never see the env var. They never see the credentials. They just see the rendered output.
+
+Compare with a client component making the same query:
+
+```tsx
+"use client";
+import { db } from "@/lib/db";    // ❌ db code ships to browser
+import { useEffect, useState } from "react";
+
+export function AdminPage() {
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    db.user.findMany().then(setUsers);    // db client tries to run in browser
+  }, []);
+}
+```
+
+Every problem:
+
+- The `db` client code ships to the browser. Anyone can view source and see your schema.
+- `process.env.STRIPE_SECRET_KEY` is `undefined` in the browser. You couldn't use it even if you wanted to. (Trying to expose it via `NEXT_PUBLIC_STRIPE_SECRET_KEY` is *worse* — now your secret is in plain sight.)
+- The connection from the browser to your database would have to go through a public URL, requiring you to expose your DB to the internet (a major security problem).
+- The browser has no DB credentials — the query would fail with an auth error.
+
+The architectural rule that flows from this:
+
+- **Secrets stay in server components and route handlers.** They never touch client components.
+- **Pass derived data, not credentials, into client components.** "Here's the formatted invoice total" — yes. "Here's the API key to fetch invoices" — never.
+- **Use `import "server-only"`** to enforce "this file must never reach the browser." If a client component accidentally imports a server-only file, the build fails loudly instead of silently shipping the secret.
+
+Server components are the modern way to handle credentials in React apps. Before them, you had to write a separate backend (Express, FastAPI, Go) to handle anything secret. Now, the same Next.js project handles both UI and credential-using logic — and the framework's boundary keeps the secret half secret.
+
+</InterviewQuestion>

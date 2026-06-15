@@ -1,0 +1,172 @@
+<!--
+  Answer two questions; get the right strategy from the 2x2 grid.
+  Each cell shows a recommendation, a concrete code example, and
+  an explanation.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pick the rendering strategy</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .q {
+        margin-top: 1rem; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.85rem 1.1rem; background: #fafafa;
+      }
+      .q h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      .opts { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .opts button {
+        padding: 0.5rem 1rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-size: 0.88rem; font-family: ui-monospace, monospace;
+      }
+      .opts button:hover  { background: #f4f4f5; }
+      .opts button.active { background: #15803d; color: #fff; border-color: #15803d; font-weight: 700; }
+      .result {
+        margin-top: 1.5rem; padding: 1.1rem 1.3rem; border-radius: 10px;
+        border: 2px solid;
+      }
+      .result.ssg { border-color: #16a34a; background: #ecfdf5; }
+      .result.isr { border-color: #38bdf8; background: #f0f9ff; }
+      .result.ssr { border-color: #b45309; background: #fef3c7; }
+      .result.csr { border-color: #c026d3; background: #fdf4ff; }
+      .result h2 { margin: 0 0 0.4rem; font-family: ui-monospace, monospace; }
+      .result p { font-size: 0.92rem; margin: 0.4rem 0 0; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin-top: 0.65rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pick a strategy — answer two questions</h1>
+
+    <div class="q">
+      <h2>1. Does the data change between page views?</h2>
+      <div class="opts">
+        <button data-q1="static">Never — same for everyone, between builds</button>
+        <button data-q1="periodic">Sometimes — but a few minutes/hour stale is fine</button>
+        <button data-q1="dynamic">Every request — real-time, fresh per visitor</button>
+      </div>
+    </div>
+
+    <div class="q">
+      <h2>2. Does this page need to be in the initial HTML (SEO)?</h2>
+      <div class="opts">
+        <button data-q2="seo">Yes — search engines, social previews, fast first paint</button>
+        <button data-q2="no-seo">No — behind auth or doesn't matter</button>
+      </div>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+      const matrix = {
+        "static|seo": {
+          kind: "ssg",
+          name: "SSG — Static Site Generation",
+          why: "The data is static and SEO matters. Pre-render once at build time; serve a flat HTML file. Free per request, instant to serve.",
+          example: `// app/about/page.tsx
+// (no special code — static is the default for pages that don't fetch dynamic data)
+export default function About() {
+  return <h1>About us</h1>;
+}`,
+        },
+        "static|no-seo": {
+          kind: "ssg",
+          name: "SSG — Static Site Generation",
+          why: "Same as above; the SEO answer doesn't change anything when data is fully static.",
+          example: `// app/legal/page.tsx
+export default function Legal() {
+  return <article>Terms of service…</article>;
+}`,
+        },
+        "periodic|seo": {
+          kind: "isr",
+          name: "ISR — Incremental Static Regeneration",
+          why: "Content changes but not in real time, and search engines need to see it. Cache + periodic background regeneration: fast to serve, stale within the revalidate window.",
+          example: `// app/blog/page.tsx
+export const revalidate = 60;       // re-render at most once per minute
+
+export default async function Blog() {
+  const posts = await fetch("https://api.cms/posts", {
+    next: { revalidate: 60 }
+  }).then(r => r.json());
+  return <PostList posts={posts} />;
+}`,
+        },
+        "periodic|no-seo": {
+          kind: "isr",
+          name: "ISR — Incremental Static Regeneration",
+          why: "Even without SEO, ISR is right when content is the same for many users and changes periodically — it saves server work compared to SSR.",
+          example: `// (same shape as the SEO case)
+export const revalidate = 60;`,
+        },
+        "dynamic|seo": {
+          kind: "ssr",
+          name: "SSR — Server-Side Rendering",
+          why: "Data must be real-time AND search engines need to see it. Render on every request; pay the per-request cost.",
+          example: `// app/products/[id]/page.tsx
+import { cookies } from "next/headers";
+
+export default async function ProductPage({ params }) {
+  const region = cookies().get("region")?.value;
+  const price = await getPriceFor(params.id, region);
+  return <ProductDetail price={price} />;
+}`,
+        },
+        "dynamic|no-seo": {
+          kind: "csr",
+          name: "CSR — Client-Side Rendering",
+          why: "Data is dynamic + no SEO need = a client component fetching after page load. The server just sends the shell; the browser fetches data.",
+          example: `// components/NotificationBell.tsx
+"use client";
+import useSWR from "swr";
+
+export function NotificationBell() {
+  const { data } = useSWR("/api/notifications", fetcher, {
+    refreshInterval: 30000,
+  });
+  return <span>{data?.count ?? "—"} new</span>;
+}`,
+        },
+      };
+
+      let q1 = null, q2 = null;
+
+      function show() {
+        const r = document.getElementById("result");
+        if (!q1 || !q2) {
+          r.innerHTML = "";
+          return;
+        }
+        const m = matrix[q1 + "|" + q2];
+        r.className = "";
+        r.innerHTML = `
+          <div class="result ${m.kind}">
+            <h2>${m.name}</h2>
+            <p>${m.why}</p>
+            <pre>${m.example}</pre>
+          </div>
+        `;
+      }
+
+      document.querySelectorAll("[data-q1]").forEach((b) => {
+        b.addEventListener("click", () => {
+          q1 = b.dataset.q1;
+          document.querySelectorAll("[data-q1]").forEach(x => x.classList.toggle("active", x === b));
+          show();
+        });
+      });
+      document.querySelectorAll("[data-q2]").forEach((b) => {
+        b.addEventListener("click", () => {
+          q2 = b.dataset.q2;
+          document.querySelectorAll("[data-q2]").forEach(x => x.classList.toggle("active", x === b));
+          show();
+        });
+      });
+    </script>
+  </body>
+</html>

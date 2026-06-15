@@ -1,0 +1,481 @@
+## Rendering strategies — SSR, SSG, ISR, client
+
+For every page in your app, Next.js asks one question: **when should the HTML be generated?** It can be generated at build time (once, baked in — fast, cheap, but stale). At request time (every page view — fresh, but slow and expensive). At build time, then re-generated periodically in the background (the "have your cake" option). Or it can be skipped entirely, with the browser fetching data after load. Four strategies; you pick per page based on how often the data changes and how critical freshness is.
+
+<Analogy>
+The four rendering strategies are **four ways a newspaper handles a story**.
+
+Imagine the same printing press, four different editorial choices for when to set the ink:
+
+- **The morning edition** is set at midnight, printed in bulk, and distributed at dawn. Every reader gets the same paper. It's *cheap to produce* (one print run for the whole city), *fast to deliver* (the trucks are already on the road), but if news breaks at 8am, the paper doesn't know about it. That's **SSG** — Static Site Generation. The HTML is generated at build time and served as a flat file for every request. Best for content that doesn't change between builds (marketing pages, docs, blog posts).
+
+- **The press conference live broadcast** is read fresh every time someone tunes in. Each viewer gets the latest. It's *expensive* (the reporter is on the air every moment) but *up to the minute*. That's **SSR** — Server-Side Rendering. The HTML is generated on every request. Best for pages where the data must reflect the very latest state (personalized dashboards, real-time scores, anything authenticated).
+
+- **The hourly bulletin** is recorded once, played for an hour, then re-recorded with fresh news. Listeners get the latest *within an hour*. It's *cheaper than live* (recorded once per hour, not once per listener) and *almost as fresh* (you're never more than 60 minutes behind). That's **ISR** — Incremental Static Regeneration. The page is generated once, then re-generated periodically in the background. Best for content that changes but doesn't need second-by-second freshness (product catalogs, lists of recent posts, anything where "an hour stale" is fine).
+
+- **The skeleton-then-content delivery** is the news app on your phone — the app loads first (just the UI shell), then fetches the headlines in the background. The user sees content "loading" and then it fills in. It's *flexible* (the app and content evolve separately) but *the user sees a blank state first*. That's **client-side rendering** (CSR). The server sends a minimal HTML; the browser fetches data after. Best for parts of a page that are user-specific and not SEO-relevant (in-app dashboards, chat widgets).
+
+The choice per page depends on two questions:
+
+1. **How fresh does the data need to be?** Real-time → SSR. Hours behind is fine → ISR. Days behind is fine → SSG.
+
+2. **Does this need to be visible to search engines?** Yes (a public page) → server-rendered (SSR/SSG/ISR). No (behind auth) → client is fine.
+
+A real app uses all four, mixed across different pages. The marketing site uses SSG (fast, free). The product catalog uses ISR (regenerates every hour). The user dashboard uses SSR (always fresh, behind auth). The notifications panel inside the dashboard uses client-side (polls every 30s).
+
+In the App Router, you don't pick the strategy with a magic export — you pick it with **how you fetch data**. The `fetch` call itself, with the right options, determines whether the page is static, dynamic, or revalidated. That's covered in the data-fetching concept; this one's about the *strategies* themselves so you can choose.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the four rendering strategies showing when HTML is generated and what arrives at the browser"
+  caption="Four ways to answer 'when is the HTML created?' SSG: at build. SSR: every request. ISR: periodically. Client: in the browser."
+>
+
+```
+   STRATEGY          WHEN HTML IS GENERATED        FRESHNESS              COST
+   ────────           ──────────────────────         ─────────               ────
+
+   SSG                build time, once               last build              free per request
+   (static)           (`next build`)                  (~0 updates)            ⚡ instant
+                                                                              ✓ SEO
+
+   ISR                build time + periodic           up to N seconds         cheap (re-renders
+   (revalidated)      background re-renders           stale                    happen at most
+                                                                                once per N seconds)
+                                                                              ⚡ near-instant
+                                                                              ✓ SEO
+
+   SSR                every request                   real-time               $ per request
+   (dynamic)                                                                  🐢 slower TTFB
+                                                                              ✓ SEO
+
+   CLIENT-SIDE         after page loads, in           real-time               cheap (no
+   (CSR)              the browser via fetch                                    server work)
+                                                                              💥 blank state on load
+                                                                              ✗ SEO (data not in HTML)
+```
+
+</Illustration>
+
+### SSG (Static Site Generation) — the default for unchanging content
+
+If a page's data doesn't depend on the request (no user, no real-time content), it's static by default. Next.js generates the HTML at build time and serves the same flat file forever:
+
+```tsx
+// app/about/page.tsx — static by default
+export default function About() {
+  return <h1>About us</h1>;
+}
+```
+
+At `next build`, this becomes a literal `.html` file in the build output. Every request gets that file — no React runs, no JS runs (until hydration), no database is touched. It's free per request and instant to serve.
+
+**Use for:**
+- Marketing pages.
+- Documentation.
+- About / FAQ / privacy.
+- Blog posts (when the content's already in the codebase or generated at build).
+
+For dynamic routes (`app/blog/[slug]/page.tsx`), you pre-generate all known slugs at build time via `generateStaticParams`:
+
+```tsx
+// app/blog/[slug]/page.tsx
+export async function generateStaticParams() {
+  const posts = await getAllPosts();
+  return posts.map((post) => ({ slug: post.slug }));
+}
+
+export default async function BlogPost({ params }: { params: { slug: string } }) {
+  const post = await getPost(params.slug);
+  return <article>{post.body}</article>;
+}
+```
+
+At build time, Next.js calls `generateStaticParams`, gets the list of slugs, and pre-renders one HTML page per slug. Visiting `/blog/hello` serves a pre-built file; same for every other slug. Fast, cheap, SEO-friendly.
+
+### SSR (Server-Side Rendering) — fresh on every request
+
+Any page that fetches per-request data automatically becomes SSR. The framework runs the component on every request, fetches the data, renders the HTML, and sends it.
+
+```tsx
+// app/dashboard/page.tsx — SSR by default (because it reads cookies)
+import { cookies } from "next/headers";
+
+export default async function Dashboard() {
+  const session = cookies().get("session")?.value;
+  const user = await getUserFromSession(session);
+  return <p>Hi {user.name}, your balance: ${user.balance}</p>;
+}
+```
+
+The component reads `cookies()` — a request-specific thing. Next.js automatically opts this page out of static generation. Every request hits the server, runs the function, gets the user's data, and ships the personalized HTML.
+
+**Use for:**
+- Pages that show user-specific content (dashboards, profiles).
+- Pages that depend on cookies / headers / query parameters that vary per request.
+- Pages with data that changes by the second (live scores, stock tickers).
+
+The cost: every page view runs server code, hits the database. For high-traffic pages with read-heavy access patterns (a homepage that shows the same content to everyone), this is wasteful — that's where ISR comes in.
+
+### ISR (Incremental Static Regeneration) — the middle path
+
+ISR is the sweet spot for "content that changes but not in real time." The page is generated once, served as static HTML, and re-generated in the background every N seconds.
+
+In the App Router, this is done via the `revalidate` option on `fetch` (or `export const revalidate`):
+
+```tsx
+// app/products/page.tsx
+export default async function Products() {
+  // Re-fetches at most every 60 seconds; otherwise serves cached
+  const products = await fetch("https://api.example.com/products", {
+    next: { revalidate: 60 },
+  }).then(r => r.json());
+
+  return <ProductGrid products={products} />;
+}
+```
+
+What happens:
+
+1. **First request after a build:** the function runs, fetches data, renders HTML. Stored.
+2. **Second request, 10 seconds later:** the stored HTML is served immediately. No work happens.
+3. **First request after 60 seconds:** the stored HTML is served immediately AND in the background, the function runs again to re-generate the HTML for the next request.
+4. **Subsequent requests within the next 60 seconds:** serve the freshly-regenerated HTML.
+
+The user always gets a fast response (cached HTML). The data is at most `revalidate` seconds stale. The server only does the expensive work once per `revalidate` window, no matter how much traffic.
+
+**Use for:**
+- Product catalogs.
+- Blog index pages.
+- "Recent posts," "trending now," "popular this week."
+- Anything where "an hour stale" is acceptable and traffic is high enough that SSR every request would be wasteful.
+
+You can also use **on-demand revalidation** — explicitly trigger a re-render from a webhook (when a CMS publishes a post, when an admin edits something). Covered in detail later; the headline is that ISR isn't only time-based.
+
+### Client-side rendering (CSR) — for parts that aren't SEO-critical
+
+Anywhere `"use client"` lives, the part of the tree it controls is client-side. The initial HTML doesn't include the rendered output for that piece (well, it does for the first render — that's SSR for the client component — but interactive updates are client-side).
+
+Client-side data fetching for a part of the UI:
+
+```tsx
+"use client";
+import useSWR from "swr";
+
+export function NotificationBell() {
+  const { data } = useSWR("/api/notifications", fetcher, {
+    refreshInterval: 30000,    // poll every 30s
+  });
+
+  if (!data) return <span>Loading…</span>;
+  return <span>You have {data.count} notifications</span>;
+}
+```
+
+The server sends a placeholder (`Loading…`); the browser fetches the data after; the bell fills in.
+
+**Use for:**
+- User-specific UI that doesn't need to be in initial HTML (notification bells, presence indicators).
+- Real-time data that polls or uses WebSockets.
+- Parts of the page where SEO doesn't matter (behind auth) and SSR would be expensive.
+
+### How to pick — the everyday decision tree
+
+For each page, ask:
+
+```text
+Does the data change between requests for different users?
+├─ No, everyone sees the same → 
+│    Does the data change at all?
+│    ├─ Never (after build)  → SSG
+│    └─ Yes, but slowly       → ISR
+│         (regenerate every N seconds)
+│
+└─ Yes, depends on user/cookie/etc.
+     ├─ Page is public-facing (SEO matters)  → SSR
+     └─ Page is behind auth                   → SSR or hybrid
+          (server-render shell + client fetch user data)
+```
+
+The framework usually picks for you based on what your page does:
+- Use a fetch with `{ cache: "force-cache" }` → SSG.
+- Use a fetch with `{ next: { revalidate: 60 } }` → ISR.
+- Read `cookies()` or `headers()` → SSR.
+
+You can also force a strategy with `export const dynamic = "force-dynamic" | "force-static"`:
+
+```tsx
+export const dynamic = "force-static";    // never run per-request, even if cookies are read
+export const dynamic = "force-dynamic";   // always run per-request, even if no dynamic data
+```
+
+Use these sparingly; the automatic detection is usually right.
+
+### A real app's strategy mix
+
+A typical SaaS app distributes pages across strategies:
+
+| Page                            | Strategy    | Why                                       |
+| ------------------------------- | ----------- | ----------------------------------------- |
+| `/` (marketing landing)         | SSG         | Same for everyone; rebuild on content change |
+| `/pricing`                       | SSG         | Same for everyone                          |
+| `/blog`                          | ISR (1h)    | New posts appear within an hour            |
+| `/blog/[slug]`                   | SSG          | One file per post at build time            |
+| `/dashboard`                     | SSR         | Per-user content                           |
+| `/dashboard/notifications` (bell) | CSR         | Polls every 30s for live counts            |
+| `/admin/users`                    | SSR         | Behind auth, fresh data                     |
+| `/api/health`                     | (route handler) | Not a page                              |
+
+Each chosen for its specific needs. The framework lets you mix; mixing is the point.
+
+### Static export — for the simplest deploys
+
+For *fully* static apps (no SSR needed at all), Next.js can produce a static export:
+
+```ts
+// next.config.ts
+export default { output: "export" };
+```
+
+`next build` then writes plain HTML files. Deploy them to any static host (Vercel, Netlify, GitHub Pages, S3, your own nginx). No Node runtime required.
+
+Useful for: marketing-only sites, documentation, anything where you genuinely don't need server-side anything. Phase 4 covers this; it's worth knowing the option exists.
+
+<ExampleProject
+  src="strategy-chooser"
+  title="A page-strategy chooser — answer questions, get the right strategy"
+  description="An interactive picker. For your specific page, answer two questions (does data change? does it depend on the user?) and see which strategy fits. Each cell of the resulting 2x2 grid has a recommendation and a concrete example."
+/>
+
+<ExampleProject
+  src="isr-timeline"
+  title="Watch ISR in action — a timeline of cached vs regenerated requests"
+  description="A simulation of 15 requests over a 90-second window with revalidate=30. The trace shows which requests served cached HTML and which triggered a background regeneration. The cached-vs-fresh trade-off becomes obvious."
+/>
+
+<Exercise
+  title="Pick a strategy for each of these 8 pages"
+  starter={`For an imaginary SaaS app, pick a rendering strategy for each
+page below. For each, write down: chosen strategy (SSG / SSR / ISR
+/ CSR), and one-sentence justification.
+
+  1. /about — a static About page with company info.
+  2. /pricing — pricing tiers, change once a quarter.
+  3. / — marketing landing page with three "Recent customer logos"
+     pulled from a CMS.
+  4. /blog — list of all blog posts; new posts appear weekly.
+  5. /blog/[slug] — individual blog post; content rarely changes
+     once published.
+  6. /dashboard — authenticated user's overview, shows their
+     personal stats.
+  7. /dashboard/feed — list of new updates relevant to the user,
+     could be 10 minutes stale and that's fine.
+  8. /dashboard/notifications-bell — a small bell icon in the
+     header that shows unread count, should be real-time.
+
+Bonus: for each, write the actual Next.js code that picks the
+strategy. Use the export const revalidate, the fetch options,
+or cookies() reads to opt in/out.`}
+>
+
+- A strategy is chosen for each of the 8 pages.
+- Each choice is justified in one sentence.
+- The strategies vary across the list — at least 3 of the 4 strategies appear.
+- For SSG-eligible pages, the student notes that they're static by default (no special code needed).
+- For ISR pages, the student writes the `revalidate` option (either as `export const` or in the fetch).
+- For SSR pages, the student identifies the request-specific dependency (cookies, headers, etc.).
+- For CSR, the student notes the `"use client"` boundary + the data-fetching mechanism (SWR, useEffect+fetch).
+- Bonus: actual code snippets for 4+ pages.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between SSG and SSR?
+
+**A:** **SSG generates HTML at build time, once. SSR generates HTML on every request. SSG is fast and cheap to serve but the data is static; SSR is up-to-the-second fresh but every request does work on the server.**
+
+```text
+SSG — static                          SSR — dynamic
+────────────                          ──────────────
+Build time:                            Build time:
+  page.tsx → renders → page.html        page.tsx → not rendered
+
+Request 1: serves page.html            Request 1: runs page.tsx → renders → serves HTML
+Request 2: serves page.html            Request 2: runs page.tsx → renders → serves HTML
+Request 1000: serves page.html         Request 1000: runs page.tsx → renders → serves HTML
+
+⚡ instant                              🐢 slower (5-100ms work per request)
+$ 0 per request                         $ per request (compute + DB queries)
+data: stale (frozen at build)           data: real-time
+```
+
+When you'd reach for SSG:
+
+- The data doesn't change without a code/content change.
+- Same content for every visitor (no personalization).
+- High traffic means SSR would be wasteful.
+
+Examples: marketing pages, documentation, blog posts, FAQ, landing pages.
+
+When you'd reach for SSR:
+
+- The content is per-user (cookies, auth, dashboards).
+- The content depends on the URL parameters in ways you can't pre-generate (a search page where the query is unbounded).
+- The data changes in real time and freshness matters.
+
+Examples: user dashboards, search results, stock tickers, live scores.
+
+The third option — **ISR** — is the compromise: built like SSG (one file), re-generated in the background periodically. Best for content that changes but not in real time (product catalogs, blog indexes).
+
+In the App Router, you don't pick the strategy explicitly. Next.js infers from what your page does:
+- Static data fetches with `cache: "force-cache"` (the default for plain `fetch`) → SSG.
+- Reading `cookies()` or `headers()` → SSR.
+- A `revalidate` time on a fetch → ISR.
+
+You can force a choice with `export const dynamic`, but you rarely need to.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When would you choose ISR over SSR?
+
+**A:** **When the data doesn't need to be real-time and your page gets enough traffic that running the server code on every request would be wasteful.**
+
+```text
+SSR:  page A         page A         page A         page A
+        ↓             ↓               ↓                ↓
+      render        render          render           render
+      (DB)           (DB)             (DB)              (DB)
+
+ISR:  page A         page A         page A         page A
+        ↓             ↓               ↓                ↓
+      cached        cached          cached           cached
+                                                     + regenerate in background
+                                                       (after revalidate window)
+```
+
+The crossover happens when:
+
+1. **The data is the same for everyone.** A "list of blog posts" is the same for every visitor; rendering it 10,000 times per minute is wasteful when the answer is identical.
+
+2. **The data is allowed to be slightly stale.** "Blog posts as of an hour ago" is fine for most marketing/content scenarios. "Bank balance as of an hour ago" is not.
+
+3. **Traffic is high enough that the savings matter.** For a page with 100 requests/day, SSR is fine — the work is trivial. For a page with 1M requests/day, ISR saves real CPU.
+
+The concrete numbers — if your page does a database query that takes 50ms:
+
+- **SSR**, 1M requests/day → 50ms × 1M = 50,000 seconds of DB time per day. Real cost.
+- **ISR with revalidate=60**, 1M requests/day → 50ms × (24*60) = 72 seconds of DB time per day. ~700× cheaper.
+
+When you wouldn't use ISR:
+
+- **Personal pages** — `/dashboard` is per-user. ISR doesn't apply (you can't cache one user's data for another).
+- **True real-time data** — if the user expects updates the instant something changes, even 30 seconds stale isn't acceptable. Use SSR + websockets for live updates.
+
+In Next.js, ISR is enabled by passing `revalidate` to `fetch`:
+
+```tsx
+const data = await fetch("...", { next: { revalidate: 60 } }).then(r => r.json());
+```
+
+Or by exporting from the page file:
+
+```tsx
+export const revalidate = 60;
+```
+
+Both produce the same effect: the page is cached, regenerated at most every 60 seconds.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `export const dynamic = "force-dynamic"` do?
+
+**A:** **It tells Next.js to render this page on every request, regardless of whether the page's data would otherwise be eligible for static generation. Opt out of caching entirely.**
+
+```tsx
+// app/feed/page.tsx
+export const dynamic = "force-dynamic";
+
+export default async function Feed() {
+  const items = await getFeedItems();
+  return <ItemList items={items} />;
+}
+```
+
+Without `force-dynamic`, Next.js might choose to static-generate this page (because `getFeedItems` might not depend on the request). With it, the page is rendered fresh for every visitor — same as SSR.
+
+Three reasons you'd reach for it:
+
+1. **Data freshness without dynamic APIs.** Your fetch doesn't read cookies or use any dynamic helper, but you want it fresh on every request anyway. Example: a homepage with "currently online users" that you want real-time on every visit, even though there's no per-user component.
+
+2. **The framework picked wrong.** Sometimes the static-vs-dynamic auto-detection picks "static" when you wanted "dynamic." Adding `force-dynamic` overrides it.
+
+3. **A/B tests, geolocation, fingerprinting.** Any per-request randomness or detection that doesn't show up to the framework as "I'm reading cookies" but should still vary per request.
+
+The opposite — `export const dynamic = "force-static"` — has the inverse effect:
+
+```tsx
+export const dynamic = "force-static";
+
+// Now: even if this page reads cookies(), Next.js tries to static-generate it.
+// Reading cookies during build → returns empty. Use at your own risk.
+```
+
+This is rare; mostly used when you have data that's per-request but you've decided to ignore it (e.g., a banner that's "personalized" but where you've decided "show the default banner to everyone is good enough").
+
+Other options for the `dynamic` export:
+
+- **`"auto"`** (default) — Next.js decides based on the page's behavior.
+- **`"error"`** — error out at build if anything in the page makes it dynamic. Useful for guaranteeing static-ness.
+
+In practice, you'll rarely export `dynamic` directly. The framework's auto-detection plus targeted `revalidate` settings cover most needs. `force-dynamic` is the escape hatch when the defaults aren't right.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is SSR slower than SSG to serve?
+
+**A:** **Because every SSR request runs server code (component rendering, data fetching, possibly database queries) before the response can be sent. SSG just serves a pre-built file from disk.**
+
+The timeline for a single page view:
+
+```text
+SSG                                    SSR
+───                                    ───
+1. Request arrives                      1. Request arrives
+2. Server reads page.html from disk     2. Server runs page.tsx
+3. Sends bytes to browser                  - fetch data from DB
+                                            - fetch from APIs
+                                            - render React tree
+                                            - serialize to HTML
+                                        3. Sends bytes to browser
+
+Total: ~5ms                              Total: 50-500ms (depending on data)
+```
+
+The SSG path is essentially file-serving. A CDN can do it. No Node process needs to wake up; no database needs to be hit. Edge networks make this faster — the file lives at a CDN node 20ms from the user.
+
+The SSR path runs your application code on every request. The work — database queries, API calls, React rendering — is whatever your component does. A complex dashboard might take 200ms; a thin page might take 30ms. Either way, it's *real work* per request.
+
+Three implications:
+
+1. **SSG is the right default for content that doesn't change.** Marketing pages, blog posts, docs. The framework will serve them as static HTML; performance is free.
+
+2. **SSR has compute costs.** At scale, every SSR page view costs money (CPU, DB load). The trade-off is real-time accuracy. For pages where freshness matters, you pay the cost willingly.
+
+3. **ISR is the compromise** — built like SSG (fast to serve), but regenerated periodically. The user gets cached HTML (fast), and the data is fresh within `revalidate` seconds.
+
+Implications for choosing:
+
+- **High-traffic public pages → SSG or ISR.** Don't burn CPU rendering the same thing for a million people.
+- **Per-user pages → SSR.** No way to pre-render personalized content; SSR is the only option (or hybrid: server-render the shell, client-fetch the user data).
+- **Low-traffic everything → doesn't really matter.** The cost savings of SSG over SSR for 100 page views a day is negligible. Pick whichever fits your data freshness needs.
+
+The general principle: **render once if you can, render per-request when you must.** SSG → ISR → SSR is a ladder of "render less often vs. render more often," and the right rung depends on your specific page's needs.
+
+</InterviewQuestion>
