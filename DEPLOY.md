@@ -1,181 +1,173 @@
 # Deploying JEditor to Dokploy
 
-This guide walks through a clean production install on **jbeditor.com** using
-[Dokploy](https://dokploy.com). It assumes:
+This guide walks through a production install on **jbeditor.com** using
+[Dokploy](https://dokploy.com) **Docker Compose** mode. The whole stack —
+api, web, admin, postgres, redis, minio — boots from one file
+(`docker-compose.prod.yml`) and one env file (`.env.production`).
 
-- A VPS with Dokploy already installed and accessible.
+Assumes:
+
+- A VPS with Dokploy installed and reachable.
 - DNS for `jbeditor.com` managed somewhere you can add A records.
 - The git repo connected to Dokploy via your Git provider.
 
-The populated env values you'll paste into each service live in
-`.env.production` at the repo root (gitignored — read it locally).
+The populated env values live in `.env.production` at the repo root
+(gitignored — read it locally and paste once into Dokploy).
 
 ---
 
 ## 1. DNS records
 
-Point all four hostnames at your Dokploy server's public IP:
+Point all five hostnames at your Dokploy server's public IP:
 
-| Type | Host             | Value          |
-| ---- | ---------------- | -------------- |
-| A    | `@`              | <server IP>    |
-| A    | `www`            | <server IP>    |
-| A    | `api`            | <server IP>    |
-| A    | `admin`          | <server IP>    |
-| A    | `downloads`      | <server IP>    |
+| Type | Host        | Value       |
+| ---- | ----------- | ----------- |
+| A    | `@`         | <server IP> |
+| A    | `www`       | <server IP> |
+| A    | `api`       | <server IP> |
+| A    | `admin`     | <server IP> |
+| A    | `downloads` | <server IP> |
 
-`downloads.jbeditor.com` is for the desktop binaries served by MinIO (or R2 if
-you switch later). It can wait until B12 — the marketing page links work but
-return 404 until you upload the first release.
-
----
-
-## 2. Service plan
-
-Create these inside a single Dokploy **Project** (call it `jeditor`). Order
-matters — databases first so the app services can resolve them.
-
-| # | Service | Type | Source | Public domain |
-| - | ------- | ---- | ------ | ------------- |
-| 1 | `postgres` | Database → Postgres | Dokploy preset | (internal only) |
-| 2 | `redis`    | Database → Redis    | Dokploy preset | (internal only) |
-| 3 | `minio`    | Application → Docker image (`minio/minio`) | image | (internal only — see step 6) |
-| 4 | `api`      | Application → Dockerfile build | this repo, `apps/api/Dockerfile` | `api.jbeditor.com` |
-| 5 | `web`      | Application → Dockerfile build | this repo, `apps/web/Dockerfile` (context: repo root) | `jbeditor.com` + `www.jbeditor.com` |
-| 6 | `admin`    | Application → Dockerfile build | this repo, `apps/admin/Dockerfile` (context: repo root) | `admin.jbeditor.com` |
-
-All six services live on Dokploy's internal Docker network. The api can reach
-`postgres:5432`, `redis:6379`, `minio:9000` by service name — no env tweaks
-required.
+`downloads.jbeditor.com` is for the desktop binaries (MinIO or R2 later).
+It can wait until B12 — the marketing page links return 404 until you upload
+the first release.
 
 ---
 
-## 3. Database services (steps 1–2)
+## 2. Create the Dokploy compose service
 
-### Postgres
-- Name: `postgres`
-- User: `jeditor`
-- Password: copy `POSTGRES_PASSWORD` from `.env.production`
-- Database: `jeditor`
-
-Dokploy will auto-create the volume and expose it on the internal network as
-`postgres:5432`.
-
-### Redis
-- Name: `redis`
-- Leave the defaults. Internal hostname will be `redis:6379`.
+1. **New Project** → name it `jeditor`.
+2. **+ Create Service → Compose**.
+3. **Source → Git**: paste your repo URL + branch (`main`).
+4. **Compose file**: `docker-compose.prod.yml`.
+5. **Save** — don't deploy yet, the env still needs to land.
 
 ---
 
-## 4. MinIO (step 3) — self-hosted file storage
+## 3. Paste the env file
 
-Create an **Application** of type **Docker image**:
+In the compose service's **Environment** tab:
 
-- Image: `minio/minio:latest`
-- Command: `server /data --console-address ":9001"`
-- Environment:
-  ```
-  MINIO_ROOT_USER=<MINIO_ACCESS_KEY from .env.production>
-  MINIO_ROOT_PASSWORD=<MINIO_SECRET_KEY from .env.production>
-  ```
-- Volume: `/data` (Dokploy will provision)
-- Public domain: leave empty for now (only the api needs to reach it,
-  internally at `minio:9000`).
+- Open `.env.production` locally.
+- Replace `RESEND_API_KEY=re_REPLACE_ME_WITH_YOUR_RESEND_API_KEY` with the
+  real key (see **§6 Email — Resend** below).
+- Copy the entire file. Paste into Dokploy's Environment textarea.
 
-After it's up, port-forward locally to the console (`9001`) once and create
-the `jeditor-uploads` bucket. Then forget about it.
+Dokploy writes that to a `.env` file alongside `docker-compose.prod.yml`
+before each build, so:
 
-> Prefer **Cloudflare R2** for production? Skip this service entirely.
-> Change `STORAGE_DRIVER=r2` in `.env.production` and fill in the `R2_*`
-> block instead. Migration later is a one-bucket copy.
+- `env_file: .env` lines in the compose file pick it up for the api,
+  postgres, and minio containers.
+- `${API_URL}` substitution in the web and admin **build args** picks it
+  up at image-build time — this is how `NEXT_PUBLIC_API_URL` gets inlined
+  into the Next.js bundles.
+
+That's it for env config. One file. No per-service panels.
 
 ---
 
-## 5. API service (step 4)
+## 4. Public domains
 
-- Source: this Git repo.
-- Build path: `apps/api/Dockerfile`.
-- Public domain: `api.jbeditor.com`. Dokploy auto-provisions Let's Encrypt.
-- Internal port: `8080`.
-- Environment: paste the entire contents of `.env.production` into the
-  service's Environment panel. (Dokploy ignores the `# comments` and blank
-  lines.)
+In Dokploy, under the compose service → **Domains**, map hostnames to the
+exposed container ports:
 
-After the first deploy:
+| Container | Container port | Domain                                  |
+| --------- | -------------- | --------------------------------------- |
+| `api`     | `8080`         | `api.jbeditor.com`                      |
+| `web`     | `3000`         | `jbeditor.com` AND `www.jbeditor.com`   |
+| `admin`   | `3000`         | `admin.jbeditor.com`                    |
 
-1. Hit `https://api.jbeditor.com/health` → expect `{"status":"ok"}`.
-2. Hit `https://api.jbeditor.com/pulse/ui/` and log in with the Pulse creds.
-3. Hit `https://api.jbeditor.com/sentinel/ui` and log in with the Sentinel
-   creds — confirm WAF rules are loaded.
+Dokploy auto-provisions Let's Encrypt for each. The `postgres`, `redis`,
+and `minio` containers stay internal — they only `expose:` (not `ports:`)
+in the compose file, so they're reachable only inside the Docker network.
 
 ---
 
-## 6. Web + Admin services (steps 5–6)
+## 5. Deploy
 
-Both Next.js services build the **same way**:
+Hit **Deploy**. First build takes ~5–8 minutes (Go compile + two Next.js
+builds + pulling postgres/redis/minio images).
 
-- Source: this Git repo.
-- Build path: `apps/web/Dockerfile` (or `apps/admin/Dockerfile`).
-- **Build context: repo root** (the Dockerfile pulls from the monorepo).
-- **Build args** (Dokploy → Build → Build Args):
-  ```
-  NEXT_PUBLIC_API_URL=https://api.jbeditor.com
-  ```
-  This is critical — Next.js inlines `NEXT_PUBLIC_*` vars at build time, so
-  setting them as runtime env vars later does **nothing**.
-- Public domain:
-  - `web`   → `jbeditor.com` AND `www.jbeditor.com` (add both; Dokploy lets
-    you redirect www → apex)
-  - `admin` → `admin.jbeditor.com`
-- Internal port: `3000`.
+After it's green:
 
-The contents of `apps/web/.env.production` and `apps/admin/.env.production`
-are your source of truth — copy the `NEXT_PUBLIC_*` values from there.
+1. `https://api.jbeditor.com/health` → `{"status":"ok"}`
+2. `https://api.jbeditor.com/pulse/ui/` → log in with the Pulse creds from
+   `.env.production`.
+3. `https://api.jbeditor.com/sentinel/ui` → log in with the Sentinel creds.
 
 ---
 
-## 7. Email — Resend
+## 6. Email — Resend
 
 The placeholder `RESEND_API_KEY=re_REPLACE_ME_WITH_YOUR_RESEND_API_KEY` in
 `.env.production` must be replaced before sign-up emails will go out.
 
 1. Create an account at [resend.com](https://resend.com).
 2. **Domains → Add Domain → `jbeditor.com`**.
-3. Add the DNS records Resend gives you (SPF + DKIM, three records total).
+3. Add the DNS records Resend gives you (SPF + DKIM, three records).
 4. **API Keys → Create**. Scope: `Sending access`. Domain: `jbeditor.com`.
-5. Paste the key into the api service's `RESEND_API_KEY` env var and
-   redeploy.
+5. Paste the key into your local `.env.production`.
+6. In Dokploy, update the same key in the Environment tab and redeploy.
 
-Test from the api host: visit `/auth/register` on the web app and complete
-sign-up — the verification email should land in your inbox within seconds.
+Test from the web app: visit `/auth/register`, complete sign-up — the
+verification email should land in your inbox within seconds.
 
-> If Resend isn't available in your region, swap to SMTP by setting
-> `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`. The mailer auto-detects
-> SMTP when those four are populated.
+> No Resend in your region? Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+> `SMTP_PASS` instead. The mailer auto-detects SMTP when those four are
+> populated and ignores `RESEND_API_KEY`.
+
+---
+
+## 7. MinIO bucket bootstrap
+
+The compose stack ships a MinIO container, but the upload bucket has to
+exist before the api can write to it.
+
+After the first deploy:
+
+1. From your laptop, port-forward the MinIO console once:
+   ```bash
+   ssh -L 9001:localhost:9001 user@your-dokploy-host
+   ```
+   then open `http://localhost:9001`.
+2. Log in with `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` from
+   `.env.production`.
+3. Create a bucket named `jeditor-uploads` (matches `MINIO_BUCKET`).
+4. Close the tunnel. You won't need it again until you rotate keys.
+
+> Prefer **Cloudflare R2**? Skip the MinIO container entirely:
+> in `.env.production` set `STORAGE_DRIVER=r2` and fill in the `R2_*`
+> block. Then drop the `minio` service from `docker-compose.prod.yml`.
 
 ---
 
 ## 8. Smoke test checklist
 
-After all six services are green in Dokploy:
+After all six containers are green:
 
 - [ ] `https://api.jbeditor.com/health` returns 200
 - [ ] `https://jbeditor.com` renders the landing page
+- [ ] `https://www.jbeditor.com` redirects to apex
 - [ ] `https://admin.jbeditor.com` redirects to `/login`
 - [ ] Sign up at `https://jbeditor.com/register` — receive verification email
 - [ ] Verify, log in, hit the dashboard
 - [ ] Pulse dashboard loads at `/pulse/ui/`
 - [ ] Sentinel dashboard loads at `/sentinel/ui`
 
-If all six pass, the platform is live. Bookmark Pulse and Sentinel — they're
-your first line of insight when something looks off.
+If all eight pass, the platform is live.
 
 ---
 
 ## 9. Updates
 
-Dokploy can auto-deploy on every push to `main`. Turn that on once you trust
-the smoke tests. Until then, hit **Deploy** manually after each merge.
+Dokploy can auto-deploy on every push to `main`. Turn that on once you
+trust the smoke tests. Until then, hit **Deploy** manually after each
+merge.
 
-The desktop app updates are independent of this stack — they ship through the
-embedded MDX bundle on the next desktop release (B12).
+Env changes (rotating Resend key, swapping storage driver) are an
+edit-paste-redeploy cycle in the same Environment tab. Keep your local
+`.env.production` as the canonical copy — Dokploy's textarea is the
+mirror, not the source of truth.
+
+The desktop app updates are independent of this stack — they ship through
+the embedded MDX bundle on the next desktop release (B12).
