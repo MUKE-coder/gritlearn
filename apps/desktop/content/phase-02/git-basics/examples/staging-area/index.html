@@ -1,0 +1,188 @@
+<!--
+  An interactive simulation of the three Git "places":
+  working directory, staging, committed history.
+
+  Three file rows (auth.ts, navbar.tsx, README.md).
+  Buttons let the student:
+    - "Edit" a file (moves it from clean → modified)
+    - "Add" the modified file (moves it from modified → staged)
+    - "Commit" all staged files (moves them to committed history)
+
+  A right panel renders git status output live, mirroring what
+  the real CLI would say.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The three places — working, staged, committed</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 940px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+      .file {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.55rem 0.75rem; border: 1px solid #e4e4e7; border-radius: 6px;
+        background: #fff; margin-bottom: 0.45rem;
+      }
+      .file .name { font-family: ui-monospace, monospace; font-size: 0.88rem; }
+      .state {
+        font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;
+        font-family: ui-monospace, monospace;
+      }
+      .state.clean    { background: #e4e4e7; color: #52525b; }
+      .state.modified { background: #fef3c7; color: #92400e; }
+      .state.staged   { background: #dbeafe; color: #1e40af; }
+      .row-btns { display: flex; gap: 0.3rem; }
+      .row-btns button {
+        padding: 0.25rem 0.55rem; border-radius: 4px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.78rem;
+      }
+      .row-btns button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .row-btns button:not(:disabled):hover { background: #f4f4f5; }
+      .actions { margin-top: 0.8rem; display: flex; gap: 0.5rem; }
+      .actions button {
+        padding: 0.45rem 0.95rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+      }
+      .actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin: 0; min-height: 9rem;
+      }
+      .commit-log {
+        margin-top: 0.6rem; background: #f4f4f6; padding: 0.5rem 0.7rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.78rem; min-height: 5rem; max-height: 7rem; overflow-y: auto;
+      }
+      .accent-g { color: #16a34a; }
+      .accent-y { color: #b45309; }
+      .accent-b { color: #1e40af; }
+    </style>
+  </head>
+  <body>
+    <h1>Three places — try the flow</h1>
+    <p>Each file starts <code>clean</code>. Click <strong>Edit</strong> to modify, <strong>Add</strong> to stage, and the <strong>Commit</strong> button at the bottom to ship every staged file into history.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Files</h2>
+        <div id="files"></div>
+
+        <div class="actions">
+          <button id="commit">git commit -m "…"</button>
+          <button id="reset" style="background:#fff;color:#52525b;border-color:#d4d4d8;">reset demo</button>
+        </div>
+
+        <h2 style="margin-top: 1rem;">Committed history</h2>
+        <div class="commit-log" id="log">(no commits yet)</div>
+      </div>
+
+      <div class="col">
+        <h2>$ git status</h2>
+        <pre id="status"></pre>
+      </div>
+    </div>
+
+    <script>
+      const initialFiles = [
+        { name: "src/auth.ts",        state: "clean" },
+        { name: "src/navbar.tsx",     state: "clean" },
+        { name: "README.md",          state: "clean" },
+      ];
+
+      let files = JSON.parse(JSON.stringify(initialFiles));
+      let commits = [];   // [{ hash, message, files: [...] }]
+      let commitCounter = 1;
+
+      const filesEl  = document.getElementById("files");
+      const statusEl = document.getElementById("status");
+      const logEl    = document.getElementById("log");
+
+      function renderFiles() {
+        filesEl.innerHTML = files.map((f, i) => `
+          <div class="file">
+            <span class="name">${f.name}</span>
+            <span class="state ${f.state}">${f.state}</span>
+            <span class="row-btns">
+              <button data-i="${i}" data-op="edit"  ${f.state === "modified" ? "disabled" : ""}>edit</button>
+              <button data-i="${i}" data-op="add"   ${f.state !== "modified" ? "disabled" : ""}>git add</button>
+            </span>
+          </div>
+        `).join("");
+        filesEl.querySelectorAll("button").forEach((b) => {
+          b.addEventListener("click", () => {
+            const i = Number(b.dataset.i);
+            const op = b.dataset.op;
+            if (op === "edit") files[i].state = "modified";
+            if (op === "add")  files[i].state = "staged";
+            render();
+          });
+        });
+      }
+
+      function renderStatus() {
+        const staged   = files.filter(f => f.state === "staged");
+        const modified = files.filter(f => f.state === "modified");
+        let s = `On branch <span class="accent-g">main</span>\n\n`;
+
+        if (staged.length) {
+          s += `<span class="accent-g">Changes to be committed:</span>\n`;
+          s += staged.map(f => `        modified:   ${f.name}`).join("\n") + "\n\n";
+        }
+        if (modified.length) {
+          s += `<span class="accent-y">Changes not staged for commit:</span>\n`;
+          s += modified.map(f => `        modified:   ${f.name}`).join("\n") + "\n\n";
+        }
+        if (!staged.length && !modified.length) {
+          s += `<span class="accent-g">nothing to commit, working tree clean</span>`;
+        }
+        statusEl.innerHTML = s;
+
+        document.getElementById("commit").disabled = staged.length === 0;
+      }
+
+      function renderLog() {
+        if (commits.length === 0) {
+          logEl.innerHTML = "(no commits yet)";
+          return;
+        }
+        logEl.innerHTML = [...commits].reverse().map(c =>
+          `<span class="accent-y">${c.hash}</span> ${c.message}`
+        ).join("\n");
+      }
+
+      function render() {
+        renderFiles();
+        renderStatus();
+        renderLog();
+      }
+
+      document.getElementById("commit").addEventListener("click", () => {
+        const staged = files.filter(f => f.state === "staged");
+        if (staged.length === 0) return;
+        const hash = "a" + (Math.random().toString(16).slice(2, 7));
+        commits.push({
+          hash,
+          message: `commit ${commitCounter}: changed ${staged.length} file${staged.length === 1 ? "" : "s"}`,
+          files: staged.map(f => f.name),
+        });
+        commitCounter += 1;
+        // Staged files become clean; modified-only files remain modified.
+        files = files.map(f => f.state === "staged" ? { ...f, state: "clean" } : f);
+        render();
+      });
+
+      document.getElementById("reset").addEventListener("click", () => {
+        files = JSON.parse(JSON.stringify(initialFiles));
+        commits = [];
+        commitCounter = 1;
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

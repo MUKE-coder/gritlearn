@@ -1,0 +1,500 @@
+## Git basics — init, add, commit
+
+Six commands cover ~80% of daily Git use: `init`, `clone`, `status`, `add`, `commit`, `log`. This concept covers the first half — turning a folder into a repo, seeing what's changed, staging some of the changes, recording them as a permanent snapshot, and reading history. Once you've done this loop a few dozen times, it becomes muscle memory and you stop noticing it; until then, every command is the front edge of "is this thing tracking my code or not?"
+
+<Analogy>
+The everyday Git loop is **a chef plating dishes for a tasting menu**.
+
+The chef is preparing courses for a tasting. The kitchen counter (the *working directory*) is where ingredients sit, half-prepped — onions diced, sauces reducing, plates being assembled. Not everything on the counter is ready to serve. The counter is messy; the chef is mid-thought.
+
+When a dish is ready, the chef moves it to **the pass** — the staging area, where the head chef inspects each plate before it goes to the dining room. The pass is *deliberately staged*: only what will be served goes there. The chef can build up several plates at the pass and inspect them all together. They can also pull a plate back if they spot a problem.
+
+Once the chef is satisfied with what's on the pass, the head chef calls "service!" — the **commit**. Those plates leave the kitchen, get served, and are permanent: someone ate them. The kitchen counter and the pass are now empty for the next course.
+
+That's the daily Git loop:
+
+```text
+   YOUR EDITS               STAGING                  COMMITTED
+   (working dir)           (the pass)               (the meal)
+
+   counter — messy   ───▶  pass — only what    ───▶ served — permanent
+   edit freely             you want this commit       in history
+                           git add ←                 git commit
+```
+
+The three "places" your changes live (working directory → staging → committed) map to the three commands you'll use most: `git add` to promote from counter to pass, `git commit` to promote from pass to served. Plus `git status` to ask "what's where right now?" — the chef glancing around to remember what's already plated.
+
+Why bother with two steps instead of "just commit everything I edited"? Because real work mixes concerns. You spend an hour, touch seven files, and notice that three are the bug fix you intended and four are unrelated cleanup you couldn't help doing. With staging, you `git add` the three, commit them as "fix login," `git add` the four, commit as "refactor: tidy navbar." Two clean commits from one work session. Without staging, every commit captures the whole counter — including the unrelated changes you forgot were even there.
+
+For days when you don't need the precision, two letters in a flag (`-A` for add, `-am` for the combined add+commit on already-tracked files) collapse the loop back to one step. The flexibility is there when you want it, out of the way when you don't.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the working directory, staging area, and repository with the commands that move between them"
+  caption="Three places, three commands. add moves to staging; commit moves to repo."
+>
+
+```
+   WORKING DIRECTORY        STAGING AREA              REPOSITORY
+   (your files)             (the next commit)          (permanent history)
+
+   edit a file ─────────►   ──── git add ────►       ──── git commit ────►
+                                                                              ▼
+                                                                          new commit
+                                                                          joins history
+
+   git status              tells you what's            git log
+                           in each place                shows committed
+                                                        history
+```
+
+</Illustration>
+
+### Setting up Git — one-time
+
+Before your first commit, tell Git who you are. This goes into every commit you make:
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+`--global` means it applies to every repo on this machine. To use a different identity for a specific project (a work email for a client repo, say), drop `--global` while inside that project.
+
+### `git init` — turn a folder into a repo
+
+In any folder:
+
+```bash
+git init
+```
+
+Creates a `.git` subdirectory (hidden). That directory IS the repository — every commit, every branch, every config lives in there. Delete `.git` and the folder is back to being a plain folder.
+
+You usually run this once per project. After that, the folder is "a Git repo" and the rest of the commands work in it.
+
+### `.gitignore` — files Git should pretend don't exist
+
+Most projects have files you don't want to commit:
+
+- `node_modules/` — huge, recreated by `pnpm install` from `package.json`.
+- `.env` — secrets.
+- `dist/` or `build/` — compiled output.
+- `.DS_Store` — macOS junk.
+- `*.log`.
+
+Create a `.gitignore` at the project root:
+
+```text
+node_modules/
+.env
+.env.local
+dist/
+build/
+.DS_Store
+*.log
+```
+
+Git treats these as if they don't exist. They won't show up in `git status`, can't be `git add`-ed (without `-f`), and won't end up in commits. Every project should have a `.gitignore` from commit 1; cleaning up accidentally-committed `node_modules` later is annoying.
+
+Useful resource: [github.com/github/gitignore](https://github.com/github/gitignore) has language-specific templates. `pnpm create next-app` or `npm create vite` generate appropriate ones by default.
+
+### `git status` — your most-used command
+
+```bash
+git status
+```
+
+Tells you, for every file:
+
+- **Untracked** — file exists in the working directory but Git has never seen it.
+- **Modified** — file is tracked, and its current contents differ from the last commit.
+- **Staged** — changes have been promoted to the pass with `git add`.
+- **Unmodified** — no changes since the last commit (these don't show up).
+
+You'll run this dozens of times a day. It's the "where am I right now?" command. Run it before every `add`, after every `commit`, anytime you're not sure what's pending.
+
+The output:
+
+```text
+On branch main
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        new file:   src/auth.ts
+        modified:   src/index.ts
+
+Changes not staged for commit:
+        modified:   README.md
+
+Untracked files:
+        notes.txt
+```
+
+Three sections — staged, modified-not-staged, untracked. The most common confusion: noticing that "modified" appears in *both* the second section AND the first, because you staged the file *then* edited it more. Git tracks both states: the staged version (locked in for the next commit) and the working-directory version (your further edits).
+
+### `git add` — move to the staging area
+
+```bash
+git add src/auth.ts             # stage one file
+git add src/                     # stage every change in src/
+git add .                        # stage every change in the current dir (and below)
+git add -A                       # stage every change in the whole repo (incl. deletions)
+git add -p                       # interactively pick which hunks to stage
+```
+
+The first form is the everyday case. `git add -p` (patch mode) is a tool experienced users love — it lets you stage *parts of a file*. Useful when you want to commit half of what you've changed in `auth.ts` and save the rest for a later commit.
+
+The opposite — unstaging — is `git restore --staged <file>` (or in older Git, `git reset HEAD <file>`).
+
+### `git commit` — promote to history
+
+```bash
+git commit -m "Add login form"
+```
+
+Two parts:
+- The contents of the staging area become a new commit.
+- The message describes the change. Short, present-tense, descriptive.
+
+Variants:
+
+- `git commit -am "..."` — add all **tracked** files (skips untracked) AND commit in one step. Daily shortcut.
+- `git commit` (no `-m`) — opens your editor for a longer message. Use this for commits where the "why" needs a paragraph.
+- `git commit --amend` — modify the *previous* commit. Useful for "I forgot to add a file" or "I want to fix the message." DON'T use it on commits you've already pushed to a shared branch — it rewrites history and confuses everyone.
+
+After committing, run `git status` again — you'll see "nothing to commit, working tree clean." That's the empty pass, ready for the next course.
+
+### `git log` — read history
+
+```bash
+git log                          # full log, paginated
+git log --oneline                # one line per commit
+git log -5                       # last 5 commits only
+git log --graph --oneline        # visual graph including branches
+git log -- src/auth.ts           # only commits that touched this file
+git log --author="Ada"            # only Ada's commits
+```
+
+The everyday form: `git log --oneline -10` — last 10 commits, one line each, with short hashes:
+
+```text
+7a3f9c2 fix: handle empty cart in checkout
+8b2e1f0 feat: add product search bar
+c1d4e7a refactor: extract price formatting
+```
+
+The hash is Git's "fingerprint" for the commit — every commit gets a unique SHA-1 hash. You'll use the short form (first 7 characters) when you need to reference a specific commit: `git checkout c1d4e7a`, `git revert c1d4e7a`, etc.
+
+### `git diff` — see exactly what changed
+
+```bash
+git diff                          # working directory vs. staging
+git diff --staged                 # staging vs. last commit
+git diff HEAD                     # working directory vs. last commit (everything not yet committed)
+git diff 7a3f9c2 8b2e1f0         # between two specific commits
+git diff main feature-branch      # between two branches
+```
+
+Output is a "unified diff" — for each changed file, the lines that were removed (`-`) and added (`+`):
+
+```diff
+diff --git a/src/auth.ts b/src/auth.ts
+index 1a2b3c4..d5e6f7g 100644
+--- a/src/auth.ts
++++ b/src/auth.ts
+@@ -10,7 +10,7 @@ export function login(email, password) {
+   if (!email) throw new Error("Email required");
+   if (!password) throw new Error("Password required");
+
+-  return fetch("/api/auth/login", {
++  return fetch("/api/auth/login", { signal: AbortSignal.timeout(5000),
+     method: "POST",
+     body: JSON.stringify({ email, password }),
+   });
+```
+
+Reading these takes practice. Modern editors (VS Code, JetBrains) show the same information visually in the source-control panel — usually nicer than the terminal diff. The terminal version is essential for quick checks before committing.
+
+### `git restore` and `git reset` — undoing
+
+Three "undo" scenarios:
+
+1. **Unstage a file** (you `git add`-ed it but want it out of the staging area):
+   ```bash
+   git restore --staged src/auth.ts
+   ```
+
+2. **Discard working-directory changes** (you edited a file but want to revert to the last committed version):
+   ```bash
+   git restore src/auth.ts        # ⚠️ destroys uncommitted edits
+   ```
+
+3. **Undo a commit** (you committed but want to "un-commit" while keeping the changes):
+   ```bash
+   git reset HEAD~                # undo last commit, keep changes staged
+   git reset --hard HEAD~          # ⚠️ undo last commit AND discard changes
+   ```
+
+`--hard` is destructive. Once edits are gone, they're gone. Make sure you really mean it.
+
+### `git clone` — copy an existing repo
+
+When you join a project that's already on GitHub:
+
+```bash
+git clone https://github.com/MUKE-coder/gritlearn.git
+```
+
+Downloads the entire repository (full history, all branches) to a new folder. You can `cd` into it and start working immediately — `git status`, `git log`, branch creation, all work because the full history is local.
+
+The opposite — pushing your local repo to a new GitHub remote — is covered in the `git-remotes` concept.
+
+### The daily rhythm
+
+Most days look like this:
+
+```bash
+# Morning — sync with team
+git pull                          # get latest from remote
+
+# Work on something
+# (edit files in editor)
+git status                        # what did I touch?
+git diff                          # what specifically did I change?
+git add src/auth.ts src/login.ts  # stage the relevant ones
+git commit -m "fix: handle expired session"
+
+# Another piece of work
+git add .
+git commit -m "feat: add settings page"
+
+# End of day
+git push                          # share with team
+```
+
+Six commands, repeated. Add branches and you have ~80% of daily Git. The mental model — *commit early, commit often, with good messages* — matters more than memorizing flags. Flags you can look up; the rhythm is what makes you productive.
+
+### One useful habit — commit *small*
+
+The single biggest junior-vs-senior difference in Git use:
+
+- Juniors commit "the whole day's work" as one big `WIP` commit.
+- Seniors commit every coherent step. Five commits per day, each focused on one concern, each with a clear message.
+
+Small commits give you:
+
+- **Easier review.** A reviewer can understand a 30-line diff in 2 minutes; a 600-line diff takes 30 minutes and they'll miss things.
+- **Safer revert.** If commit 3 of 5 introduced a bug, you revert that one. With one big commit, you have to revert everything and re-do the unrelated parts.
+- **Better `git blame`.** A line points at a small, focused commit with a clear message. With big commits, the message is "WIP" and you have no context.
+
+The exercise that builds the habit: commit every time you'd be willing to deploy. Each commit should leave the codebase in a working state. If it doesn't, the commit is too big.
+
+<ExampleProject
+  src="staging-area"
+  title="See the three places — working, staged, committed — simulated in a page"
+  description="An interactive sim of a tiny three-file repo. Edit a file → see it in 'working directory'. 'Add' it → moves to 'staging'. 'Commit' → moves to 'committed' and clears staging. Captures the mental model that the next 100 commits of your career will reinforce."
+/>
+
+<ExampleProject
+  src="commit-workflow"
+  title="A realistic commit sequence with status / diff / log at each step"
+  description="A walkthrough that mimics a real working session: create a file, edit it, add it, commit, edit again, see the diff, commit again, then view the log. Shows what status / diff / log say at each stage so the student knows what to expect when they do it for real."
+/>
+
+<Exercise
+  title="Build the daily rhythm — five commits in a real folder"
+  starter={`Create a fresh folder. Apply everything from this lesson:
+
+  mkdir git-practice && cd git-practice
+  git init
+  echo "node_modules" > .gitignore
+
+Now do FIVE small, focused commits. Pick a tiny project — a notes
+file, a todo list, a basic HTML page — and grow it across five
+commits:
+
+  1. Commit 1: Initial commit. README.md with the project title.
+  2. Commit 2: Add a feature (one file, focused change).
+  3. Commit 3: Edit something you wrote in commit 2 (the "fix the
+     mistake you made earlier" commit).
+  4. Commit 4: Add a second feature.
+  5. Commit 5: Update the README to describe both features.
+
+Rules:
+  - Each commit message follows the convention:
+    "<type>: <one-sentence summary>" (e.g. "feat: add date picker").
+  - Run 'git status' before EVERY 'git add'.
+  - Run 'git diff' before EVERY 'git commit'.
+  - Run 'git log --oneline' after EVERY commit to see your growing
+    history.
+  - At least one commit uses 'git add' for some files but not
+    others (so you experience precise staging).
+  - At least one commit uses 'git add -p' to stage only part of a
+    file (this is the eye-opening one).
+
+When done, run 'git log --oneline' and read your five lines. Are
+they readable as a story? "Set up project → added feature A →
+fixed a bug in A → added feature B → updated docs." If yes, you've
+internalized the rhythm.`}
+>
+
+- A new folder was initialized as a Git repo (`.git/` exists).
+- A `.gitignore` was created with at least one entry.
+- **Five** commits were made — verifiable by `git log --oneline | wc -l` returning 5.
+- Each commit message follows the `<type>: <summary>` convention with a meaningful type and present-tense summary.
+- At least **one** commit was created using `git add` on specific files only (not `git add .`).
+- At least **one** commit was created using `git add -p` (interactive patch staging).
+- `git status` and `git diff` were used at the steps in the brief (verifiable by the student's recollection or terminal history).
+- Reading `git log --oneline` from top to bottom (newest first), the five lines tell a coherent story of the project's evolution.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `git status` tell you?
+
+**A:** **What's changed in your working directory and what's currently staged for the next commit, broken into three categories.**
+
+Run it any time you're not sure what's pending:
+
+```text
+On branch main
+Changes to be committed:
+        new file:   src/auth.ts
+        modified:   src/index.ts
+
+Changes not staged for commit:
+        modified:   README.md
+
+Untracked files:
+        notes.txt
+```
+
+The three sections, top to bottom:
+
+1. **Changes to be committed** — files in the staging area. These will go into the next `git commit`. Got here via `git add`.
+2. **Changes not staged for commit** — files Git is tracking that you've edited since the last commit, but haven't yet `git add`-ed.
+3. **Untracked files** — files in the folder that Git has never seen and isn't tracking. These won't end up in commits unless you `git add` them.
+
+A file can appear in **both** section 1 AND section 2 simultaneously: you staged it, then edited it more. Git remembers both states — the staged version (locked in for the next commit) and the working-directory version (your further edits). If you commit now, the staged version goes in; your further edits stay pending.
+
+Other things `git status` tells you:
+- The current branch (`On branch main`).
+- Whether the branch is ahead/behind the remote (`Your branch is ahead of 'origin/main' by 2 commits`).
+- Whether you're mid-merge or mid-rebase (and what to do about it).
+
+The single most-run Git command, by a wide margin. Get comfortable running it constantly — it's free, fast, and prevents 90% of "wait, what's in this commit?" mistakes.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How would you commit only some of the changes in a file?
+
+**A:** **Use `git add -p`** (or `--patch`) — interactive patch mode. Git walks you through each chunk of changes in the file and asks whether to stage it.
+
+```bash
+git add -p src/auth.ts
+```
+
+For each "hunk" (a contiguous change block), Git shows it and prompts:
+
+```text
+@@ -10,7 +10,7 @@
+   if (!email) throw new Error("Email required");
+-  return fetch("/api/auth/login", {
++  return fetch("/api/auth/login", { signal: AbortSignal.timeout(5000),
+     method: "POST",
+   });
+Stage this hunk [y,n,q,a,d,e,?]?
+```
+
+Options:
+- `y` — stage this hunk
+- `n` — don't stage this hunk
+- `s` — split this hunk into smaller ones (when the auto-grouped hunk is too big)
+- `e` — edit the hunk manually (advanced)
+- `q` — quit
+- `a` — stage this and all remaining hunks in this file
+- `?` — show help
+
+The everyday case: you've made two unrelated edits to one file (added a feature and tidied an unrelated section). `git add -p` lets you stage just the feature, commit it as `feat: add X`, then stage the tidy, commit as `refactor: tidy Y`.
+
+Modern editors (VS Code's source control panel, JetBrains' Local Changes) offer the same functionality with a graphical click-to-stage interface — often easier than the terminal version for complex cases. Both produce the same result.
+
+The capability is small in mechanics but big in habit: it lets you commit *only what belongs together*, even when you've made unrelated edits in the same file. Five focused commits with good messages beats one big "WIP" commit with everything mashed together.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `git commit --amend` do, and when is it dangerous?
+
+**A:** **It modifies the *previous* commit instead of creating a new one — combining your currently-staged changes into the last commit, or letting you change the last commit's message.**
+
+```bash
+# Forgot to add a file to the last commit:
+git add src/forgotten-file.ts
+git commit --amend --no-edit       # add the file to last commit, keep message
+
+# Fix a typo in the last commit message:
+git commit --amend -m "fix: handle empty cart (correct typo)"
+```
+
+Useful daily uses:
+- "Oops, forgot to include this one file" — amend instead of "fix typo from previous commit."
+- "Bad message" — amend the message instead of leaving "fix bug" in history.
+- Tightening your in-progress commits before pushing.
+
+**The danger:** `--amend` doesn't *modify* the previous commit; it **replaces** it with a new commit (different SHA, same parent). If the original commit was already pushed to a shared branch and others have pulled it, you've now diverged from them:
+
+```text
+Before amend:    ... ── A ── B    (you and teammate both have this)
+After amend:     ... ── A ── B'   (you have this — different SHA than B)
+                            ↑
+                       teammate still has B; your push will fail
+                       (or force-push will rewrite their history)
+```
+
+The rule: **never amend commits you've already pushed to a shared branch.** Locally (before push), amend freely. Once it's on `main` or any branch your team has pulled, leave it alone.
+
+Two safe workflows:
+
+1. **Local-only edits.** Commit, see something to fix, amend. Push when clean. Standard during feature development on your own branch.
+2. **Forward-only on shared branches.** Once pushed, don't amend or rebase. New commits are added on top.
+
+Force-push (`git push --force` or `--force-with-lease`) makes amending shared commits "work" mechanically — but it's a footgun. Other people's local clones go out of sync; lost work happens. Junior-to-senior progression often involves learning when force-push is OK (your own feature branch, with `--force-with-lease`) and when it absolutely isn't (`main`, ever).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do experienced developers prefer small, focused commits over big ones?
+
+**A:** **Three concrete reasons: easier review, safer revert, better `git blame`.**
+
+**1. Easier review.** A reviewer can read a 30-line diff in 2 minutes and notice issues. A 600-line diff takes 30 minutes and they'll miss things — the cognitive load of holding the whole change in your head is too high. If you submit a PR with 12 small commits, the reviewer can review one at a time, each independently understandable.
+
+**2. Safer revert.** Production breaks. You know the bug came in sometime today. You run `git log --oneline` and see:
+
+```text
+9c2a3b1 fix: handle null user in profile     ← suspected
+8a3b2f1 feat: add dark mode toggle
+7e2d1f0 refactor: extract date helpers
+6d1f0e5 feat: add settings page
+```
+
+If each commit is small and focused, you can `git revert 9c2a3b1` and the bug is gone — without losing dark mode, helpers, or settings. With one big commit `WIP: today's work`, you'd have to revert everything and re-do the parts that were fine.
+
+**3. Better `git blame`.** Six months later, line 47 of `payment.ts` has a bug. You run `git blame payment.ts` and see "WIP commit, 4 months ago, +2400 lines." Useless. With small commits, the line points at a focused commit with a clear message: "fix: charge rounding overflows on amounts > $10k." Now you have context to understand the line.
+
+The habit that builds it: **commit every time your code would be safe to deploy.** If a stop-here moment leaves the code in a broken state, your commit is too big — split it. The rule produces a history of small, working snapshots, each safe to revert independently.
+
+Two anti-patterns to avoid:
+
+- **The end-of-day "WIP" commit.** Everything you did today, mashed together, message says "WIP" or "stuff." Avoid by committing after each coherent step.
+- **The 600-line "refactor."** A real refactor often is large, but it can usually be staged as a sequence of smaller commits ("extract helper", "rename variable", "remove unused code"). Each is safely revertable; the whole sequence achieves the refactor.
+
+The cost of small commits: ~30 seconds extra per commit (writing the message, running `git add -p`). The benefit: the rest of your team's life is easier and your future self can debug your code. Heavily worth it.
+
+</InterviewQuestion>

@@ -1,0 +1,117 @@
+<!--
+  Realistic commit sequence walkthrough.
+  Six steps mimic an actual session: create file → status → add →
+  commit → edit → diff → add → commit → log. Each step shows the
+  command, the expected output, and a 1-line note.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A realistic commit walkthrough</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .step {
+        border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.85rem 1rem;
+        background: #fafafa; margin-top: 1rem;
+      }
+      .step h2 {
+        margin: 0 0 0.4rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;
+      }
+      .num {
+        display: inline-block; width: 1.4rem; height: 1.4rem; line-height: 1.4rem; text-align: center;
+        background: #15803d; color: #fff; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+      }
+      .cmd {
+        background: #18181b; color: #ededee; padding: 0.4rem 0.7rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0.35rem 0;
+      }
+      .cmd::before { content: "$ "; color: #7fff5b; }
+      .out {
+        background: #0a0a0d; color: #ededee; padding: 0.55rem 0.7rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap;
+        border-left: 3px solid #38bdf8;
+      }
+      .note { font-size: 0.85rem; color: #555; margin-top: 0.3rem; }
+      .ok    { color: #16a34a; font-weight: 600; }
+      .add   { color: #16a34a; }
+      .del   { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>A realistic commit walkthrough</h1>
+    <p>This mimics a real session — create a file, commit, edit, commit again, view history. Each step shows what to type and what to expect.</p>
+
+    <div class="step">
+      <h2><span class="num">1</span> Initialize and write the first file</h2>
+      <div class="cmd">mkdir notes &amp;&amp; cd notes &amp;&amp; git init</div>
+      <div class="out">Initialized empty Git repository in ~/notes/.git/</div>
+      <div class="cmd">echo "# My Notes" &gt; README.md</div>
+      <div class="note">README.md exists in the working directory. Git doesn't know about it yet.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">2</span> Check status</h2>
+      <div class="cmd">git status</div>
+      <div class="out">On branch main
+
+No commits yet
+
+<span class="del">Untracked files:</span>
+  (use "git add &lt;file&gt;..." to include in what will be committed)
+        README.md</div>
+      <div class="note">README is <strong>untracked</strong> — exists on disk, not in Git.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">3</span> Add and commit</h2>
+      <div class="cmd">git add README.md</div>
+      <div class="cmd">git status</div>
+      <div class="out">On branch main
+
+<span class="ok">Changes to be committed:</span>
+        new file:   README.md</div>
+      <div class="cmd">git commit -m "Add README"</div>
+      <div class="out">[main (root-commit) a1b2c3d] Add README
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md</div>
+      <div class="note">First commit done. <span class="ok">a1b2c3d</span> is the short hash.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">4</span> Edit the file</h2>
+      <div class="cmd">echo "Built with JEditor." &gt;&gt; README.md</div>
+      <div class="cmd">git status</div>
+      <div class="out">On branch main
+
+<span class="del">Changes not staged for commit:</span>
+        modified:   README.md</div>
+      <div class="note">The file is back to "modified" — Git sees it differs from the last commit.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">5</span> See the diff before committing</h2>
+      <div class="cmd">git diff</div>
+      <div class="out">diff --git a/README.md b/README.md
+index e69de29..f1234ab 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1,2 @@
+ # My Notes
+<span class="add">+Built with JEditor.</span></div>
+      <div class="note">One line added. Always run <code>git diff</code> before committing to confirm you're shipping what you intended.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">6</span> Commit and view history</h2>
+      <div class="cmd">git add . &amp;&amp; git commit -m "Add subtitle"</div>
+      <div class="out">[main e5f6a7b] Add subtitle
+ 1 file changed, 1 insertion(+)</div>
+      <div class="cmd">git log --oneline</div>
+      <div class="out">e5f6a7b Add subtitle
+a1b2c3d Add README</div>
+      <div class="note"><span class="ok">Two commits.</span> Newest first. Each shows the short hash and the message.</div>
+    </div>
+  </body>
+</html>

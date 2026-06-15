@@ -1,0 +1,232 @@
+<!--
+  Interactive branch visualizer.
+  Two columns:
+    Left — controls: commit, branch, switch, merge.
+    Right — SVG graph rendering the current state.
+
+  Captures the headline shape of branching: parallel timelines that
+  can rejoin via a merge commit.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Branch visualizer</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 900px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+      .actions button {
+        padding: 0.35rem 0.7rem; border-radius: 5px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem;
+      }
+      .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .actions button:not(:disabled):hover { background: #f4f4f5; }
+      .actions button.primary { background: #15803d; color: #fff; border-color: #15803d; }
+      .actions button.primary:hover:not(:disabled) { background: #166534; }
+      select, input[type="text"] {
+        padding: 0.3rem 0.55rem; border-radius: 4px; border: 1px solid #d4d4d8;
+        font-size: 0.85rem; font-family: ui-monospace, monospace;
+      }
+      .info {
+        font-size: 0.85rem; color: #52525b; padding: 0.5rem 0.7rem; background: #fff;
+        border: 1px solid #e4e4e7; border-radius: 4px; margin-top: 0.5rem;
+      }
+      .head { color: #15803d; font-weight: 700; }
+      svg { background: #0a0a0d; border-radius: 6px; display: block; width: 100%; height: 320px; }
+    </style>
+  </head>
+  <body>
+    <h1>Branch visualizer — try the moves</h1>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Controls</h2>
+        <div class="actions">
+          <button id="commit" class="primary">git commit</button>
+        </div>
+        <div class="actions">
+          <input type="text" id="bname" placeholder="branch name" />
+          <button id="branch">git checkout -b</button>
+        </div>
+        <div class="actions">
+          <span style="font-size: 0.82rem; color: #52525b; align-self: center;">switch to:</span>
+          <select id="switchTo"></select>
+          <button id="switch">git switch</button>
+        </div>
+        <div class="actions">
+          <span style="font-size: 0.82rem; color: #52525b; align-self: center;">merge from:</span>
+          <select id="mergeFrom"></select>
+          <button id="merge">git merge</button>
+        </div>
+        <div class="actions">
+          <button id="reset">reset</button>
+        </div>
+
+        <div class="info">
+          <div>HEAD = <span class="head" id="head">main</span></div>
+          <div id="hint" style="margin-top: 0.35rem; color: #71717a;">…</div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Graph</h2>
+        <svg id="graph" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <script>
+      // ── State ──
+      let commits = [];   // [{ id, parents: [id...], branch: string }]
+      let branches = {};  // name -> commitId at tip
+      let head = "main";
+      let counter = 0;
+
+      function nextId() {
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        return letters[counter++ % 26];
+      }
+
+      function reset() {
+        commits = [];
+        branches = {};
+        head = "main";
+        counter = 0;
+        // Seed: one commit on main
+        const id = nextId();
+        commits.push({ id, parents: [], branch: "main" });
+        branches.main = id;
+        render();
+      }
+
+      function makeCommit() {
+        const id = nextId();
+        const parent = branches[head];
+        commits.push({ id, parents: parent ? [parent] : [], branch: head });
+        branches[head] = id;
+        render();
+      }
+
+      function makeBranch(name) {
+        if (!name) return;
+        if (branches[name]) return;   // already exists
+        branches[name] = branches[head];
+        head = name;
+        render();
+      }
+
+      function switchHead(name) {
+        if (!branches[name]) return;
+        head = name;
+        render();
+      }
+
+      function doMerge(from) {
+        if (!branches[from] || from === head) return;
+        const id = nextId();
+        commits.push({
+          id,
+          parents: [branches[head], branches[from]],
+          branch: head,
+          isMerge: true,
+        });
+        branches[head] = id;
+        render();
+      }
+
+      // ── Rendering ──
+      const svg = document.getElementById("graph");
+
+      function laneOf(branchName) {
+        const names = Object.keys(branches);
+        const idx = names.indexOf(branchName);
+        return 40 + idx * 80;
+      }
+
+      function colorOf(branchName) {
+        const palette = ["#7fff5b", "#38bdf8", "#fbbf24", "#f87171", "#a78bfa"];
+        const names = Object.keys(branches);
+        return palette[names.indexOf(branchName) % palette.length];
+      }
+
+      function render() {
+        // SVG layout
+        const cx = (c, i) => 50 + i * 70;   // x position by commit order
+        const positions = {};
+        commits.forEach((c, i) => {
+          positions[c.id] = { x: cx(c, i), y: laneOf(c.branch) };
+        });
+
+        const parts = [];
+        // Edges (parents → child)
+        commits.forEach((c) => {
+          for (const p of c.parents) {
+            if (!positions[p]) continue;
+            const from = positions[p];
+            const to = positions[c.id];
+            parts.push(`<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${colorOf(c.branch)}" stroke-width="2" />`);
+          }
+        });
+        // Nodes
+        commits.forEach((c) => {
+          const p = positions[c.id];
+          parts.push(`
+            <circle cx="${p.x}" cy="${p.y}" r="14" fill="${colorOf(c.branch)}" />
+            <text x="${p.x}" y="${p.y + 4}" text-anchor="middle" font-size="11" font-family="ui-monospace, monospace" fill="#0a0a0d" font-weight="700">${c.id}</text>
+          `);
+        });
+        // Branch labels (right side)
+        Object.entries(branches).forEach(([name, tip]) => {
+          if (!positions[tip]) return;
+          const p = positions[tip];
+          parts.push(`
+            <rect x="${p.x + 22}" y="${p.y - 11}" width="${name.length * 7 + 14}" height="22" rx="11" fill="${colorOf(name)}" />
+            <text x="${p.x + 29}" y="${p.y + 4}" font-size="11" font-family="ui-monospace, monospace" fill="#0a0a0d" font-weight="700">${name}${name === head ? " ★" : ""}</text>
+          `);
+        });
+
+        svg.innerHTML = parts.join("");
+
+        // Sidebar
+        document.getElementById("head").textContent = head;
+        const lastCommit = commits[commits.length - 1];
+        document.getElementById("hint").textContent = lastCommit
+          ? `Last commit: ${lastCommit.id} on ${lastCommit.branch}${lastCommit.isMerge ? " (merge)" : ""}`
+          : "no commits yet";
+
+        // Dropdowns
+        const switchTo = document.getElementById("switchTo");
+        switchTo.innerHTML = Object.keys(branches)
+          .map((n) => `<option value="${n}" ${n === head ? "disabled" : ""}>${n}</option>`)
+          .join("");
+        const mergeFrom = document.getElementById("mergeFrom");
+        mergeFrom.innerHTML = Object.keys(branches)
+          .filter((n) => n !== head)
+          .map((n) => `<option value="${n}">${n}</option>`)
+          .join("");
+      }
+
+      // ── Wire up ──
+      document.getElementById("commit").addEventListener("click", makeCommit);
+      document.getElementById("branch").addEventListener("click", () => {
+        const name = document.getElementById("bname").value.trim();
+        if (name) {
+          makeBranch(name);
+          document.getElementById("bname").value = "";
+        }
+      });
+      document.getElementById("switch").addEventListener("click", () => {
+        switchHead(document.getElementById("switchTo").value);
+      });
+      document.getElementById("merge").addEventListener("click", () => {
+        doMerge(document.getElementById("mergeFrom").value);
+      });
+      document.getElementById("reset").addEventListener("click", reset);
+
+      reset();
+    </script>
+  </body>
+</html>

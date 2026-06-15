@@ -1,0 +1,80 @@
+<!--
+  Why folder-based versioning collapses. A grid of "version" folders
+  with file counts; click a folder to see "what's inside" and the
+  three failure modes are listed at the bottom.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Why folder-based versioning fails</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      .folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; margin-top: 1rem; }
+      .folder {
+        border: 1px solid #e4e4e7; border-radius: 6px; padding: 0.65rem 0.75rem;
+        background: #fef9c3; cursor: pointer; text-align: left; font-family: ui-monospace, monospace; font-size: 0.85rem;
+      }
+      .folder:hover { background: #fde68a; }
+      .folder small { display: block; color: #71717a; font-size: 0.72rem; margin-top: 0.2rem; }
+      .out {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; margin-top: 0.5rem; min-height: 6rem;
+      }
+      .fail { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 0.75rem 1rem; margin-top: 0.5rem; font-size: 0.92rem; color: #991b1b; }
+      .fail strong { color: #7f1d1d; }
+      ul.fails { padding-left: 1.4rem; margin: 0; }
+      ul.fails li { margin: 0.35rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>The "folder name versioning" trap</h1>
+    <p>A real team's project folder, in real time. Click any folder to see what's inside.</p>
+
+    <div class="folders" id="folders"></div>
+    <div class="out" id="out">click a folder above…</div>
+
+    <h2>Three reasons this fails — every time</h2>
+    <div class="fail">
+      <strong>1. Diffs are impossible.</strong> Try to figure out what changed between <code>project-v2</code> and <code>project-v2-FIXED</code>. The folders are identical except for one line in one file — and there's no way to know without manually opening every file.
+    </div>
+    <div class="fail">
+      <strong>2. Storage doubles per version.</strong> 100MB × 8 versions = 800MB on disk, of which 99% is duplicates. Git stores the same history in roughly 105MB by sharing unchanged content.
+    </div>
+    <div class="fail">
+      <strong>3. Two people can't safely edit at once.</strong> If Alice and Bob both start from <code>project-final</code>, they'll each produce a divergent <code>v2</code>. Merging by hand is impossible past about three files.
+    </div>
+
+    <script>
+      const folders = [
+        { name: "project",                    files: 24, note: "the original" },
+        { name: "project-backup",             files: 24, note: "made by Alice" },
+        { name: "project-v2",                 files: 26, note: "added login" },
+        { name: "project-v2-FIXED",           files: 26, note: "one bug fix in login.js" },
+        { name: "project-v3",                 files: 28, note: "added cart" },
+        { name: "project-FINAL",              files: 28, note: "who made this?" },
+        { name: "project-final-FINAL",        files: 30, note: "renamed by Bob" },
+        { name: "project-final-USE-THIS-ONE", files: 31, note: "is this the latest??" },
+      ];
+
+      const out = document.getElementById("out");
+      const grid = document.getElementById("folders");
+
+      folders.forEach((f) => {
+        const div = document.createElement("button");
+        div.className = "folder";
+        div.innerHTML = "📁 " + f.name + "<small>" + f.files + " files</small>";
+        div.addEventListener("click", () => {
+          out.textContent =
+            "📁 " + f.name + " — " + f.files + " files\n" +
+            "  " + f.note + "\n\n" +
+            "(Compared to the 'project' folder, " + (f.files - 24) + " new files were added.\n" +
+            " To find what CHANGED in existing files, you'd have to diff them all by hand.)";
+        });
+        grid.appendChild(div);
+      });
+    </script>
+  </body>
+</html>

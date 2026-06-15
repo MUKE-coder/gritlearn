@@ -1,0 +1,115 @@
+<!--
+  Diff-based history (RCS-style) vs. snapshot-based history (Git-style).
+  A small interactive visualization: 5 commits modifying a hello.txt
+  file. The diff view shows commit-N as "add line X, remove line Y"
+  applied to commit-(N-1). The snapshot view shows each commit as a
+  complete file state. Both end up storing similar disk space, but
+  the snapshot model makes "jump to any commit" instant.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Diff vs. snapshot history</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.6rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.5; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .commit-pick { display: flex; gap: 0.4rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
+      .commit-pick button {
+        padding: 0.35rem 0.65rem; border-radius: 4px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.8rem;
+      }
+      .commit-pick button.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .add { color: #7fff5b; }
+      .del { color: #f87171; }
+      .ctx { color: #71717a; }
+      .note { background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.55rem 0.85rem; border-radius: 6px; font-size: 0.88rem; margin-top: 0.6rem; color: #065f46; }
+    </style>
+  </head>
+  <body>
+    <h1>Two ways to model history</h1>
+    <p>Same 5 commits, two storage strategies. The Git way stores complete file states; the older way stores incremental diffs.</p>
+
+    <div class="commit-pick" id="picker"></div>
+
+    <div class="grid">
+      <div class="col">
+        <h3>RCS-style — diff against previous</h3>
+        <pre id="diff"></pre>
+        <div class="note">To reconstruct any commit, you must replay ALL diffs from the start. Jumping to commit-3 means applying commits 1, 2, 3 in order.</div>
+      </div>
+      <div class="col">
+        <h3>Git-style — full snapshot</h3>
+        <pre id="snap"></pre>
+        <div class="note">Each commit is the complete file. Jumping to commit-3 is a single read. Unchanged files share storage with previous commits internally.</div>
+      </div>
+    </div>
+
+    <script>
+      // Each commit is the full state of hello.txt at that point.
+      const commits = [
+        { msg: "init",       lines: ["hello"] },
+        { msg: "add line",   lines: ["hello", "world"] },
+        { msg: "rename",     lines: ["hi",    "world"] },
+        { msg: "add line",   lines: ["hi",    "world", "from git"] },
+        { msg: "reorder",    lines: ["from git", "hi", "world"] },
+      ];
+
+      // Simple line-level diff between prev and curr.
+      function diff(prev, curr) {
+        const out = [];
+        const prevSet = new Set(prev);
+        const currSet = new Set(curr);
+        // Removals first (lines in prev not in curr)
+        for (const l of prev) if (!currSet.has(l)) out.push({ kind: "del", text: l });
+        // Additions (lines in curr not in prev)
+        for (const l of curr) if (!prevSet.has(l)) out.push({ kind: "add", text: l });
+        // Common lines, marked as context
+        for (const l of curr) if (prevSet.has(l)) out.push({ kind: "ctx", text: l });
+        return out;
+      }
+
+      const picker = document.getElementById("picker");
+      const diffEl = document.getElementById("diff");
+      const snapEl = document.getElementById("snap");
+
+      let active = 0;
+
+      commits.forEach((c, i) => {
+        const b = document.createElement("button");
+        b.textContent = "commit " + (i + 1) + " — " + c.msg;
+        b.addEventListener("click", () => { active = i; render(); });
+        picker.appendChild(b);
+      });
+
+      function render() {
+        // Diff view
+        const prev = active === 0 ? [] : commits[active - 1].lines;
+        const curr = commits[active].lines;
+        const d = diff(prev, curr);
+        diffEl.innerHTML = d.map((line) => {
+          if (line.kind === "add") return "<span class=\"add\">+ " + line.text + "</span>";
+          if (line.kind === "del") return "<span class=\"del\">- " + line.text + "</span>";
+          return "<span class=\"ctx\">  " + line.text + "</span>";
+        }).join("\n");
+        if (active === 0) diffEl.innerHTML = "<span class=\"add\">+ " + curr.join("\n+ ") + "</span>\n<span class=\"ctx\">(first commit — full content stored)</span>";
+
+        // Snapshot view
+        snapEl.innerHTML = "hello.txt @ commit-" + (active + 1) + "\n──────────────────────\n" + curr.join("\n");
+
+        document.querySelectorAll(".commit-pick button").forEach((b, i) => {
+          b.classList.toggle("active", i === active);
+        });
+      }
+      render();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,373 @@
+## What version control is
+
+Before version control, every team's "history of the code" lived in folders named `project-final-v2`, `project-final-v2-FIXED`, and `project-final-USE-THIS-ONE`. Version control replaces that mess with a tool that remembers every change you've ever committed, lets you compare any two points in time, and lets multiple people change the same files without overwriting each other's work. The tool everyone uses is **Git**. Once you've learned its mental model, the productivity unlock is enormous — but the mental model matters more than the commands.
+
+<Analogy>
+Version control is **a building's surveillance camera that also lets you rewind, label moments, and run two timelines in parallel**.
+
+A construction site has a camera mounted in the corner. Every time anyone makes a change to the building — a wall goes up, a pipe gets installed, a window is replaced — the camera quietly records the moment. The recordings stack up. Two weeks later, when you ask "wait, when did we install the upstairs sink?", the foreman walks to the camera, scrubs the timeline, and finds the exact moment. The whole history is right there: who changed what, when, in what order.
+
+Now stretch the metaphor. The camera doesn't just record — it lets the foreman do three astonishing things:
+
+1. **Label moments.** Friday afternoon, the building passed inspection. The foreman puts a marker on the timeline: "v1 — inspection passed." Two weeks later when someone breaks the wiring, the foreman can rewind to that label and see exactly what worked.
+
+2. **Run two timelines in parallel.** An electrician wants to try a wild rewiring idea without affecting the main build. The foreman duplicates the timeline — "main" and "rewire-experiment". The electrician works in the experiment timeline; if it goes well, the foreman *merges* the two timelines back together (electrical changes carry over to main). If it fails, the foreman just deletes the experiment timeline and main is untouched.
+
+3. **Sync timelines across sites.** The same building is being mirrored at a sister construction site. Whenever the local timeline moves forward, the foreman *pushes* the new recordings to the central archive. The other site can *pull* them down and stay in sync. Everyone sees the same history.
+
+That's Git. The recordings are **commits**. The labels are **tags**. The parallel timelines are **branches**. The central archive is the **remote** (GitHub, GitLab, your company's server). Each of these has a one-line command, but the value isn't in the commands — it's in being able to think this way about your code's history.
+
+What you get when you adopt it:
+
+- **Nothing is permanent.** Made a bad change yesterday? Revert. Bad change two weeks ago? Revert. The code never forgets; you can always go back.
+- **Experimentation is cheap.** "Try a refactor" doesn't mean "risk the working build." Branch, try, merge or throw away. Zero damage to main if it doesn't work.
+- **Collaboration is sane.** Three people can change the same file in the same day. Git merges intelligent edits automatically; for the rare conflicts, it shows you exactly where humans need to make the call.
+- **Auditability.** Every change has a who, a when, and a "why" (the commit message). When a bug surfaces six months later, you can `git blame` the line and find the commit that introduced it.
+
+The mental shift from "I'm typing into a file" to "I'm contributing to a history" is the entire point. Every commit is a labeled snapshot you can return to. The codebase becomes a *recording*, not just a *current state*.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a sequence of commits on a main branch with a parallel feature branch that gets merged"
+  caption="Each commit is a labeled snapshot. Branches are parallel timelines that can rejoin."
+>
+
+```
+   THE SHAPE OF A REPO'S HISTORY
+
+   main:    A ─── B ─── C ──────────── F ───── G          (production timeline)
+                          \           /
+   feature:                D ─── E ──┘                     (a parallel experiment)
+
+   A,B,C,F,G are commits on main. D,E happened on a branch.
+   The merge at F combined the two timelines.
+
+   ┌──────────────────────────────────────────────────┐
+   │ Each letter is a "labeled moment":                │
+   │   commit  →  snapshot of every file at that point │
+   │   message →  one-line description of WHY          │
+   │   author  →  who made it                          │
+   │   time    →  when                                 │
+   │   hash    →  unique fingerprint (e.g. 7a3f9c2)    │
+   └──────────────────────────────────────────────────┘
+```
+
+</Illustration>
+
+### Why folder-based versioning fails
+
+Most people start here:
+
+```
+   project/
+   project-v2/
+   project-v2-FIXED/
+   project-final/
+   project-final-FINAL/
+   project-final-USE-THIS-ONE/
+```
+
+It "works" for a solo developer for about two weeks. Then:
+
+1. **You can't tell what changed between versions.** Open `project-v2-FIXED` and `project-final`; you have to manually diff every file to find what's different.
+2. **Two people can't safely edit at once.** If Alice and Bob both start from `project-v2`, they each produce their own `v3` that diverges from the other. Merging by hand is impossible past about three files.
+3. **Storage doubles every version.** Every "snapshot" is the entire folder. A 100MB project with 20 versions is 2GB of disk space, of which 1.9GB is duplicate.
+4. **Nobody knows what's authoritative.** Five months in, which folder is "real"? Hopefully the most recent. Hopefully.
+
+Version control was invented to fix exactly these. The first widely-used version control system was RCS in 1982. CVS in 1990. SVN in 2000. Git in 2005. Each generation got better at the same problem; today, Git's mental model has won so completely that "version control" and "Git" are practically synonyms.
+
+### The mental model — commits, not files
+
+The single most important concept: **a commit is a snapshot of every file in your project at a moment in time**. Not a diff. Not a change. A complete state.
+
+```text
+   commit 7a3f9c2 — "Add login form"
+     ↑
+     │ At this point in history, every file looked like this:
+     │   src/app/login/page.tsx     (the new file)
+     │   src/components/navbar.tsx  (slightly modified — added a link)
+     │   ... 200 other files unchanged
+     │
+     └─ Snapshot stored. Future commits will reference 7a3f9c2 as their parent.
+```
+
+When you `git checkout 7a3f9c2`, your working directory becomes *exactly* what the project looked like at that commit. Not "the current state with some changes applied" — the full state, frozen.
+
+Git is space-efficient about this. Unchanged files aren't copied; they share the same internal storage with previous commits (the technical term is *content-addressed* storage). Two commits with mostly identical files share most of their bytes. The 100MB project with 100 commits doesn't grow to 10GB; it grows by the size of the actual changes.
+
+### The three trees — working, staging, committed
+
+Git has three places your changes can live, and most early confusion comes from not knowing which is which:
+
+1. **Working directory** — the actual files on your disk. When you edit a file, you're changing the working directory.
+
+2. **Staging area (index)** — a "checkout cart" where you assemble the next commit. When you `git add file.js`, you've added that file's current state to the cart. Editing the file *after* adding it doesn't update the cart; you'd have to `add` again.
+
+3. **Repository (committed)** — the permanent history. When you `git commit`, the contents of the staging area become a new commit in the repo. The cart is then empty for the next purchase.
+
+```text
+   WORKING DIRECTORY          STAGING AREA           REPOSITORY
+   (your edits)               (cart for next commit) (permanent history)
+
+   you edit a file
+   ──── git add ────►         file is staged
+                              ──── git commit ────►  new commit
+                                                     joins the history
+```
+
+The staging area is the part that surprises people. "Why two steps?" Because you sometimes want to commit *some* of your changes and not others. You can `git add` three of the seven modified files, commit those as "Add auth", then `git add` the other four and commit as "Update navbar." Two clean commits from one work session.
+
+For the simplest workflow — every change committed together — `git add -A && git commit -m "..."` rolls both steps into one. Once you're comfortable, you'll appreciate the staging area's flexibility.
+
+### Why Git won
+
+By 2010, three competitors existed: SVN (centralized), Mercurial (distributed like Git), Git (distributed). Git won not because it was the easiest to use (it wasn't), but because:
+
+- **Distributed.** Every developer has the *whole history* on their laptop. You can commit while offline; sync later. SVN required a network connection for every commit.
+- **Fast branching.** Creating a branch in SVN was a "let's plan this Tuesday" operation; in Git it's instant. Developers branch dozens of times a day.
+- **GitHub.** Launched 2008, made Git social. PRs, issues, code review — the social layer made Git the obvious choice for open source, then for commercial teams.
+- **Linux kernel pedigree.** Linus Torvalds wrote Git in 2005 to replace BitKeeper for Linux kernel development. The Linux project's adoption gave Git instant credibility.
+
+The result: in 2026, Git is on every developer's machine. The other tools still exist but mostly in legacy environments. When this lesson and the next ones say "version control," they mean Git.
+
+### The flow you'll repeat thousands of times
+
+```bash
+git status                       # what's changed?
+git add file.tsx                 # stage one file
+git add .                        # OR stage all changes in current dir
+git commit -m "Fix navbar link"   # commit them with a message
+git log                          # see history
+git push                         # send to GitHub
+```
+
+Six commands. The next lesson covers each one in detail. For now, the mental shift to make: **stop thinking "save the file." Start thinking "commit the change."** Saving is a working-directory operation; committing is what carves a labeled moment into history.
+
+### The one rule for commit messages
+
+Every commit needs a message. The convention that works on every team:
+
+```text
+   <type>: <one-sentence summary>
+
+   <optional longer paragraph if needed>
+```
+
+Examples:
+- `fix: login crashes when password has emoji`
+- `feat: add user export to CSV`
+- `refactor: extract cart total calculation`
+- `docs: update README with new API URL`
+
+The first line is what shows up in `git log --oneline`. Short, descriptive, present-tense ("add", not "added"). Imagine the message completing the sentence "*This commit will...*" — "*add user export to CSV*" is good; "*added the export*" is fine but slightly off.
+
+Why this matters: in two years when someone runs `git blame` on the line that broke production, they'll see your message. "fix login bug" is unhelpful; "fix: login crashes when password has emoji" is gold. The future is paying attention.
+
+### What version control is NOT
+
+Three common misunderstandings:
+
+- **Not a backup.** Yes, Git stores history — but if your laptop dies and you haven't pushed, the history dies with it. The remote (GitHub) is what makes Git resilient to hardware failure. Push regularly.
+- **Not a deploy tool.** Git tracks code. Deployment is a separate concern (CI/CD, Vercel, Dokploy). You `git push`, the CI sees the new commit, *then* it deploys. Two distinct steps.
+- **Not file-by-file.** Git tracks *the whole project's state* at each commit, not "this file's history." `git log file.tsx` shows commits that touched the file, but those commits also touched other files. The unit of history is the commit, not the file.
+
+### What's ahead
+
+This concept is the *why*. The next concepts give you the *how*:
+
+- **git-basics**: `init`, `add`, `commit`, `log`, `diff`. The four daily commands plus the one that shows history.
+- **git-branches**: branching to work on features without touching main; merging vs. rebasing; the branch-per-feature pattern every modern team uses.
+- **git-remotes**: GitHub, `push`, `pull`, syncing with the central archive.
+- **github-prs**: code review, the social layer of collaboration.
+- **merge-conflicts**: when Git can't auto-merge, what the conflict markers mean, and how to resolve.
+
+Each builds on this one. Without the mental model — *commits are snapshots, branches are parallel timelines, remotes are central archives* — the commands become magic incantations. With the model, they become a coherent tool.
+
+<ExampleProject
+  src="folder-versions"
+  title="Why folder-based versioning collapses past about five versions"
+  description="A small interactive walkthrough of the folder-naming approach — 'project-v1', 'project-v2-FIXED', etc. — and the three failure modes it inevitably produces (diff impossible, two-person editing impossible, storage doubles). Read it once, never forget why Git exists."
+/>
+
+<ExampleProject
+  src="diff-vs-snapshot"
+  title="A commit is a snapshot, not a diff — see the difference"
+  description="Two ways to model history: as a sequence of diffs (RCS-style) or as a sequence of full snapshots that share unchanged content (Git-style). The page demonstrates how both end up storing similar amounts of disk but how the snapshot model makes 'jump to any point in history' trivial."
+/>
+
+<Exercise
+  title="Set up your first Git repository"
+  starter={`Open a terminal. Pick a folder (an existing tiny project or a new
+one — even a folder with three .txt files is fine for this exercise).
+Run:
+
+  cd path/to/your/folder
+  git init                          # turn this folder into a Git repo
+  echo "node_modules" > .gitignore  # if applicable
+  git status                        # see what's tracked vs. ignored
+
+Now create or edit a file:
+  echo "Hello, JEditor" > README.md
+
+Then make your first commit:
+  git add README.md
+  git status                        # see README.md is "staged"
+  git commit -m "Add README"
+
+Look at history:
+  git log
+  git log --oneline
+
+Now edit README.md, save, and run:
+  git status                        # see the file is modified again
+  git diff                          # see exactly what changed
+  git add README.md
+  git commit -m "Update README"
+  git log --oneline                 # two commits now
+
+Confirm you understand each output. Write down (in a notes file or
+in your head):
+  1. What does each commit look like in 'git log --oneline'?
+  2. What was in the staging area between 'git add' and 'git commit'?
+  3. Why does 'git diff' show nothing once you've added the change?
+     (Hint: 'git diff' shows working-vs-staging by default.)`}
+>
+
+- A directory was turned into a Git repo with `git init` — the folder now contains a `.git/` subfolder.
+- At least **two commits** were made, each with a meaningful commit message.
+- `git status` was run between each step and the output was understood (which files are untracked, modified, or staged).
+- `git log --oneline` shows both commits with their short hashes and messages.
+- The student wrote down their answers to the three questions in the brief (in their own words).
+- A `.gitignore` was set up if applicable (excluding `node_modules` or similar large/derived directories).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between Git and GitHub?
+
+**A:** **Git is the version control tool that runs on your computer. GitHub is a website (and company) that hosts Git repositories for you.**
+
+You can use Git without GitHub — `git init` a folder, commit changes, never push anywhere — and you'll have full history on your laptop. You can use Git with a self-hosted server, GitLab, Bitbucket, or anything else that speaks Git's network protocol.
+
+What GitHub adds on top of Git:
+
+- **A remote your team can share.** Instead of "email Alice the latest code," everyone pushes to the GitHub repo and pulls from it.
+- **Pull requests.** The web UI for code review: "here are my changes; please review before merging into main."
+- **Issues.** Bug tracker integrated with commits — a commit can reference an issue, the issue can show the commits that fixed it.
+- **Actions.** CI/CD — when you push, GitHub can run tests, build, deploy.
+- **Web hosting.** Browse, edit (small files), search code, download — everything from a browser.
+- **Social layer.** Follow developers, star projects, fork, contribute. The reason GitHub became dominant.
+
+In daily speech, "GitHub" often gets used as a metonym for both ("I'll push this to GitHub" really means "I'll commit with Git and push to the GitHub-hosted remote"). For interviewing, knowing the distinction matters: Git is the protocol and tool; GitHub is one host among many that speaks it.
+
+The competitive landscape: GitHub is by far the largest. GitLab and Bitbucket are alternatives with similar features. Your company might host its own. The good news: the Git knowledge you learn here works on every one of them.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do you need to `git add` before `git commit`?
+
+**A:** **Because Git separates "what you changed" from "what you want to record." The `add` step lets you decide *which* of your current edits go into the next commit.**
+
+The everyday case where this matters:
+
+You spend an hour editing six files. Two of them are related ("fix the login form's email validation"). The other four are a different concern ("update the navbar links and colors"). You'd ideally commit those as two separate commits — different "why"s, different review concerns. With staging:
+
+```bash
+git add login-form.tsx login-validation.ts
+git commit -m "fix: validate email format on login"
+
+git add navbar.tsx theme.css ...
+git commit -m "refactor: navbar tidy + link updates"
+```
+
+Two clean commits from one work session.
+
+Without a staging area (some other VCSes work this way), every commit captures *everything* that changed — which forces you to either work super-cleanly file by file, or end up with messy "wip" commits that mix unrelated changes.
+
+The convention `git add -A && git commit -m "..."` (or `git commit -am "..."` for tracked files) handles the simple case in one step — every change gets committed together. Most days, that's fine. The staging area is there for the days when it isn't.
+
+A subtle benefit: `git add` lets you commit *exactly* what's been staged, not what's currently on disk. You can stage a file, then continue editing it; the staged version is what'll be committed, your further edits won't sneak in. This decouples "decision about what to commit" from "ongoing work."
+
+The cost: one extra command. The benefit: precise control over your history. Worth it; the staging area is one of the things Git got right.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why are good commit messages important?
+
+**A:** **Because every commit message is read by every developer who works on that line later — including your future self.** A bad message is a small tax paid by every future debugger; a good message is a small gift.
+
+The concrete daily scenario: production breaks. The bug is on line 47 of `payment.ts`. You run:
+
+```bash
+git blame payment.ts
+```
+
+For each line, Git shows the commit that last touched it, with its message. If the message is "fix bug" — you have no context. If the message is "fix: charge rounding overflows on amounts > $10k" — you know exactly when this code path was added and why. The fix follows in seconds; with the bad message, you spend half an hour reading commits to reconstruct the same context.
+
+Multiply by every "what did this line ever do?" question in the project's lifetime. The cost of bad messages compounds; the cost of good ones is 10 extra seconds per commit.
+
+The convention that works everywhere:
+
+```text
+<type>: <one-sentence summary in present tense>
+
+<optional paragraph: why, not what>
+```
+
+Types: `fix`, `feat`, `refactor`, `docs`, `chore`, `test`. The structured prefix lets tools (changelogs, release notes) parse history without humans relabeling each commit.
+
+Six rules of thumb:
+
+1. **Present tense.** "fix login crash" not "fixed login crash." Reads as "*This commit will* fix login crash."
+2. **Under 72 characters for the first line.** It shows in `git log --oneline`.
+3. **The "what" is the code; the message is the "why".** "Lower z-index on dropdown" is bad. "fix: dropdown gets clipped behind sticky header on Safari" is good.
+4. **One concern per commit.** If the message has "and" in it ("fix login and add settings page"), you should have made two commits.
+5. **Reference issues if relevant.** `fix: validation fails on emoji (#234)` — links the commit to the bug tracker.
+6. **Don't apologize.** Nobody needs "fix: I'm so sorry this took 3 days to find."
+
+The phrase that captures the principle: **a commit message is a love note to your future self.** Be kind.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does "distributed" mean in "distributed version control"?
+
+**A:** **Every developer has a full copy of the entire repository — including all history — on their machine. There's no single authoritative server that's required for most operations.**
+
+Compare with the previous generation (SVN, Perforce, CVS), which were **centralized**:
+
+```text
+   CENTRALIZED (SVN)              DISTRIBUTED (Git)
+   ──────────────────             ──────────────────
+   Developer  ─── network ───►   Developer (full repo)  ─── push/pull ─── GitHub (full repo)
+   Server (master copy)           Developer (full repo)  ─── push/pull ───
+                                  Developer (full repo)  ─── push/pull ───
+
+   - server has full history       - everyone has full history
+   - your laptop has               - your laptop has the same as the server
+     a checked-out copy            - "central" is just a convention; technically
+   - commits need network            any clone could be the canonical one
+     to reach server
+```
+
+Concrete consequences:
+
+1. **Commit while offline.** You're on a plane, no wifi. You can still commit, branch, look at history, revert — every operation that doesn't involve talking to the network. Only `push` and `pull` need the remote. SVN couldn't do this; every commit went straight to the server.
+
+2. **Performance.** `git log`, `git diff`, `git blame` — all read from your local copy. No network round-trip per operation. SVN was famously slow because every operation hit the server.
+
+3. **No single point of failure.** If GitHub goes down, your work continues. The history lives on every laptop. (You can't push or pull, but you can keep committing — and once GitHub recovers, push the backlog.)
+
+4. **Forking is natural.** Every clone is a full repo. Forking a project on GitHub is conceptually the same as cloning — you just have a copy on GitHub instead of only on your laptop. Open source's culture of forking is partly enabled by Git's design.
+
+5. **You're responsible for pushing.** Centralized systems committed = sent to server. With Git, commit and push are separate. If your laptop dies before you push, your commits are gone. The rule: **push often** (at least daily) when working on shared code.
+
+The "distributed" idea was the key technical decision that let Git scale to thousands-of-contributor projects like the Linux kernel. Centralized systems would have collapsed under that load. By 2010 it was clear distributed had won; today, every modern VCS is distributed.
+
+</InterviewQuestion>

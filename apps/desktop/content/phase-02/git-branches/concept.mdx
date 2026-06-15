@@ -1,0 +1,532 @@
+## Git branches and merging
+
+A branch is a parallel timeline of commits. You create one to work on a feature without touching the main timeline; you merge it back when the work is ready. Branches in Git are so cheap (they're literally a 41-byte file pointing at a commit) that every modern team creates one per feature, sometimes one per task. The branch-per-feature pattern is *the* standard workflow on every team you'll ever join — internalize it now and the rest of Git starts to feel like a coherent tool.
+
+<Analogy>
+A Git branch is **a separate cooking station the chef can step over to without losing their place on the main line**.
+
+Picture a restaurant kitchen during service. The main grill has six dishes going at once — the chef can't experiment with a new sauce *on the grill* because they'd ruin the dishes in progress. So they walk over to a side station, prep the sauce, taste it, adjust, try again. The main line keeps moving the whole time. If the sauce turns out great, the chef carries it back to the main grill and pours it on the next dish — the new technique is now part of the main service. If it tastes terrible, they toss the side experiment; the main line never knew.
+
+That's branching. Your `main` branch is the active grill — the version of the code that's deployed, that the team agrees is "real." When you want to try something — a new feature, a refactor, a risky change — you step over to a side branch:
+
+```bash
+git checkout -b add-search-bar    # create + switch to a new branch
+# ... edit, commit, edit, commit ...
+git checkout main                  # walk back to the main grill
+git merge add-search-bar           # carry your experiment over
+```
+
+Three things make this pattern so powerful:
+
+1. **Main stays clean while you experiment.** Other people pulling main get the working code, never your half-finished work. Production never sees broken intermediate states.
+
+2. **Multiple experiments at once.** You can be on `add-search-bar` while a teammate is on `fix-checkout` and another is on `refactor-auth`. Each branch is independent; nobody steps on anyone's plate.
+
+3. **Discard cheaply.** If the experiment doesn't work out, `git branch -D add-search-bar` deletes the side station. The main grill is untouched.
+
+The mental shift: stop thinking "I'm editing the project." Start thinking "I'm working on a *branch*." The default branch (`main`) is one branch among many; the only thing special about it is the team's agreement that "this one is the released version." Branches are scratch paper. Most of them never reach main; some do; all of them are cheap.
+
+The downstream concept the analogy stretches to cover — **merging** — is when you pour the new sauce onto the main grill. Git's job is to figure out, automatically, how to combine the side-station's changes with whatever the main line did while you were over there. Most of the time it does this without help; occasionally two changes conflict (you both rewrote the same recipe line), and Git stops to ask you which version wins. That's a merge conflict — covered in its own concept; for now the headline is: Git tries hard to combine work; humans only step in when changes overlap.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a main branch and a feature branch diverging then merging back"
+  caption="The side timeline diverges, then rejoins. The merge commit ties them together."
+>
+
+```
+   main:    A ─── B ─── C ─────────────── F ─────── G          (production)
+                          \             /
+   feature:                D ─── E ────┘                       (side work)
+                          ▲           ▲
+                          │           │
+                  branched here  ─ ─ merged back here
+
+   A,B,C are commits on main BEFORE the branch.
+   D,E are commits made on the feature branch.
+   F is a merge commit that combines main and feature back into main.
+   G is a new commit on main, made after the merge.
+```
+
+</Illustration>
+
+### Create and switch — `git checkout -b`
+
+```bash
+git checkout -b feature/login
+```
+
+Two operations in one:
+1. **Create a new branch** called `feature/login`, starting from wherever you are now.
+2. **Switch to it** (HEAD now points at the new branch).
+
+Modern Git also has `git switch`:
+
+```bash
+git switch -c feature/login        # equivalent to checkout -b
+git switch main                    # equivalent to checkout main (no edits)
+```
+
+`switch` was added in 2019 because `checkout` is overloaded (it also handles "throw away changes," which surprises people). Both work; pick whichever your team uses. This lesson keeps using `checkout` since older docs and tutorials use it; the behavior is the same.
+
+The branch name is up to you. Common conventions:
+
+```text
+   feature/login              ← a new feature
+   fix/empty-cart-crash       ← a bug fix
+   refactor/extract-pricing   ← internal cleanup
+   docs/api-readme            ← documentation only
+   chore/upgrade-react        ← maintenance
+```
+
+The slash isn't structural; it's just a visual grouping. `feature/login` and `feature/dark-mode` show up grouped in `git branch -l`.
+
+### See your branches — `git branch`
+
+```bash
+git branch                         # list local branches, * marks current
+git branch -a                      # include remote branches
+git branch -d feature/login        # delete branch (only if merged)
+git branch -D feature/login        # ⚠️ force delete (even if unmerged)
+git branch -m new-name              # rename current branch
+```
+
+The everyday one is the bare `git branch`:
+
+```text
+* feature/login
+  main
+  refactor/cart-tidy
+```
+
+The asterisk marks your current branch.
+
+### What a branch actually is
+
+A branch is a **pointer to a commit**. That's literally it. The `.git/refs/heads/main` file contains the SHA of whatever commit `main` currently points at:
+
+```bash
+$ cat .git/refs/heads/main
+7a3f9c2e8b1d4f5a6b7c8d9e0f1a2b3c4d5e6f7a
+```
+
+41 bytes (40 hex chars + newline). When you make a new commit on `main`, Git overwrites this file with the new commit's SHA. That's all.
+
+This is why branches are "free" — creating one is writing a 41-byte file. Deleting one is removing that file (the commits themselves stay around for a while, garbage-collected later if nothing points at them). On other VCSes, a branch was a full directory copy and took minutes; in Git it's instant.
+
+`HEAD` is a special pointer — it points at "the branch you're currently on." When you switch branches, you change what HEAD points at.
+
+### Working on a branch
+
+```bash
+git checkout -b feature/login
+
+# edit files, commit, edit, commit (just like on main)
+git add .
+git commit -m "feat: add login form"
+
+git add .
+git commit -m "feat: wire form to API"
+```
+
+Two new commits. They're on `feature/login`, not on `main`. If you `git checkout main`, you'll see the version of the code without those changes; if you `git checkout feature/login`, you'll see them again. Same physical disk, two different views.
+
+### Merging — `git merge`
+
+When the branch is ready, combine it into `main`:
+
+```bash
+git checkout main                  # back to main
+git pull                            # make sure main is up to date
+git merge feature/login             # combine feature into main
+```
+
+Two possible outcomes:
+
+**Fast-forward.** If `main` hasn't moved while you were on the branch, the merge is just "move main's pointer forward to wherever feature/login is." No new commit, no merge work, instant:
+
+```text
+Before:  main ─── A ─── B
+                       \
+                        C ─── D ── feature/login
+                                  (main hasn't moved since B)
+
+After:   main ─────────────────────► D     (same commits; main pointer moved)
+```
+
+**Merge commit.** If `main` has moved (someone else pushed while you were on the branch), Git creates a new commit that has *two parents* — the tip of main AND the tip of feature/login:
+
+```text
+Before:  main ─── A ─── B ─── X ─── Y    (someone else pushed X and Y)
+                       \
+                        C ─── D ── feature/login
+
+After:   main ─── A ─── B ─── X ─── Y ─── M    (M is a merge commit)
+                       \                  /
+                        C ─── D ─────────/
+```
+
+The merge commit `M` represents "I combined the two timelines here." Git computes the combined file contents automatically — if both branches touched different lines, both changes win; if both touched the same line, Git stops and asks you (merge conflict).
+
+You'll see merge commits in your `git log --graph` view as the "joins" in the timeline.
+
+### After merging — delete the branch
+
+Once a branch is merged into main, you usually don't need it anymore:
+
+```bash
+git branch -d feature/login
+```
+
+The commits are still in history (via the merge commit `M`). The branch pointer is what's being deleted — and since the commits are reachable through `main` now, nothing is lost.
+
+Some teams configure GitHub to auto-delete branches after a PR merges. That's fine; nothing's lost.
+
+### Switching branches with uncommitted changes — the trap
+
+```bash
+# You're on feature/login. You've made some uncommitted edits.
+git checkout main
+# error: Your local changes to the following files would be overwritten
+# Please commit your changes or stash them before you switch branches.
+```
+
+Git refuses to switch if your uncommitted changes would conflict with the destination branch. Three options:
+
+1. **Commit first.** "wip" commits are fine on a feature branch — clean them up later with `git rebase -i`.
+2. **Stash.** `git stash` tucks your edits into a side pocket; `git stash pop` brings them back later.
+3. **Discard.** `git restore .` throws the edits away. ⚠️ irreversible.
+
+The pattern that prevents the trap entirely: **commit before switching**. Branch hops are free when the working directory is clean.
+
+### `git stash` — the side pocket
+
+```bash
+git stash                          # save uncommitted changes, restore clean state
+git stash pop                      # bring them back, remove from stash
+git stash list                     # see all stashed entries
+git stash drop                     # discard a stash without applying
+```
+
+Used when:
+- You're mid-feature and need to switch branches to fix something urgent.
+- You want to pull (`git pull` refuses if you have uncommitted changes) — stash, pull, pop.
+- You want to test "what does the code look like without my changes?" — stash, look, pop.
+
+Don't make stash a habit for ordinary work. Commit early, commit often is the right rhythm. Stash is for emergencies.
+
+### Rebasing — the alternative to merging
+
+Instead of producing a merge commit, `git rebase` *replays* your branch's commits on top of the current main, as if you'd started from main's latest:
+
+```text
+Before:  main ──── A ── B ── X ── Y      (someone pushed X, Y)
+                       \
+                        C ── D ── feature/login
+
+After (rebase): main ── A ── B ── X ── Y ──── C' ── D' ── feature/login
+                                         ▲           ▲
+                                   replayed onto Y    (new SHAs)
+```
+
+`C'` and `D'` are *new commits* with the same changes as `C` and `D`, but a different SHA because they have a different parent. Then you fast-forward `main` to the rebased tip:
+
+```bash
+git checkout feature/login
+git rebase main                    # replay your commits on top of latest main
+git checkout main
+git merge feature/login            # fast-forward (no merge commit)
+```
+
+Trade-offs:
+
+- **Merge** keeps the literal history — you can see "this work happened on a branch." Easier to reason about; never rewrites commits.
+- **Rebase** produces a linear history — looks like everything happened in a clean sequence. Reads better in `git log`; but it *rewrites* the branch's commits (new SHAs), which is fine on your private branch and dangerous on a shared one.
+
+The rule: **rebase your private feature branches before merging; never rebase a branch others have pulled.** Most teams use a mix — local rebases for tidying, merge commits when integrating.
+
+### The branch-per-feature workflow
+
+The pattern almost every modern team uses:
+
+```bash
+# Start a feature
+git checkout main && git pull
+git checkout -b feature/dark-mode
+
+# Work on it
+# ... commits, commits, commits ...
+git push -u origin feature/dark-mode
+
+# Open a Pull Request on GitHub (next concept).
+# Get reviewed. Merge via the PR button (or git merge locally).
+
+# Clean up
+git checkout main && git pull
+git branch -d feature/dark-mode
+```
+
+Five-minute setup. The benefits:
+
+- Every feature has its own history, easy to revert independently.
+- Code review is per-PR; PR is per-branch.
+- Production (main) only ever sees reviewed, complete features.
+- Many features can be in flight at once without stepping on each other.
+
+The variations are mostly cosmetic — some teams use `dev` as a staging branch between feature branches and main; some use release branches; some prefer "trunk-based development" with super-short-lived branches. The core idea (work on a branch; review before merging) is everywhere.
+
+### What NOT to do
+
+- **Don't commit directly to `main` on a shared project.** Always work on a branch. Even tiny fixes. The PR is the review checkpoint.
+- **Don't `git push --force` on `main`.** Ever. Rewrites the shared history; breaks every teammate's local clone.
+- **Don't let branches live for months.** The longer a branch is open, the harder the merge gets. Aim for branches to live days or a week, not months.
+- **Don't branch from a branch unless you really need to.** Stack of in-flight branches gets complex quickly. Branch from `main` for each feature unless you have a specific reason.
+
+<ExampleProject
+  src="branch-visualizer"
+  title="A visual playground — create branches, commit on them, see the graph"
+  description="An interactive sim of a tiny repo. Click 'commit' on main; click 'branch' to create one; switch between them; click 'merge' to combine. The graph re-renders in real time so you see the shape branching produces. Captures the mental model the next 1000 branches of your career will reinforce."
+/>
+
+<ExampleProject
+  src="merge-vs-rebase"
+  title="Same situation, two integration strategies — see the resulting history"
+  description="Two side-by-side graphs of the same scenario: feature branched off main, main moved forward, time to integrate. Left column shows the merge-commit result; right column shows the rebase result. Walk through both; see which one matches the convention your team uses."
+/>
+
+<Exercise
+  title="Make a real feature branch, merge it, delete it"
+  starter={`In your practice repo from the last lesson (or any Git repo):
+
+  1. Make sure main is clean: 'git status' shows nothing.
+  2. Create a feature branch:
+     git checkout -b feature/add-greeting
+
+  3. Add a file, commit:
+     echo "Hello from a branch!" > greeting.txt
+     git add greeting.txt
+     git commit -m "feat: add greeting file"
+
+  4. Edit something else (e.g. update README), commit again on the
+     SAME branch:
+     echo "Now with greeting!" >> README.md
+     git commit -am "docs: mention greeting in README"
+
+  5. View history side-by-side:
+     git log --oneline --graph --all
+     (notice main is behind your branch)
+
+  6. Switch back to main:
+     git checkout main
+     (notice greeting.txt is gone from the working directory)
+
+  7. Merge:
+     git merge feature/add-greeting
+     (notice greeting.txt is back, and the README change is applied)
+
+  8. View history again:
+     git log --oneline --graph --all
+
+  9. Delete the branch:
+     git branch -d feature/add-greeting
+
+Bonus: do it all again, but this time discard the branch instead of
+merging:
+     git checkout main
+     git branch -D feature/throwaway
+
+Notice: main is untouched. Branching is free; throwing away is free.`}
+>
+
+- A feature branch was created and named meaningfully (with a `feature/` or similar prefix).
+- At least **two** commits were made on the feature branch — both with `<type>:` style messages.
+- `git log --oneline --graph --all` was run and the output was understood (main is one branch; the feature is another, ahead of main).
+- The student switched to main and observed that the branch's changes are *not* present in the working directory.
+- A successful merge brought the changes into main; `git log --graph` shows the joined history.
+- The branch was deleted with `git branch -d` after merging (without `-D` force).
+- Bonus: a separate throwaway branch was created and discarded with `-D` to demonstrate that branches are free.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `git checkout` and `git switch`?
+
+**A:** **`git switch` was added in 2019 to do *only* branch switching, splitting off responsibilities that were jumbled into `git checkout`. Both work; modern docs prefer `switch`.**
+
+The old `git checkout` is overloaded:
+- `git checkout main` — switch branches
+- `git checkout -b new-branch` — create + switch
+- `git checkout HEAD~3` — go to a specific commit
+- `git checkout src/file.ts` — **discard uncommitted changes** to a file ⚠️
+- `git checkout origin/main -- src/file.ts` — restore a file from another branch
+
+The "discard uncommitted changes" form has burnt every new Git user at some point. You're trying to switch to a file and Git silently destroys your work.
+
+In 2019, Git split the responsibilities into two new commands:
+
+- **`git switch`** — only changes which branch you're on.
+  ```bash
+  git switch main                 # switch to main
+  git switch -c feature/login     # create + switch
+  ```
+- **`git restore`** — only restores file contents.
+  ```bash
+  git restore src/file.ts         # discard uncommitted edits
+  git restore --staged file.ts    # unstage
+  git restore --source main file.ts  # bring back file from another branch
+  ```
+
+You can keep using `checkout` — it still works and most tutorials use it. But:
+
+- New code uses `switch`/`restore` for safety (the surprise destruction is gone).
+- `switch` is more explicit (the `-c` flag for "create" is clearer than `-b`).
+- Mixing the two old behaviours into one command was always confusing; the split fixes it.
+
+Use `switch`/`restore` in your own work. Recognize `checkout` when you read older docs or commands from senior teammates.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does Git let you create branches so easily? What's the technical trick?
+
+**A:** **Because a branch is just a 41-byte file pointing at a commit. Creating one is writing a file; deleting one is removing the file. No data is copied.**
+
+The internals:
+
+```bash
+$ cat .git/refs/heads/main
+7a3f9c2e8b1d4f5a6b7c8d9e0f1a2b3c4d5e6f7a
+
+$ git checkout -b feature/login    # → creates .git/refs/heads/feature/login
+$ cat .git/refs/heads/feature/login
+7a3f9c2e8b1d4f5a6b7c8d9e0f1a2b3c4d5e6f7a   # initially points at the same commit
+```
+
+When you commit on the branch:
+1. Git writes a new commit object (the snapshot).
+2. Git updates `.git/refs/heads/feature/login` to point at the new commit.
+3. `main` still points at the old commit. The two branches now point at different commits.
+
+The branches *share storage* for everything they have in common — Git's object store is content-addressed, so the unchanged files are stored once. A new branch with one new commit takes the size of one commit's deltas plus 41 bytes for the pointer.
+
+Compare with previous-generation VCSes (SVN, CVS): a branch was a full directory copy. Creating one took minutes on a large project; nobody did it casually. Git's design lets you create branches dozens of times a day without thinking about cost.
+
+The downstream effects of "branches are free":
+
+- **Branch per feature.** Easy to create one; easy to discard if the feature is abandoned.
+- **Experiment freely.** A wild refactor in a branch costs nothing if it doesn't work out.
+- **Multiple in-flight features.** Five branches in active development; no performance impact.
+- **PR-based collaboration.** Every PR is a branch. GitHub's PR workflow assumes branches are cheap.
+
+The 41-byte fact is the entire reason modern Git workflows look the way they do. It's the killer technical decision that beat SVN.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `git merge` and `git rebase`?
+
+**A:** **Merge combines two branches by creating a new commit that has two parents. Rebase replays one branch's commits on top of the other, producing a linear history.**
+
+The same scenario, two outcomes:
+
+```text
+Setup:
+  main:    A ─── B ─── X ── Y                  (someone pushed X, Y)
+                 \
+  feature:        C ── D                       (your work)
+
+────────────────────────────────────────────────
+
+git merge feature into main:
+  main:    A ─── B ── X ── Y ─── M             ← M has TWO parents (Y and D)
+                 \              /
+  feature:        C ── D ──────/
+
+────────────────────────────────────────────────
+
+git rebase main on feature, then fast-forward:
+  main:    A ─── B ── X ── Y ── C' ── D'       ← C', D' are NEW commits
+                                                  (same content as C, D
+                                                   but different SHAs)
+```
+
+What they're good for:
+
+**Merge:**
+- Preserves the literal history. You can see "this work was on a branch."
+- Doesn't rewrite commits. No SHAs change.
+- The merge commit gives you a clear "I integrated branch X" record.
+- Safe on shared branches (no force-push needed).
+
+**Rebase:**
+- Linear history. `git log --oneline` reads as a clean sequence.
+- No "merge commit noise."
+- *Rewrites* the branch's commits — new SHAs. Fine on your private branch; **dangerous on shared branches** because others who pulled the old commits will have a fork in their local history.
+
+The everyday rule:
+
+- **Rebase your own feature branch onto main before merging** to clean it up.
+- **Use `--rebase` on `git pull`** (or `pull.rebase = true` in config) to avoid merge commits when syncing your branch with origin.
+- **Never rebase a branch that others have pulled.** Force-push will hurt them.
+- **Merge (not rebase) when integrating into `main`** unless your team specifically prefers a fully linear history.
+
+Most teams converge on a hybrid: rebase locally to tidy your branch (squashing WIP commits, fixing up messages), then merge into main. Some "trunk-based development" teams rebase everything and force-push their feature branches; everyone else uses merges for integration.
+
+The deciding question isn't "which is better?" — it's "which workflow does my team follow?" Match the convention; consistency matters more than the choice.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the "branch-per-feature" workflow, and why is it the modern default?
+
+**A:** **The workflow where every feature, bug fix, or refactor lives on its own branch until it's reviewed and merged into `main`. `main` only ever receives complete, reviewed work; daily development happens on short-lived branches.**
+
+The full loop:
+
+```bash
+# 1. Start
+git checkout main && git pull
+git checkout -b feature/dark-mode
+
+# 2. Work
+# ... commits, commits ...
+git push -u origin feature/dark-mode
+
+# 3. Review
+# Open PR on GitHub. Get feedback. Address comments. Push again.
+
+# 4. Merge
+# Click "Merge" on GitHub (or git merge locally).
+
+# 5. Cleanup
+git checkout main && git pull
+git branch -d feature/dark-mode
+```
+
+Why this won out over alternatives:
+
+1. **`main` is always deployable.** Production reflects the last `main` commit. Because every commit on main was reviewed before merging, you can deploy at any moment without inspecting individual commits.
+
+2. **Review is a checkpoint.** The PR is where code review happens. A reviewer reads a diff that's the size of one feature, not the size of three weeks of mixed work. Smaller PRs = faster, better review.
+
+3. **Multiple parallel features.** Three people working on three features at once don't step on each other. Each PR is independent until merge.
+
+4. **Easy revert.** If a feature ships and turns out to be wrong, revert the merge commit. The bad code is gone; the rest of main is untouched.
+
+5. **Audit trail.** `git log` shows merges; each merge represents a reviewed change. You can grep for "what was added in the last month?" and read PR titles.
+
+Variations on the theme (all share the core idea):
+
+- **GitHub flow** — what's described above. Branches off main, merges back. Used by most small/mid teams.
+- **Git flow** — adds `develop`, `release/*`, `hotfix/*` branches. More structure; useful for versioned software (libraries, mobile apps with release cycles).
+- **Trunk-based development** — branches live hours, not days. Heavy use of feature flags to merge incomplete work safely. Used by very fast-moving teams.
+
+All three are variants. The branch-per-feature core is the same: work happens on a branch; integration happens via review.
+
+The anti-pattern: committing directly to main. The result is a `main` history that's a mess of half-completed work, "WIP" commits, and unrevived experiments. Production becomes unpredictable. Code review is harder. The PR loop is the most important habit modern development has settled on; internalize it.
+
+</InterviewQuestion>
