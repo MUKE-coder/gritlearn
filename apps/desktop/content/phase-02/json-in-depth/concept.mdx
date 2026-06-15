@@ -1,0 +1,559 @@
+## JSON in depth
+
+JSON ("JavaScript Object Notation") is the format almost every API, config file, and inter-process message uses to encode structured data as text. You've used it in every fetch call in this curriculum. Now we look at it carefully: what shapes are legal, the surprising edge cases (undefined, NaN, Date), how `JSON.parse` and `JSON.stringify` work and where they break, and what to do when JSON isn't enough. Understanding JSON deeply means fewer "why is this field missing?" bugs.
+
+<Analogy>
+JSON is **the "send this in plain text" version of an object — like writing a furniture order in pen on a paper form**.
+
+You're ordering furniture by mail. You can't ship a *chair* through the postbox — only paper. So you fill out a form: name, dimensions, color, finish, quantity. The form's fields are constrained — it accepts text strings, numbers, dates, checked-or-unchecked boxes, repeatable line items. The recipient reads the form and assembles the chair on their end.
+
+JSON is exactly that paper form. You can't send a live JavaScript object across the network — networks only carry bytes. So you **serialize** it to text using JSON's rules (`JSON.stringify`), the bytes travel, and the receiver **deserializes** the text back to an object (`JSON.parse`). What's preserved: the shape, the field names, the values. What's lost: anything that doesn't fit JSON's narrow set of legal shapes.
+
+JSON's legal shapes are deliberately tiny — six of them:
+
+- **String** — `"hello"`. Double quotes only.
+- **Number** — `42`, `3.14`, `-7`. No `NaN`, no `Infinity`.
+- **Boolean** — `true` or `false`.
+- **Null** — `null`. Explicit absence.
+- **Array** — `[1, 2, 3]`. Ordered list of any legal values.
+- **Object** — `{ "key": value }`. Unordered map; keys are always strings in double quotes.
+
+That's it. No dates, no `undefined`, no functions, no Map, no Set, no circular references. The narrowness is the *point*: anyone parsing JSON in any language gets exactly these six things, predictably.
+
+Three implications that bite when you forget:
+
+1. **`undefined` and `NaN` are not JSON.** `JSON.stringify(undefined)` returns `undefined` (not the string `"undefined"`). `JSON.stringify({ a: undefined })` returns `'{}'` — the field is *dropped*. `JSON.stringify(NaN)` returns `'null'`. None of these throw; they silently change shape.
+
+2. **Dates become strings.** `JSON.stringify(new Date())` produces `'"2026-06-15T18:23:00.000Z"'` — an ISO 8601 string. When you `JSON.parse` it back, you get a *string*, not a Date. Round-tripping a Date through JSON loses the type. Most APIs accept this and re-parse the string when they need it.
+
+3. **Circular references throw.** `const a = {}; a.self = a; JSON.stringify(a)` — `TypeError: cyclic object`. Most modern code rarely has cycles; old patterns occasionally do (mutual references, observer registrations). The fix is to break the cycle before stringify.
+
+The everyday rule: **JSON is what gets sent over the wire; rich types are what live in memory**. The instant you cross a JSON boundary — a fetch, a localStorage write, a postMessage — you lose anything richer than JSON's six shapes. Convert at the boundaries; trust the rich types inside.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing a JS object being stringified to JSON text, traveling, and being parsed back, with side notes on what's lost"
+  caption="JS object → JSON text → bytes on wire → JSON text → JS object. Some types don't survive."
+>
+
+```
+   IN MEMORY (JS)                           ON WIRE (JSON text)                IN MEMORY (JS — different process)
+
+   const user = {                            ┌────────────────────────────┐    const user = {
+     id: 47,                                 │  {                          │      id: 47,
+     name: "Ada",                            │    "id": 47,                │      name: "Ada",
+     created: new Date(),                    │    "name": "Ada",           │      created: "2026-06-15T18:..."
+     active: true,                           │    "created": "2026-...",   │      active: true,
+     score: NaN,                ── stringify │    "active": true,          │ parse  score: null,
+     handler: () => {},         ──────────►  │    "score": null,           │ ───►   pet: null,
+     pet: undefined,                         │    "pet": null,             │      tags: ["new"]
+     tags: ["new"]                           │    "tags": ["new"]          │    }
+   };                                        │  }                          │
+                                             └────────────────────────────┘
+
+   Lost in transit:
+   - `created` (Date)         → became a string. Caller must re-parse if they want a Date.
+   - `score` (NaN)             → became null.
+   - `handler` (function)      → dropped entirely.
+   - `pet` (undefined)         → became null  (or dropped, depending on where it appeared).
+```
+
+</Illustration>
+
+### The six legal shapes — examples
+
+```json
+"hello"             ← string  (must be double-quoted)
+42                  ← number  (integer or float)
+3.14                ← number
+true                ← boolean
+false               ← boolean
+null                ← null
+
+[1, "two", true, null]                          ← array, mixed types OK
+
+{ "name": "Ada", "active": true, "age": 32 }    ← object
+```
+
+Things that LOOK legal but aren't:
+
+```text
+'hello'             ← ✗ single quotes not allowed
+NaN                 ← ✗ not a JSON value
+Infinity            ← ✗ same
+undefined           ← ✗ same
+0x1A                ← ✗ no hex literals
+.5                  ← ✗ must be 0.5
+1_000               ← ✗ no separators (allowed in JS, not JSON)
+"foo"  // comment   ← ✗ JSON has no comments
+{ name: "Ada" }     ← ✗ keys must be in double quotes
+```
+
+The "no comments" thing is famously annoying. The workaround is JSON5 (a superset that allows comments and trailing commas) for config files; for wire format, stick to strict JSON.
+
+### `JSON.stringify` — object → string
+
+```js
+JSON.stringify({ name: "Ada", age: 32 });
+// → '{"name":"Ada","age":32}'
+```
+
+The everyday call. Two useful extra arguments:
+
+**Pretty-print** with the third argument:
+
+```js
+JSON.stringify({ name: "Ada", age: 32 }, null, 2);
+// → '{\n  "name": "Ada",\n  "age": 32\n}'
+```
+
+The `null` is the second argument (a "replacer" function — usually unused). The `2` is the number of spaces per indent level. `4` for wider; `"\t"` for tabs.
+
+**Replacer function** (filter or transform values):
+
+```js
+JSON.stringify(user, (key, value) => {
+  if (key === "password") return undefined;   // drop sensitive fields
+  return value;
+});
+```
+
+Used rarely; useful for redacting sensitive data before logging or sending.
+
+### `JSON.parse` — string → object
+
+```js
+JSON.parse('{"name":"Ada","age":32}');
+// → { name: "Ada", age: 32 }
+```
+
+Throws `SyntaxError` on malformed input. **Wrap in try/catch when parsing untrusted input:**
+
+```js
+function safeParse(text) {
+  try { return JSON.parse(text); }
+  catch { return null; }
+}
+```
+
+**Reviver function** (transform values during parse):
+
+```js
+JSON.parse(text, (key, value) => {
+  // Auto-convert ISO date strings back to Date objects
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return new Date(value);
+  }
+  return value;
+});
+```
+
+A useful pattern when you want Dates to survive the round-trip — but it's brittle (any string that *looks* like a date gets converted, even if it wasn't one).
+
+### The Date round-trip
+
+Dates don't survive JSON. The default `toJSON` on Date is `toISOString`:
+
+```js
+JSON.stringify(new Date());
+// → '"2026-06-15T18:23:00.000Z"'
+
+JSON.parse('"2026-06-15T18:23:00.000Z"');
+// → "2026-06-15T18:23:00.000Z"   ← a string, not a Date
+```
+
+Three common handlings:
+
+1. **Keep as a string.** Many APIs work with ISO strings throughout. Comparisons, sorting all work lexically (ISO is sortable as text).
+2. **Convert at the boundary.** Right after `JSON.parse`, walk the object and replace ISO-looking strings with Date objects.
+3. **Use a schema library** (Zod, TypeBox). Define the field as `z.coerce.date()` and validation/parsing converts automatically.
+
+For TypeScript with Zod (introduced in earlier concepts):
+
+```ts
+const UserSchema = z.object({
+  id: z.number(),
+  createdAt: z.coerce.date(),    // ← auto-parse string to Date
+});
+
+const user = UserSchema.parse(json);
+user.createdAt.getFullYear();   // ← works, it's a real Date now
+```
+
+Most modern apps use Zod or similar for exactly this.
+
+### `undefined` vs `null` in JSON
+
+Subtle but important:
+
+```js
+JSON.stringify({ a: undefined, b: null });
+// → '{"b":null}'           ← `a` is gone, `b` survives
+```
+
+`undefined` is **not a legal JSON value**, so stringify *drops the field entirely*. `null` IS a legal value, so it's preserved.
+
+For arrays:
+
+```js
+JSON.stringify([1, undefined, 3]);
+// → '[1,null,3]'           ← undefined becomes null
+```
+
+Inside arrays, `undefined` becomes `null` (it can't be dropped — that would reorder the array).
+
+Implications:
+
+- A round-trip `parse(stringify(obj))` is not always identical to `obj`. Fields with `undefined` disappear; `NaN`s and functions become `null` / disappear.
+- Some APIs care about the distinction "field is null" vs "field is absent." If you send `{ "email": null }` to a PATCH endpoint, the server might interpret that as "clear the email." Sending `{}` means "don't touch email." JSON's `undefined`-drops-fields behavior means you have to think about which you mean.
+
+### Pretty common bug: `JSON.stringify(circular)`
+
+```js
+const a = { name: "root" };
+const b = { name: "child", parent: a };
+a.child = b;
+
+JSON.stringify(a);
+// → TypeError: Converting circular structure to JSON
+```
+
+You can't serialize a graph that loops. Most app code doesn't have cycles — but if you observe React state, accidentally store a DOM node, or use a Map with object keys that include each other, you can hit this.
+
+Workarounds:
+
+- **Break the cycle.** Replace the back-reference with an id: `parent.childId = 47`, not `parent.child = childObj`.
+- **Replacer function** that detects and replaces cycles with a marker.
+- **`structuredClone`** for in-memory copies — handles cycles natively (but only for in-memory, not for sending over the wire).
+
+### Numbers — the precision footgun
+
+JSON numbers are IEEE 754 doubles (same as JavaScript). Two real-world issues:
+
+**1. Floating-point arithmetic.** `0.1 + 0.2 !== 0.3`. JSON doesn't fix this; you still get `0.30000000000000004`. For currency, store **integer cents** (or a string), not float dollars.
+
+**2. Integer precision.** JS numbers can exactly represent integers up to `2^53 - 1`. Past that (Twitter status IDs, some database IDs), precision is lost:
+
+```js
+JSON.parse('{"id": 9007199254740993}');
+// → { id: 9007199254740992 }   ← lost 1 silently
+```
+
+The fix: APIs that have IDs over 2^53 should send them as **strings**: `{ "id": "9007199254740993" }`. The JSON spec allows numbers of any size, but JavaScript's parser doesn't preserve them.
+
+For currency: store cents as integers (up to 2^53-1 cents = $90 trillion, more than enough), or use a decimal library. Never store dollars as float.
+
+### Comments — the workaround
+
+JSON has no comments. For config files where you want comments, two options:
+
+1. **JSON5** — a superset that allows comments and trailing commas. Used by VS Code's settings, Babel config, and many tools that have human-edited config:
+
+   ```json5
+   {
+     // This is OK in JSON5
+     name: "config",
+     trailing: "comma OK",
+   }
+   ```
+
+2. **JSONC** — another flavor with comments. Used by some Microsoft tools.
+
+For wire format (API responses, network messages), use strict JSON without comments. Comments belong in code, not in data.
+
+### Schema validation — the modern guardrail
+
+JSON has no built-in type system. The string `"42"` and the number `42` are different values; an API that says "`age` is a number" needs to *enforce* that at the boundary.
+
+The modern solution (covered in Phase 1's TypeScript concepts):
+
+```ts
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  createdAt: z.coerce.date(),
+});
+
+const json = await res.json();
+const user = UserSchema.parse(json);   // throws on shape mismatch
+```
+
+You get:
+- Runtime validation (bad data throws).
+- TypeScript types for free (`z.infer<typeof UserSchema>`).
+- One source of truth — schema and type can't drift.
+
+Without Zod (or similar), you have to write `if (typeof json.id !== "number") throw ...` for every field. Zod compresses that to one chain.
+
+### Sending JSON over the wire — common headers
+
+When you `POST` JSON to an API:
+
+```http
+POST /api/users
+Content-Type: application/json
+Accept: application/json
+
+{ "name": "Ada", "email": "ada@x" }
+```
+
+Two headers matter:
+- **`Content-Type: application/json`** tells the *server* how to parse your body.
+- **`Accept: application/json`** tells the *server* what you want back.
+
+Forgetting `Content-Type` is a classic bug — Express/Gin without `Content-Type: application/json` will parse your body as form-data, not JSON, and miss every field.
+
+Modern fetch wrappers set these automatically; raw `fetch` you have to remember.
+
+### When JSON isn't enough
+
+JSON works for almost everything. Three cases where it doesn't:
+
+1. **Binary data.** Images, files, audio. JSON can't represent bytes directly; you'd have to base64-encode (33% size bloat). Most APIs use `multipart/form-data` for file uploads or accept binary directly.
+
+2. **Streaming.** JSON is a single document; you parse the whole thing or fail. For streaming data (live logs, AI responses), other formats fit better: **NDJSON** (newline-delimited JSON, one object per line), **SSE** (server-sent events), **WebSockets** (any framing).
+
+3. **High-performance internal services.** When you need <1ms serialization for service-to-service traffic, **Protobuf** or **MessagePack** are 5-10x faster and smaller than JSON. Public-facing APIs still use JSON for compatibility; internal microservices sometimes don't.
+
+For 95% of web work, JSON is the right tool. Recognize the exceptions; reach for them only when you have the actual problem.
+
+<ExampleProject
+  src="json-shapes"
+  title="The six legal shapes, plus the four common gotchas"
+  description="A page with one panel showing each of the six legal JSON values rendered, and a second panel showing what JSON.stringify does to values that aren't legal (undefined, NaN, Date, function). Captures all the surprises in one place."
+/>
+
+<ExampleProject
+  src="stringify-vs-parse"
+  title="Round-trip any value — see what survives"
+  description="A textarea where you type a JavaScript expression. The page evaluates it, calls JSON.stringify on it, shows the text, then JSON.parse the text and shows the result. The diff is rendered side-by-side so the lossy steps are obvious."
+/>
+
+<Exercise
+  title="Write a JSON sanitizer + validator"
+  starter={`Write a function safeJsonParse(text, schema) that:
+
+  1. Tries to JSON.parse(text). On SyntaxError, returns
+     { ok: false, error: "Invalid JSON" }.
+  2. Walks the parsed value against the schema (just an object
+     describing expected types).
+  3. Returns { ok: true, value: parsed } if everything matches.
+  4. Returns { ok: false, error: "..." } with a useful message
+     if anything doesn't match.
+
+The schema format you design (something like this):
+
+  {
+    type: "object",
+    properties: {
+      id: { type: "number" },
+      name: { type: "string" },
+      email: { type: "string", optional: true },
+      tags: { type: "array", items: { type: "string" } },
+    },
+  }
+
+Validate:
+  - All required (non-optional) properties exist.
+  - Each property's type matches.
+  - For arrays, every item matches the items schema.
+  - For objects, recurse.
+
+Test with:
+  - Good input: '{"id": 47, "name": "Ada", "tags": ["a", "b"]}'
+  - Missing required field: '{"id": 47}'
+  - Wrong type: '{"id": "47", "name": "Ada", "tags": []}'
+  - Invalid JSON: '{not json'
+
+This is essentially a baby Zod. The point: feel why type validation
+at the JSON boundary matters, and how schema-based libraries work
+under the hood.`}
+>
+
+- The function returns the discriminated `{ ok: true; value } | { ok: false; error }` shape.
+- `SyntaxError` from `JSON.parse` is caught and turned into a `{ ok: false }` result.
+- The schema validator handles the four primitive types (`string`, `number`, `boolean`, `null`), `object`, and `array`.
+- Required vs optional properties are correctly enforced.
+- Arrays validate every item against the `items` schema.
+- Nested objects validate recursively.
+- The error message for a validation failure is *useful* (mentions which field and why).
+- The function was tested with at least the four cases in the brief.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `JSON.parse(text)` and `JSON.stringify(value)`?
+
+**A:** **`stringify` turns a JS value into JSON text (for sending or storing). `parse` turns JSON text back into a JS value (after receiving or loading).** They're inverses — for legal JSON values, `JSON.parse(JSON.stringify(x))` should equal `x`.
+
+```js
+JSON.stringify({ name: "Ada" })            // → '{"name":"Ada"}'    (text)
+JSON.parse('{"name":"Ada"}')               // → { name: "Ada" }      (object)
+```
+
+When you use each:
+
+- **`stringify`** before sending across a network boundary (fetch body) or storing in localStorage / sessionStorage / cookies — any place that wants text, not objects.
+- **`parse`** after receiving across a network boundary (`res.text()` then parse, or `res.json()` which does both for you) or loading from localStorage.
+
+Three things to watch for:
+
+1. **`stringify` silently drops some types.** `undefined`, functions, and `Symbol` become "absent" (in objects) or `null` (in arrays). `NaN` and `Infinity` become `null`. Dates become ISO strings, losing their type.
+
+2. **`parse` throws on bad input.** `JSON.parse("{not json")` is a `SyntaxError`. Always wrap parsing of *untrusted* input in try/catch.
+
+3. **They're not perfectly reversible.** `JSON.parse(JSON.stringify(date))` returns a string, not a Date. Round-tripping loses information unless every value is already JSON-legal.
+
+Modern fetch combines them: `res.json()` is `JSON.parse(await res.text())` — read response body as text, then parse. Same trap: if the response isn't valid JSON (server crashed and returned HTML, network glitch returned an empty body), `res.json()` throws.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does `JSON.stringify({ a: undefined })` return `'{}'` and not `'{"a": undefined}'`?
+
+**A:** **Because `undefined` is not a legal JSON value, and JSON has no way to represent "this field has the value undefined." So `stringify` drops the field entirely.**
+
+```js
+JSON.stringify({ a: undefined });           // → '{}'        (field dropped)
+JSON.stringify({ a: undefined, b: 1 });     // → '{"b":1}'   (only b survives)
+JSON.stringify([undefined, 1]);             // → '[null,1]'  (array preserves position)
+```
+
+In an *object*, `stringify` drops the field. In an *array*, it can't drop the position (that would reorder the array), so it converts to `null`.
+
+The reason: JSON has six legal value types — string, number, boolean, null, array, object. `undefined` isn't one of them. The JSON spec gives no syntax for "this field exists but has no value" because in most languages, there's a clear distinction between *null* and *not in the data*.
+
+Practical consequences:
+
+1. **PATCH bugs.** If your client does `PATCH /api/user` with `{ name: undefined, email: "new@x" }`, the request body is `{"email":"new@x"}` — `name` is gone. The server doesn't know you intended "leave name alone"; it just sees no name field. (Which is usually fine — many APIs treat absent fields as "no change.")
+
+2. **null is different.** `JSON.stringify({ name: null })` is `'{"name":null}'`. `null` IS legal in JSON; it survives. If you send `{ "name": null }` to a PATCH endpoint, the server might interpret that as "clear the name."
+
+3. **Round-trip discrepancy.** `JSON.parse(JSON.stringify({ a: undefined }))` is `{}`. The shape changed. If your code depended on the `a` property existing (even as undefined), that's a bug.
+
+The everyday rule: **inside your app, use `undefined` for "this value isn't set." When sending to an API, decide explicitly whether you mean "omit the field" (use `undefined`) or "clear the field" (use `null`).** Most APIs prefer the former.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do some APIs send IDs as strings instead of numbers?
+
+**A:** **Because JavaScript can only exactly represent integers up to `2^53 - 1` (about 9 quadrillion). IDs larger than that lose precision when parsed as JSON numbers. Strings preserve them exactly.**
+
+```js
+JSON.parse('{"id": 9007199254740993}');
+// → { id: 9007199254740992 }      ← LOST 1 silently
+```
+
+`2^53 - 1` = `9007199254740991` (Number.MAX_SAFE_INTEGER). Anything past that is approximate. Some real systems hit this:
+
+- **Twitter status IDs** — exceeded 2^53 around 2009. Twitter's API sends IDs as strings (and also as numbers, for legacy clients that don't care about new tweets).
+- **Snowflake IDs** (Discord, X, Sony, etc.) — 64-bit integers by design. Always exceed 2^53.
+- **Some database BIGINTs** — Postgres BIGINT is 64-bit. If you store IDs in it and have many records, you'll cross 2^53.
+
+The fix: APIs that *might* have IDs in this range serialize them as strings:
+
+```json
+{ "id": "1234567890123456789", "name": "Ada" }
+```
+
+Then the client treats the ID as opaque text — for equality and lookups it's just a string, no math needed.
+
+The cost: the type is `string`, so TypeScript users have to model it as such, and you can't `id + 1` (you wouldn't anyway, IDs aren't arithmetic).
+
+A related precision footgun is **money**:
+
+```js
+0.1 + 0.2;                              // → 0.30000000000000004
+JSON.parse("0.1") + JSON.parse("0.2");   // → 0.30000000000000004 still
+```
+
+JSON doesn't fix float precision. For currency, store **integer cents** (or microcents) as numbers, or strings:
+
+```json
+{ "priceCents": 12500 }       ✓ exact
+{ "price": "$125.00" }        ✓ exact (but you have to parse the string)
+{ "price": 125.0 }            ✗ float — bugs around 125.10 + 0.05
+```
+
+Stripe, every financial API, every accounting system uses integer cents. The Number type can exactly represent integers up to 2^53; that's $90 trillion — plenty of headroom.
+
+The general principle: **anything that needs exact precision and can exceed 2^53 should be a string in JSON**, not a number. If you're designing an API that might hit these limits, decide early.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `JSON.stringify(new Date())` produce, and what's the round-trip behaviour?
+
+**A:** **It produces an ISO 8601 string (because `Date` has a `toJSON` method that returns `toISOString()`). Round-tripping does NOT recover the Date — you get a string back, not a Date.**
+
+```js
+JSON.stringify(new Date("2026-06-15"));     // → '"2026-06-15T00:00:00.000Z"'
+
+const text = JSON.stringify({ at: new Date() });    // → '{"at":"2026-06-15T..."}'
+const obj  = JSON.parse(text);
+typeof obj.at;                              // → "string", not "object"
+obj.at.getFullYear();                       // → TypeError: not a function
+```
+
+Three common fixes:
+
+**1. Keep it as a string.** Many systems work with ISO strings throughout:
+
+```js
+const obj = JSON.parse(text);
+new Date(obj.at).getFullYear();             // convert at the use site
+```
+
+ISO strings are sortable as text (chronological order = lexical order), so comparisons work without converting:
+
+```js
+obj1.at < obj2.at    // ← string compare, but chronologically correct
+```
+
+**2. Use a Zod schema with coercion.**
+
+```ts
+const Schema = z.object({
+  at: z.coerce.date(),     // ← automatically converts the string to Date
+});
+const obj = Schema.parse(JSON.parse(text));
+obj.at instanceof Date     // ← true
+```
+
+This is the modern default in TypeScript apps.
+
+**3. Use a reviver in `JSON.parse`.**
+
+```js
+const obj = JSON.parse(text, (key, value) => {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return new Date(value);
+  }
+  return value;
+});
+```
+
+Brittle (anything that looks like an ISO date gets converted, even if it wasn't intended to be), but zero-dependency.
+
+The general lesson: **JSON has no Date type**. Dates are second-class citizens — they survive in serialized form but lose their type. Plan for it: convert at the boundary, or use a schema library that does it for you.
+
+Related types that also don't survive JSON:
+
+- **Map / Set** — disappear (`JSON.stringify(new Map())` returns `'{}'`).
+- **Symbol** — dropped.
+- **BigInt** — throws (`TypeError`).
+- **RegExp** — serializes to `'{}'`.
+- **Function** — dropped.
+- **`undefined`** — dropped (in objects) or `null` (in arrays).
+
+JSON is a deliberately narrow format. The narrowness is what makes it work universally; the cost is that not everything fits.
+
+</InterviewQuestion>

@@ -1,0 +1,520 @@
+## What an API is
+
+API stands for "Application Programming Interface" — a phrase so generic it explains nothing. The useful definition: **an API is a published contract between two programs that lets one of them request things from the other without knowing how it works inside**. The DOM is an API the browser exposes for JavaScript. React's `useState` is an API the library exposes for components. A REST API is the version of this idea that runs over HTTP between separate computers. Same idea, different scope; understanding the pattern is what makes "API" stop sounding mysterious.
+
+<Analogy>
+An API is **the menu at a restaurant — plus the kitchen's promise to deliver what the menu describes**.
+
+Walk into a restaurant. You don't go into the kitchen, push the cook aside, and assemble your dish. You sit down and read the **menu** — a structured list of what's on offer, with the price and the inputs you can customize ("sandwich, pick your bread, pick your filling"). When you order, you tell the waiter what you want; the kitchen handles the rest. You don't know which pots they use, which flame, which order. You don't need to. The menu is the **contract**: anything on it, the kitchen will produce; anything not on it, they won't.
+
+The kitchen could change everything inside — switch suppliers, hire new staff, replace the stove — and as long as the menu still works the same way (you order the burger, you get a burger), you don't care. That separation is the entire point of APIs.
+
+A real API has these same three properties:
+
+- **Surface (the menu).** A list of things you can request, with the inputs each one accepts. `GET /api/users/:id` returns a user with the given id. `POST /api/users` creates a new user; the body is a JSON object with name and email. Every API publishes its surface as docs.
+- **Promise (the contract).** Each request, given valid input, produces a specific response. The shape doesn't change without notice (versioning). If you call it the right way, you get a predictable answer; if you call it the wrong way, you get a predictable error.
+- **Hidden internals.** What the API does *behind* the surface — which database, which language, which servers — is none of your business. The team running it can rewrite all of it tomorrow; your code keeps working.
+
+The reason this matters: once you have this separation, you can compose programs that *don't have to be written together*. Stripe's API lets you charge credit cards without writing payment-processing code. OpenAI's API lets you call a language model without training one. The Google Maps API gives you a world map. Each is a kitchen you're never going to staff yourself; you order from the menu and the work is done.
+
+Three kinds of API you'll meet in everyday work, ordered from "narrow" to "wide":
+
+1. **A library's API** — the functions a npm package exposes. `lodash.debounce(fn, 250)`. You call functions; you ignore the implementation.
+2. **A framework's API** — the conventions React, Next, Express, etc. define. `useState`, `app.get(...)`, `redirect()`. Same shape — a public surface, hidden internals.
+3. **A web API (REST / GraphQL / RPC)** — over the network. Your browser calls `https://api.example.com/users/47`; a different program on a different machine answers. The HTTP layer adds the "different machines" wrinkle but the *contract* idea is the same.
+
+The lesson focus from here is the third — the web kind — because that's where most JS developers spend their time. But the mental model is universal: **a public surface plus a promise, with the implementation hidden behind it**. Everywhere you see that shape, "API" is the word for it.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a client calling an API and getting a structured response, with the server's internals hidden"
+  caption="Client knows the menu. Server knows the kitchen. The contract sits between them."
+>
+
+```
+   YOUR APP                  API SURFACE                 SERVER
+   (the diner)               (the menu)                  (the kitchen)
+
+   ───────────                ────────────                ───────────────
+                                                          ┌──────────────┐
+   fetch                                                  │  PostgreSQL  │
+   ("/api/users/47")  ──── HTTP request ─────►            │  Redis cache │
+                                                          │  Rust handler│
+                            (the contract)                │  Cron jobs   │
+                            "GET /api/users/:id           │  Bug fixes   │
+                             → 200 OK with                │  3 microsvcs │
+                                user JSON, or             └──────┬───────┘
+                              404 if not found"                  │
+                                                                  │ (internals)
+   parse                ◀──── HTTP response ─────                 │
+   res.json()                                                     ▼
+                                                            you don't see, don't
+                                                            care, can't depend on.
+                                                            it can ALL change.
+```
+
+</Illustration>
+
+### REST — the architectural style
+
+Most web APIs you'll meet are **REST APIs** (or "REST-ish" — pure REST is rare). REST is a style, not a protocol. The conventions:
+
+1. **Resources have URLs.** Each "thing" — user, product, post — has a unique URL. `/api/users/47` is user 47. `/api/products/widget-3` is the widget-3 product.
+2. **HTTP methods describe the operation.** `GET /api/users/47` reads. `POST /api/users` creates. `PUT /api/users/47` replaces. `DELETE /api/users/47` removes. Same URL, different verbs, different meanings.
+3. **JSON is the body format.** Almost always. Some old REST APIs use XML; modern ones default to JSON.
+4. **Stateless.** Each request stands alone. The server doesn't remember "this user just did X" between requests; the client sends whatever context it needs (auth token, request ID).
+5. **Standard status codes.** `200`, `201`, `404`, `401`, etc. — see the HTTP concept.
+
+The five together produce a predictable shape. You can guess what `GET /api/orders/47/items` does without reading the docs (probably "list items of order 47").
+
+### The endpoints of a typical REST API
+
+For a `users` resource, the conventional endpoints:
+
+```text
+GET    /api/users           → list users
+POST   /api/users           → create a new user
+GET    /api/users/:id       → read a single user
+PUT    /api/users/:id       → replace a user
+PATCH  /api/users/:id       → partially update a user
+DELETE /api/users/:id       → delete a user
+```
+
+Six endpoints, one for each CRUD-plus operation. Auto-generators ("scaffolders") in frameworks like Rails, Django, Grit produce all six in a single command. Most CRUD-shaped resources end up with this layout exactly.
+
+For relationships:
+
+```text
+GET    /api/users/:id/orders   → orders belonging to a user
+POST   /api/users/:id/orders   → create an order for a user
+GET    /api/orders/:id/items   → items in an order
+```
+
+Nesting can go deeper but rarely should — past two levels, the URLs get hard to read. Most APIs flatten with query parameters instead:
+
+```text
+GET /api/orders?userId=47
+```
+
+### Query parameters — filters and pagination
+
+Query parameters (the `?key=value&key2=value2` part) carry **modifiers** to a request:
+
+```text
+GET /api/users?role=ADMIN&active=true       → filter
+GET /api/users?page=2&pageSize=20           → pagination
+GET /api/users?sort=-createdAt              → sort (descending)
+GET /api/users?search=ada                   → search
+```
+
+They're the right tool for "I want users matching X" — variations on the same list. They live in the URL, so browsers cache `GET` responses keyed by the full URL including the query string.
+
+### Path parameters vs query parameters
+
+```text
+GET /api/users/47                            → 47 is a path parameter
+GET /api/users?id=47                         → 47 is a query parameter
+```
+
+Convention:
+
+- **Path parameters** identify a specific resource. `/api/users/47` is *the* user 47; it's a different URL than `/api/users/48`.
+- **Query parameters** are modifiers — filters, sorts, pagination — for a *collection* endpoint.
+
+You can do either; REST conventions strongly prefer the path version for "identify a specific thing."
+
+### Request body — for POST, PUT, PATCH
+
+`GET` and `DELETE` rarely have bodies. `POST`, `PUT`, `PATCH` do — the payload is what you're sending:
+
+```http
+POST /api/users
+Content-Type: application/json
+
+{ "name": "Ada", "email": "ada@x.com", "role": "USER" }
+```
+
+The body is JSON 99% of the time on modern APIs. Set the `Content-Type: application/json` header so the server knows how to parse it.
+
+### Response shape — conventions
+
+Most REST APIs return JSON. Two common shapes:
+
+**1. Raw resource (or array of resources):**
+
+```json
+{ "id": 47, "name": "Ada", "email": "ada@x.com" }
+```
+
+```json
+[
+  { "id": 47, "name": "Ada" },
+  { "id": 48, "name": "Lin" }
+]
+```
+
+Simple; widely used.
+
+**2. Envelope:**
+
+```json
+{
+  "data": [
+    { "id": 47, "name": "Ada" },
+    { "id": 48, "name": "Lin" }
+  ],
+  "meta": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 137
+  }
+}
+```
+
+The envelope leaves room for metadata (pagination, request IDs, etc.) without polluting the resource. Many APIs that started raw add an envelope later when they need to ship metadata.
+
+Either is fine; pick one and be consistent across your endpoints.
+
+### Errors — a separate shape
+
+Errors usually have their own JSON shape:
+
+```json
+{
+  "error": {
+    "code": "INVALID_EMAIL",
+    "message": "The email address is not valid",
+    "field": "email"
+  }
+}
+```
+
+Plus the right HTTP status code (`400`, `422`, etc.). The client can:
+- Read `status` to decide the *kind* of error (4xx/5xx categories).
+- Read `error.code` to decide programmatic handling (`INVALID_EMAIL` → highlight the email field).
+- Read `error.message` to show the user a useful string.
+
+Avoid: returning `200` for errors and signaling failure inside the body. Some legacy APIs do this; it breaks the HTTP contract.
+
+### Auth — the everyday flow
+
+Most authenticated APIs use bearer tokens. The client gets a token (from a login endpoint) and sends it on every subsequent request:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{ "email": "ada@x.com", "password": "..." }
+```
+
+```json
+{ "token": "eyJhbGciOiJIUzI1NiI..." }
+```
+
+Then on every protected request:
+
+```http
+GET /api/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiI...
+```
+
+The server validates the token (decodes JWT, checks signature, checks expiry) and identifies the user. If invalid → `401`. If valid but not allowed → `403`.
+
+Most fetch wrappers automatically attach the token to every request — you call `apiClient.get("/api/me")` and the token is there. The auth concept in Phase 3 covers this in detail.
+
+### Versioning
+
+APIs change. New fields get added; old endpoints get deprecated. To avoid breaking existing clients, modern APIs version their endpoints:
+
+```text
+/v1/users/47           → old shape
+/v2/users/47           → new shape
+```
+
+Or via headers:
+
+```http
+Accept: application/vnd.api.v2+json
+```
+
+The client picks which version. Servers maintain old versions for some deprecation window, then remove them. This is how Stripe, Google APIs, Twilio etc. evolve their APIs without breaking your code overnight.
+
+Internal APIs you control (your own backend serving your own frontend) often skip versioning — you just update both sides together.
+
+### Public APIs — the marketplace
+
+A huge percentage of modern software is built by calling public APIs. The most useful ones to know about:
+
+- **Stripe** — payments. Their API docs are the gold standard for REST API quality.
+- **OpenAI / Anthropic** — language models. Send a prompt, get a response.
+- **Twilio** — SMS, voice, video.
+- **SendGrid / Resend / Postmark** — email.
+- **Cloudinary / Imgix** — image transformations on the fly.
+- **GitHub** — code, issues, PRs (you used this in the desktop-release lesson).
+- **Mapbox / Google Maps** — maps and geocoding.
+- **Algolia** — search.
+- **Plaid** — bank account integrations.
+
+Each is "a kitchen you'd never staff yourself." You read the docs, get an API key, send requests with the key in `Authorization`, get responses. Most of the engineering time on a startup's first version goes into picking the right combination of these APIs, not building from scratch.
+
+### Reading API docs efficiently
+
+Every public API has docs. The structure converges on:
+
+1. **Authentication** — how to get a token.
+2. **Endpoints** — grouped by resource (users, payments, etc.).
+3. **Per-endpoint** — method + URL, parameters, request body schema, response schema, possible errors.
+4. **Examples** — copy-pasteable `curl` and code snippets.
+
+The skim order that works for most APIs:
+- Read the auth section first.
+- Find the endpoint that does what you need.
+- Read its parameters and the response schema.
+- Copy the example, modify the URL/params, run it.
+- When something doesn't work, check the status code against the docs.
+
+A good API doc (Stripe, Twilio, Linear) has a working code sample for every endpoint. A bad API doc lists fields without examples, and you have to guess. Most teams' internal APIs fall somewhere in between; the standard "OpenAPI / Swagger" docs are auto-generated from the server's code, so they're always up to date but sometimes terse.
+
+<ExampleProject
+  src="restaurant-api"
+  title="A REST API as a restaurant menu — make 'orders' and watch them resolve"
+  description="A make-believe restaurant API exposed at /api/menu, /api/orders. The page is the diner; click 'place order' to POST; refresh to GET; cancel to DELETE. Watch the HTTP requests in the Network panel. Demonstrates CRUD and status codes against a fake but coherent backend."
+/>
+
+<ExampleProject
+  src="public-api-call"
+  title="Call a real public API — GitHub user lookup"
+  description="A small lookup form: type a GitHub username, see their profile (followers, repos, avatar). One real fetch to api.github.com. Demonstrates that 'calling an API' is one fetch + parse JSON away — no special tooling needed."
+/>
+
+<Exercise
+  title="Build a 5-endpoint mini REST API on top of localStorage"
+  starter={`Build a small in-browser "REST API" that pretends to be a server but
+stores everything in localStorage. The point is to feel the shape of
+REST from the inside.
+
+Define five functions that simulate endpoints:
+
+  listUsers()              → return the array of users
+  getUser(id)              → return one user or null
+  createUser(data)         → push a new user (assign auto id), return it
+  updateUser(id, patch)    → update fields, return updated user
+  deleteUser(id)           → remove, return true/false
+
+All five read/write to localStorage under one key ('users').
+
+Then build a tiny UI that calls each function on button clicks:
+  - List button → renders all users in a panel.
+  - Form for create → adds a user.
+  - Edit button per row → patches.
+  - Delete button per row → removes.
+
+After it works, ALSO render an "HTTP trace" pane that, for every
+button click, logs what the equivalent REST call would have been:
+  "GET    /api/users        → 200"
+  "POST   /api/users        → 201"
+  "PATCH  /api/users/3      → 200"
+  "DELETE /api/users/3      → 204"
+
+The point: see the shape of REST without needing a server.`}
+>
+
+- Five functions are defined, each simulating one HTTP endpoint on a "users" resource.
+- The data is persisted to localStorage and survives a page reload.
+- A small UI exercises all five (list, create, update, delete).
+- An "HTTP trace" pane logs each operation as a method + path + simulated status code.
+- The status codes follow REST conventions (200/201/204/404).
+- The student can articulate what each method represents conceptually (read/create/update/delete).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a REST API?
+
+**A:** **A web API whose endpoints map URLs to "resources" and HTTP methods to operations on them, returning JSON. Built on standard HTTP conventions, predictable to consume.**
+
+The five conventions of REST:
+
+1. **Resources have URLs.** `/api/users/47` is *the* user with id 47. `/api/products/widget-3` is a specific product.
+2. **HTTP methods describe the operation.** `GET` reads, `POST` creates, `PUT`/`PATCH` updates, `DELETE` removes.
+3. **JSON is the body format.** Both requests and responses use JSON.
+4. **Stateless.** Each request stands alone — the server doesn't remember previous requests. Any state the request needs (auth, context) is sent with each call.
+5. **Standard status codes.** `200 OK`, `201 Created`, `404 Not Found`, `401 Unauthorized` — see the HTTP concept.
+
+The everyday consumer pattern:
+
+```js
+// Read
+const res = await fetch("/api/users/47");
+const user = await res.json();
+
+// Create
+await fetch("/api/users", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Ada", email: "ada@x" }),
+});
+
+// Delete
+await fetch("/api/users/47", { method: "DELETE" });
+```
+
+Same shape every time. Predictable. The huge win: once you know the conventions, you can use most REST APIs without reading docs deeply — `GET /api/widgets/12` is "read widget 12" everywhere.
+
+Alternatives to REST:
+
+- **GraphQL** — one endpoint; the client says exactly which fields it wants in the query language.
+- **RPC / gRPC** — endpoints are "calls," not "resources." Used for service-to-service.
+- **WebSockets / SSE** — long-lived connections for real-time data instead of request-response.
+
+REST is the default for public web APIs and most internal ones. Knowing it is table stakes for any web role.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a query parameter and a path parameter?
+
+**A:** **Path parameters identify a specific resource. Query parameters modify how you query a collection.**
+
+```text
+/api/users/47               → 47 is a PATH parameter (identifies a user)
+/api/users?role=ADMIN       → role=ADMIN is a QUERY parameter (filter)
+```
+
+Concretely:
+
+- **Path parameter** `/users/47` is *the* user with id 47. It's a different URL than `/users/48`. You'd put a unique identifier here.
+- **Query parameter** `?role=ADMIN` modifies a collection request. Same base URL (`/users`); the query string filters which subset you get.
+
+The conventions:
+
+- **GET single thing** → path. `GET /api/users/47`.
+- **GET filtered collection** → query. `GET /api/users?role=ADMIN&active=true`.
+- **Pagination** → query. `GET /api/users?page=2&pageSize=20`.
+- **Sort, search** → query. `GET /api/users?sort=-createdAt&search=ada`.
+
+A small but useful nuance: GETs are cacheable by URL (including query string). `GET /api/users?role=ADMIN` and `GET /api/users?role=USER` are different cache entries; the browser and intermediate caches store them separately. Path parameters cache the same way.
+
+Common mistake: putting the id in the query string for a "specific resource" endpoint:
+
+```text
+GET /api/user?id=47          ❌ awkward; non-standard
+GET /api/users/47             ✓ standard
+```
+
+Standards-compliant REST APIs always use path params for resource ids. Use query params for filters, sorts, pagination — anything that *modifies* a collection request.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do APIs version their endpoints?
+
+**A:** **Because once external clients depend on an API's shape, changing it breaks them. Versioning lets the API evolve without forcing every client to update simultaneously.**
+
+The problem:
+
+```js
+// Client v1, year 2024
+const res = await fetch("/api/users/47");
+const user = await res.json();
+console.log(user.name);                     // works
+```
+
+Now the API team renames `name` → `fullName`:
+
+```json
+// API v2 response
+{ "id": 47, "fullName": "Ada Lovelace" }
+```
+
+Every existing client breaks. They were reading `.name`; now there's no `.name`. The team would have to coordinate with every consumer, ship in lockstep, redeploy everything at once — impossible at any scale.
+
+The solution: version the endpoint.
+
+```text
+GET /v1/users/47          → still returns { "name": "Ada" }
+GET /v2/users/47          → returns { "fullName": "Ada" }
+```
+
+The server runs both. Old clients keep working against `/v1`; new clients use `/v2`. Eventually `/v1` is deprecated with a long notice period, then removed when usage drops to zero.
+
+How versions are exposed:
+
+1. **URL prefix** — `/v1/users`, `/v2/users`. Most readable; most popular.
+2. **Header** — `Accept: application/vnd.api.v2+json`. Cleaner URLs; less discoverable.
+3. **Query parameter** — `/users?version=2`. Awkward but seen in some APIs.
+
+When versioning isn't worth it:
+
+- **Internal-only APIs** (your backend serving your frontend). You ship both at once; no consumers to break.
+- **Additive changes only.** Adding a *new* field to the response doesn't break old clients (they ignore it). Adding a new endpoint doesn't break anything. Only *changing* existing field shapes or *removing* fields/endpoints requires a version bump.
+
+The trade-off: versioning is real work. The server maintains both `/v1` and `/v2` codepaths. Tests, monitoring, documentation — all doubled. Most teams version sparingly; a "v1 forever" approach with strict additive changes can work for years.
+
+Versioning is most needed for **public APIs** with external consumers (Stripe, Twilio, GitHub). For your team's internal API, you can usually ship breaking changes Mon morning and update all client code in the same PR — no versioning needed.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between REST and GraphQL?
+
+**A:** **REST has many endpoints, each returning fixed shapes. GraphQL has one endpoint where the client specifies exactly which fields it wants in a query language.**
+
+```text
+REST                                  GraphQL
+────                                  ────────
+GET /api/users/47                     POST /graphql
+                                      {
+→ {                                     query: `
+    "id": 47,                             user(id: 47) {
+    "name": "Ada",                          id
+    "email": "ada@x.com",                   name
+    "role": "USER",                         posts { title }
+    "createdAt": "..."                    }
+  }                                       `
+                                      }
+
+GET /api/users/47/posts               → {
+                                            user: {
+→ [ {title: "..."}, ... ]                     id: 47, name: "Ada",
+                                              posts: [{title: "..."}]
+TWO requests for user + posts             }
+                                       }
+                                       ONE request, exact shape
+```
+
+REST's strengths:
+
+- **Simple.** Just URLs and HTTP methods. Every browser / library / language already speaks it.
+- **Cacheable.** GETs cache cleanly by URL. CDNs, browsers, intermediaries all understand.
+- **Tooling everywhere.** curl, Postman, browsers, network panels — all built for REST.
+
+GraphQL's strengths:
+
+- **No over-fetching.** Mobile clients don't pay for fields they don't render.
+- **One round-trip for related data.** "User and their last 10 posts" is one request, not two.
+- **Strong types** (when you use the schema). The query language enforces field names; mistakes are caught at lint time.
+- **Self-documenting.** Tools introspect the schema and offer autocomplete.
+
+REST's weaknesses:
+
+- **Over-fetching.** GET /users/47 returns every field. If your mobile app only needs the name, the rest is wasted bytes.
+- **Many round-trips.** "User and their posts" is two requests. Three levels deep is three requests.
+
+GraphQL's weaknesses:
+
+- **Caching is harder.** Everything's a POST to one endpoint; CDNs can't cache by URL.
+- **Server complexity.** Schemas, resolvers, query depth limits, batching to prevent N+1 — more moving parts.
+- **Tooling overhead.** Generating types, the GraphiQL playground, the codegen for client types — more tools to learn.
+
+The 2026 verdict: **REST for public APIs and most service-to-service work**. **GraphQL** for client-heavy apps where mobile bandwidth matters (Facebook, the GraphQL originator, has every reason to optimize this). Many startups use REST for simplicity unless they hit a clear over-fetching or round-trip problem.
+
+A growing third option: **tRPC** (TypeScript RPC) — RPC over HTTP with end-to-end TypeScript types. Used heavily in Next.js apps where client and server share a codebase. Different trade-offs again.
+
+Pick the one that matches your team's experience and your app's constraints. Most teams don't need to debate; they default to REST and move on.
+
+</InterviewQuestion>

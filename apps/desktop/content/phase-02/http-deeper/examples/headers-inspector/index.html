@@ -1,0 +1,131 @@
+<!--
+  Type any public URL → see the full request method, all REQUEST headers
+  the browser will send (well, the ones we can see), and all RESPONSE
+  headers + status. Useful for poking at any API quickly.
+
+  Note: the browser strips some request headers (User-Agent, Host) before
+  we can list them. We can show what we set; the rest are auto-added by
+  the browser. We show what fetch returns from the response.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Headers inspector</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 800px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .form { display: flex; gap: 0.5rem; margin-top: 1rem; }
+      .form input {
+        flex: 1; padding: 0.55rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.88rem;
+      }
+      .form button {
+        padding: 0.55rem 1.1rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+      }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .label { font-size: 0.72rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; }
+      .panel {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.6;
+        margin-top: 0.4rem;
+      }
+      .status { font-size: 0.95rem; }
+      .status.s2xx { color: #7fff5b; }
+      .status.s3xx { color: #38bdf8; }
+      .status.s4xx { color: #fbbf24; }
+      .status.s5xx { color: #f87171; }
+      .header-row { padding: 1px 0; }
+      .key { color: #38bdf8; }
+      .val { color: #e5e7eb; }
+      .examples {
+        margin-top: 1rem; font-size: 0.85rem;
+      }
+      .examples a {
+        display: inline-block; margin-right: 0.7rem; color: #15803d;
+        font-family: ui-monospace, monospace; text-decoration: none;
+        border: 1px solid #d4d4d8; border-radius: 4px; padding: 2px 8px; background: #fff;
+      }
+      .examples a:hover { background: #f4f4f5; }
+    </style>
+  </head>
+  <body>
+    <h1>Headers inspector</h1>
+    <p>Type a URL; see the response headers. Try a public API to see real-world examples — GitHub's headers include rate-limit info; Cloudflare's include cache info.</p>
+
+    <div class="form">
+      <input id="url" type="text" value="https://api.github.com/users/octocat" />
+      <button id="go">Send GET</button>
+    </div>
+
+    <div class="examples">
+      Try:
+      <a href="#" data-u="https://api.github.com/users/octocat">GitHub user (rate-limit headers)</a>
+      <a href="#" data-u="https://jsonplaceholder.typicode.com/posts/1">JSONPlaceholder</a>
+      <a href="#" data-u="https://httpbin.org/get">httpbin (echo)</a>
+    </div>
+
+    <h2>Status</h2>
+    <div class="panel"><span class="status" id="status">click Send to begin…</span></div>
+
+    <h2>Response headers</h2>
+    <div class="panel" id="headers">—</div>
+
+    <h2>Body preview</h2>
+    <div class="panel" id="body">—</div>
+
+    <script>
+      const urlEl     = document.getElementById("url");
+      const statusEl  = document.getElementById("status");
+      const headersEl = document.getElementById("headers");
+      const bodyEl    = document.getElementById("body");
+
+      async function send(url) {
+        statusEl.className = "status";
+        statusEl.textContent = "…requesting…";
+        headersEl.textContent = "";
+        bodyEl.textContent = "";
+
+        try {
+          const res = await fetch(url);
+          const cls =
+            res.status >= 500 ? "s5xx" :
+            res.status >= 400 ? "s4xx" :
+            res.status >= 300 ? "s3xx" : "s2xx";
+          statusEl.className = "status " + cls;
+          statusEl.textContent = res.status + " " + res.statusText;
+
+          // Headers — only the ones the browser exposes via CORS.
+          // Many response headers (Set-Cookie, custom internal ones)
+          // are blocked unless the server CORS-allows them.
+          const rows = [];
+          for (const [k, v] of res.headers.entries()) {
+            rows.push(`<div class="header-row"><span class="key">${k}</span>: <span class="val">${v}</span></div>`);
+          }
+          headersEl.innerHTML = rows.join("") || "(no headers visible)";
+
+          // Body
+          const text = await res.text();
+          try {
+            bodyEl.textContent = JSON.stringify(JSON.parse(text), null, 2).slice(0, 4000);
+          } catch {
+            bodyEl.textContent = text.slice(0, 4000) || "(empty)";
+          }
+        } catch (e) {
+          statusEl.className = "status s5xx";
+          statusEl.textContent = "network error: " + e.message;
+        }
+      }
+
+      document.getElementById("go").addEventListener("click", () => send(urlEl.value.trim()));
+      document.querySelectorAll(".examples a").forEach((a) => {
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          urlEl.value = a.dataset.u;
+          send(urlEl.value);
+        });
+      });
+    </script>
+  </body>
+</html>

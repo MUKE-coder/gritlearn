@@ -1,0 +1,456 @@
+## HTTP deeper — methods, status codes, headers
+
+You met HTTP in Phase 1 as "the protocol the browser uses to talk to servers." Now we go a layer deeper. HTTP is a sequence of three things on every request: a **method** that says what you want to do, a **path + headers + body** that says what you want to do it to, and a **status + headers + body** that comes back. Every web framework, every fetch call, every REST API speaks this shape. Once you can read raw HTTP, the rest of backend work — APIs, debugging, security headers, caching — stops feeling like magic.
+
+<Analogy>
+HTTP is **the postcard protocol of a very well-organized post office**.
+
+The post office in this analogy follows three rules that make billions of letters reach the right desks every day:
+
+- Every postcard has a **verb** scribbled at the top — "READ THIS," "ADD THIS TO YOUR PILE," "UPDATE THE OLD ONE," "THROW IT AWAY." Without the verb the receiving clerk wouldn't know what to do.
+- Every postcard has an **address** that uniquely identifies what it's about — "Department of Users, Folder 47" — and a few **routing labels** at the top that tell intermediate sorting offices things like "this is in JSON," "this is a logged-in user," "deliver only if Folder 47 was modified after Tuesday."
+- Every postcard sent back has a **number stamp** that summarizes the outcome — 200 for "done, here you go," 404 for "we couldn't find that folder," 500 for "we caught fire trying."
+
+HTTP works exactly this way. Each request has:
+
+- A **method** — the verb: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. The verb tells the server what the request *means*. A `GET /users/47` is "read user 47"; a `DELETE /users/47` is "remove user 47." Same URL, very different intents.
+- A **path** identifying the resource — `/users/47`, `/api/products/widget-3`, `/login`.
+- **Headers** — short labeled lines that carry metadata: `Content-Type: application/json`, `Authorization: Bearer eyJ…`, `If-None-Match: "abc123"`. These don't usually carry the *data* (that's the body's job); they carry information *about* the data.
+- A **body** — the actual payload, when there is one. JSON, form data, raw bytes for an uploaded file.
+
+The response comes back with:
+
+- A **status code** — three digits that summarize what happened: `200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `401 Unauthorized`, `404 Not Found`, `500 Internal Server Error`. There are dozens; you'll use about eight.
+- Its own headers and body.
+
+Three things make this a useful mental model in everyday work:
+
+1. **Method + status are the protocol's grammar.** A `GET` that returns `200` is "I read it, here's the thing." A `POST` that returns `201` is "I created it." A `DELETE` that returns `204` is "I removed it, nothing left to send back." Knowing the standard pairings means you can predict what's "normal" and what's an anomaly.
+
+2. **Headers are the boring power.** They carry caching info, auth tokens, content negotiation, security policies, CORS allowances — features that are invisible until you debug them. The Network panel in devtools shows every header on every request; learning to read them is the difference between "the API doesn't work" and "ah, the response is missing `Access-Control-Allow-Origin` from this origin."
+
+3. **HTTP is symmetric.** Same protocol the browser uses to load a webpage, your fetch call uses to hit a REST API, a microservice uses to call another microservice. Master HTTP and you can debug any layer of the stack.
+
+The shift this concept produces: stop thinking "the browser calls the API" and start thinking "the browser sends an HTTP request; the server sends an HTTP response." The framework, the fetch wrapper, the REST library — they're all conveniences over that one protocol. When something breaks, you drop down to "what request actually went out, and what response came back?" The Network panel becomes your most-used debugging tool.
+</Analogy>
+
+<Illustration
+  alt="Diagram of one HTTP request and response showing method, path, headers, body, status"
+  caption="Every request and every response has the same five parts. Different values in each."
+>
+
+```
+   REQUEST                                    RESPONSE
+   ───────                                    ────────
+
+   POST /api/users   HTTP/1.1                  HTTP/1.1   201 Created
+   ────  ──────                                ──────     ── ──────
+    │       │                                       │      │   │
+    │   ┌── path                                    │      │   └ status text
+   verb │                                           │      └─── status code
+        ▼                                       version
+   ┌─────────────────────────────┐
+   │ Host: api.jbeditor.com      │            ┌──────────────────────────────────┐
+   │ Content-Type: application/json │         │ Content-Type: application/json   │
+   │ Authorization: Bearer eyJ... │  ◀── ─►   │ Location: /api/users/47          │
+   │ User-Agent: Mozilla/5.0 ...  │            │ X-Request-Id: abc-123-def        │
+   └─────────────────────────────┘            └──────────────────────────────────┘
+   (headers)                                  (headers)
+
+   { "name": "Ada", "email": "ada@x" }         { "id": 47, "name": "Ada", "email": "ada@x" }
+   (body, JSON in this case)                  (body)
+```
+
+</Illustration>
+
+### The methods you'll use
+
+Of HTTP's nine methods, you use four daily and one occasionally.
+
+**`GET`** — read.
+
+```http
+GET /api/users/47
+```
+
+No body. The path identifies what you want. Should be **safe** (doesn't change anything) and **idempotent** (calling it twice produces the same effect as once). A `GET` that deletes something is a footgun: web crawlers, browser prefetchers, and caches all assume `GET`s are safe.
+
+**`POST`** — create something new, or invoke an action.
+
+```http
+POST /api/users
+Content-Type: application/json
+
+{ "name": "Ada", "email": "ada@x.com" }
+```
+
+The body is the new thing. The server typically responds `201 Created` with the new resource's URL in a `Location` header.
+
+`POST` is also the catchall verb for "doing a thing that doesn't fit the others." `POST /api/auth/login`, `POST /api/payments/charge`, `POST /api/users/47/lock` — actions, not pure CRUD.
+
+**`PUT`** — replace entirely.
+
+```http
+PUT /api/users/47
+Content-Type: application/json
+
+{ "name": "Ada", "email": "ada@new.com" }
+```
+
+The entire resource is replaced by the body. Idempotent: doing the same `PUT` twice ends in the same state as doing it once.
+
+**`PATCH`** — partial update.
+
+```http
+PATCH /api/users/47
+Content-Type: application/json
+
+{ "email": "ada@new.com" }
+```
+
+Only the fields in the body change. Other fields are untouched. Not strictly idempotent (depends on the patch), but in practice usually behaves that way.
+
+**`DELETE`** — remove.
+
+```http
+DELETE /api/users/47
+```
+
+No body. Should be idempotent: deleting an already-deleted resource is the same as deleting an existing one (some APIs return `404` then; some return `204`).
+
+The other methods (`HEAD`, `OPTIONS`, `CONNECT`, `TRACE`) are rarely written by hand — browsers and proxies use them under the hood (e.g., `OPTIONS` for CORS preflight checks).
+
+### Status codes you'll see weekly
+
+Three digits; the first digit groups them:
+
+- **1xx — Informational.** Rare in app code. `101 Switching Protocols` shows up on WebSocket upgrades.
+- **2xx — Success.**
+  - **`200 OK`** — generic success, response has a body.
+  - **`201 Created`** — `POST` created a new resource. Body is the new resource; `Location` header points at its URL.
+  - **`204 No Content`** — success, but no body (`DELETE` is the classic case).
+- **3xx — Redirect.**
+  - **`301 Moved Permanently`** — the resource is now at a different URL; the browser caches this redirect.
+  - **`302 Found`** / **`307 Temporary Redirect`** — same idea but temporary; not cached.
+  - **`304 Not Modified`** — used with conditional `GET`s; the server is saying "you already have the latest, use your cached copy."
+- **4xx — Client error.**
+  - **`400 Bad Request`** — your request was malformed (bad JSON, missing required field).
+  - **`401 Unauthorized`** — no valid auth credentials. Send the right `Authorization` header.
+  - **`403 Forbidden`** — auth was valid, but you're not allowed to do this. (Different from 401: 401 means "who are you?"; 403 means "I know who you are, no.")
+  - **`404 Not Found`** — the resource doesn't exist.
+  - **`409 Conflict`** — your request conflicts with the current state (e.g., trying to create a user with an email that already exists).
+  - **`422 Unprocessable Entity`** — the request was well-formed but failed validation (e.g., email is not a valid email).
+  - **`429 Too Many Requests`** — rate limited.
+- **5xx — Server error.**
+  - **`500 Internal Server Error`** — the server crashed processing the request.
+  - **`502 Bad Gateway`** — your request reached a proxy, but the upstream server is broken.
+  - **`503 Service Unavailable`** — the server is overloaded or down for maintenance.
+  - **`504 Gateway Timeout`** — the proxy timed out waiting for the upstream.
+
+The first-digit rule is the everyday filter:
+- 2xx = good.
+- 4xx = my fault (client).
+- 5xx = their fault (server).
+
+### Headers — the metadata layer
+
+Headers are short `Key: Value` lines that travel with the request or response. The most common ones:
+
+**Request headers:**
+
+- **`Host: api.jbeditor.com`** — which host you're talking to. Required for HTTP/1.1.
+- **`Content-Type: application/json`** — what format the body is in.
+- **`Authorization: Bearer eyJ...`** — auth token.
+- **`Accept: application/json`** — what formats you can handle in the response.
+- **`User-Agent: Mozilla/5.0 ...`** — identifies the client (browser, library, etc.).
+- **`Cookie: session=abc123`** — sends cookies the server set previously.
+- **`If-None-Match: "etag-value"`** — conditional GET; only send the body if the resource changed.
+
+**Response headers:**
+
+- **`Content-Type: application/json`** — format of the response body.
+- **`Content-Length: 4521`** — size in bytes.
+- **`Set-Cookie: session=abc123; HttpOnly; Secure`** — sets a cookie on the client.
+- **`Cache-Control: max-age=3600`** — caching directive.
+- **`ETag: "abc123"`** — version tag for conditional requests.
+- **`Access-Control-Allow-Origin: https://jbeditor.com`** — CORS.
+- **`Location: /api/users/47`** — for `201 Created` or `3xx` redirects.
+
+The `Authorization`, `Content-Type`, and CORS headers are the ones you'll touch most. The caching ones (`Cache-Control`, `ETag`) become important when performance matters.
+
+### The body — what's actually being moved
+
+The body is the data. For requests, the body usually appears with `POST`, `PUT`, `PATCH`. For responses, almost every status code can have a body (except `204 No Content` and some 304/1xx).
+
+Common body formats:
+
+- **JSON** (`application/json`) — modern default for APIs.
+- **Form data** (`application/x-www-form-urlencoded`) — old-school HTML form submissions. Looks like a URL query string: `name=Ada&email=ada@x.com`.
+- **Multipart form data** (`multipart/form-data`) — used when uploading files alongside form fields.
+- **Plain text** (`text/plain`), **HTML** (`text/html`), **CSS**, **JS**, **images** — for serving web pages and assets.
+
+The `Content-Type` header tells the receiver how to interpret the body. Mismatch (server says JSON, sends HTML) is a common bug source.
+
+### `fetch` against the protocol
+
+`fetch` in JavaScript maps directly to HTTP:
+
+```js
+const res = await fetch("https://api.jbeditor.com/api/users", {
+  method: "POST",                                    // verb
+  headers: {                                         // request headers
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + token,
+  },
+  body: JSON.stringify({ name: "Ada", email: "ada@x" }),  // request body
+});
+
+console.log(res.status);                              // status code
+console.log(res.headers.get("content-type"));         // response header
+const data = await res.json();                        // response body
+```
+
+Every field on the `fetch` options object maps to a part of the HTTP request. The `Response` object has corresponding fields for the response. Once you see the mapping, `fetch` reads as "build an HTTP request from these parts and parse the response."
+
+The trap from a previous concept worth re-stating: **`fetch` doesn't reject on 4xx or 5xx.** It only rejects on network failures (DNS, CORS, offline). Check `res.ok` (true for 2xx) yourself, or use a wrapper.
+
+### HTTP versions briefly
+
+The protocol has three versions in active use:
+
+- **HTTP/1.1** — text-based, one request at a time per TCP connection. Decades old; still the lingua franca.
+- **HTTP/2** — binary, multiplexed (multiple requests in parallel on one connection). Most modern web traffic. Transparent to app code.
+- **HTTP/3** — built on QUIC (UDP-based), even faster. Increasingly common on production CDNs.
+
+App code rarely needs to know which version is in use — the browser, the server, and intermediate proxies negotiate it. You'll occasionally see HTTP/2 mentioned when debugging performance (concurrent request limits don't apply the same way).
+
+### Common bugs HTTP-literacy fixes
+
+A short list of bugs that "I don't really know what's in the headers" causes — and that "I read the Network panel" instantly solves:
+
+1. **The API rejects me with 401.** Check the `Authorization` request header. Is the token there? Is it expired? Often the bug is "I forgot to attach the token to this specific fetch."
+2. **CORS error in the console.** Check the `Access-Control-Allow-Origin` *response* header. Does it match your origin? Is the server even sending it? Different problem from the auth case; different fix.
+3. **The body is empty.** Check `Content-Length` and `Content-Type` on the response. A `204` correctly has no body; a `200` with `Content-Length: 0` and no `Content-Type` is the server failing to serialize.
+4. **The data is stale.** Check `Cache-Control` and `ETag` headers. Browser might be aggressively caching; you need to add a cache-busting query parameter or fix the server's cache headers.
+5. **The form submission isn't reaching the server.** Check the `Content-Type` of your request. Sending JSON without `Content-Type: application/json` makes Express/Gin parse it as form data and miss every field.
+
+Reading raw HTTP makes you a better debugger than any framework documentation can.
+
+<ExampleProject
+  src="methods-and-status"
+  title="Try the four methods on a fake API — see the status codes"
+  description="A page with buttons that fire GET, POST, PUT, DELETE against a sample endpoint and render the response (status, headers, body). Watch how 200 / 201 / 204 / 404 / 400 each correspond to different scenarios. Network-panel literacy in 5 minutes."
+/>
+
+<ExampleProject
+  src="headers-inspector"
+  title="Hit any URL and dump its full request + response headers"
+  description="A tiny tool: type a URL, see every header on both sides of the request. Demonstrates the metadata layer in practice — Content-Type, Cache-Control, Authorization, CORS headers, all visible. Use it once to see what a real production API's responses look like."
+/>
+
+<Exercise
+  title="Build a single-page HTTP playground"
+  starter={`Build a small HTML page (one file, no build step) that:
+
+  1. Has a form with these inputs:
+     - method (select: GET / POST / PUT / PATCH / DELETE)
+     - url   (text)
+     - headers (textarea, one "Key: Value" per line)
+     - body  (textarea, JSON or form-data string)
+     - a Send button.
+
+  2. On submit, builds a fetch call from those inputs:
+     - method from the select
+     - parse the headers textarea into a plain object
+     - body from the textarea (if not GET/HEAD)
+
+  3. Renders the response:
+     - status code + status text
+     - every response header as a list
+     - the body (prettified if JSON)
+
+  4. Catch network failures and show them as a useful error
+     ("network error: ..." vs. an HTTP error).
+
+  5. Try it against:
+     - https://jsonplaceholder.typicode.com/posts/1  (GET → 200)
+     - https://jsonplaceholder.typicode.com/posts    (POST → 201)
+     - https://api.github.com/users/octocat          (GET → 200, useful headers)
+     - any URL that's down or unreachable (network error)
+
+Test:
+  - For each scenario, paste the URL, set method, send. Read the
+    status code aloud and predict what category it's in (2xx / 4xx / 5xx).
+  - Look at the response headers. Find Content-Type. Cache-Control.
+    Server. X-RateLimit-Remaining. Note what each tells you.`}
+>
+
+- The HTML page has a form with method, URL, headers (textarea), body (textarea), submit button.
+- On submit, `fetch` is built correctly from the inputs (method, headers parsed, body sent if applicable).
+- The response is rendered with status code + status text, every response header, and the body (JSON pretty-printed if applicable).
+- Network errors (offline, DNS failure) are shown distinctly from HTTP errors (4xx/5xx).
+- The tool was tested against at least three real public endpoints — the student wrote down at least one observation per response (e.g., "GitHub rate-limit headers show 4978/5000 remaining").
+- The student correctly identifies the status category (2xx success, 4xx client error, 5xx server error) for each response.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `200 OK`, `201 Created`, and `204 No Content`?
+
+**A:** **All three are "success" codes (2xx). They differ in *what response body* and *what operation* they represent.**
+
+- **`200 OK`** — generic success. Response has a body. Typical for `GET` responses that return data: `GET /api/users/47` → `200 OK` with the user JSON in the body.
+
+- **`201 Created`** — success, and a new resource was created. Typical for `POST`: `POST /api/users` with new user data → `201 Created` with the new user in the body AND a `Location` header pointing at the new user's URL (`/api/users/48`).
+
+- **`204 No Content`** — success, but no body. Typical for `DELETE` and some `PUT`s: `DELETE /api/users/47` → `204 No Content`. The server is saying "done, but there's nothing to send back."
+
+Why three different success codes instead of just one?
+
+1. **Semantic precision.** `201` tells the client "this created something new" — they might want to fetch the `Location` URL or update a list. `200` doesn't carry that meaning.
+
+2. **Behavior change.** Some HTTP clients react to status codes — they might follow the `Location` from `201`, treat `204` as "nothing to render."
+
+3. **Standards compliance.** The HTTP spec defines these meanings; APIs that follow them are predictable to consumers and to tooling (Swagger, OpenAPI, CLI testers).
+
+The everyday practice in APIs:
+- `GET` → `200` with the resource.
+- `POST` → `201` with the new resource + `Location`.
+- `PUT`/`PATCH` → `200` with the updated resource, OR `204` if no body needed.
+- `DELETE` → `204`.
+
+You'll see APIs that "just return 200 for everything" — they work but lose the precision. Stick to the standard codes when you build APIs; your clients will thank you.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `401 Unauthorized` and `403 Forbidden`?
+
+**A:** **`401` means "I don't know who you are — please authenticate." `403` means "I know who you are; you're not allowed to do this."**
+
+```text
+GET /api/admin/users
+→ 401 Unauthorized          ← no token sent, server doesn't know you
+
+GET /api/admin/users
+  Authorization: Bearer <valid-user-token>
+→ 403 Forbidden              ← valid token, but you're a USER not ADMIN
+```
+
+The order of operations on the server side:
+1. Read the request.
+2. Look for credentials (Authorization header, cookie, etc.).
+3. If none or invalid → `401`.
+4. If valid → identify the user.
+5. Check whether *this user* can do *this operation*.
+6. If not → `403`.
+
+Why the distinction matters:
+- The client's response differs. `401` should prompt "log in" / refresh tokens. `403` should show "you don't have access to this" — re-authenticating won't help.
+- Security headers can differ. `401` responses usually include a `WWW-Authenticate` header telling the client how to authenticate.
+- Audit logging differs. A wave of 401s might mean a misconfigured client; a wave of 403s from one user might be an attempted privilege escalation.
+
+A common mistake: returning `403` for un-authenticated requests. Some APIs do this to "leak less info" — but it confuses well-behaved clients that would otherwise retry with credentials. The HTTP spec is clear: 401 for missing/invalid auth; 403 for "authenticated but denied."
+
+For a related pair: `404 Not Found` is sometimes returned instead of `403` to hide the resource's existence from unauthorized users. ("If you can't see it, you shouldn't even know it exists.") That's a security trade-off, not a standard — use 403 by default.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between `PUT` and `PATCH`?
+
+**A:** **`PUT` replaces the entire resource with the request body. `PATCH` updates only the fields in the body, leaving everything else unchanged.**
+
+```text
+GET /api/users/47
+→ 200 OK
+  { "id": 47, "name": "Ada", "email": "ada@x.com", "role": "USER" }
+
+# PUT — entire resource replaced
+PUT /api/users/47
+  { "id": 47, "name": "Ada", "email": "new@x.com" }
+→ 200 OK
+  { "id": 47, "name": "Ada", "email": "new@x.com" }    ← `role` is GONE
+
+# PATCH — partial update
+PATCH /api/users/47
+  { "email": "new@x.com" }
+→ 200 OK
+  { "id": 47, "name": "Ada", "email": "new@x.com", "role": "USER" }
+```
+
+Three implications:
+
+1. **`PUT` is strict.** You have to send every field that should remain. Forgot to include `role`? Resource now has no role. This forces clients to send the *full* desired state.
+
+2. **`PATCH` is forgiving.** Send only what you're changing. Easier to write, easier to evolve (adding fields server-side doesn't break old clients).
+
+3. **`PUT` is idempotent; `PATCH` usually is too.** Doing the same PUT twice ends in the same state. Doing the same PATCH twice ends in the same state, *for typical PATCHes* (setting fields to values). Exotic PATCHes (e.g., "increment by 1") aren't idempotent — but you rarely see those.
+
+Which to use in your API:
+
+- **Use `PATCH`** for most updates. Easier on clients; easier to evolve.
+- **Use `PUT`** when "replace this entirely" is the actual operation (e.g., "set the entire ACL for this resource").
+- **For booleans** (toggle, lock, publish), some APIs use `POST /api/users/47/activate` instead of `PATCH { "active": true }` — both are fine; consistency matters more than the choice.
+
+A common pragma: APIs that "treat PUT like PATCH" (`PUT` doesn't actually replace unset fields). This is non-standard but pervasive. Read your team's API docs; don't assume.
+
+For the OpenAPI / Swagger ecosystem, `PUT` and `PATCH` are correctly distinguished. For old REST APIs, the distinction is sometimes fuzzy. Tools like Stripe's API famously use `POST` for everything *including* updates — also fine, just a different convention.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a CORS preflight, and why does it happen?
+
+**A:** **An `OPTIONS` request the browser sends *before* a "non-simple" cross-origin request, asking the server whether the actual request will be allowed. The actual request only fires if the preflight gets the right response.**
+
+When CORS preflight triggers:
+
+The browser sends a preflight when the cross-origin request is **not** "simple." A "simple" request is:
+- Method: `GET`, `HEAD`, or `POST`.
+- Headers: only safe-list headers (`Accept`, `Content-Language`, `Content-Type` with limited values).
+- `Content-Type`: `application/x-www-form-urlencoded`, `multipart/form-data`, or `text/plain`.
+
+Any request that violates these rules — including most modern API calls (`Content-Type: application/json`, custom `Authorization` headers, methods other than GET/POST) — triggers a preflight.
+
+The preflight looks like:
+
+```http
+OPTIONS /api/users/47 HTTP/1.1
+Host: api.jbeditor.com
+Origin: https://jbeditor.com
+Access-Control-Request-Method: PATCH
+Access-Control-Request-Headers: content-type, authorization
+```
+
+The server responds with the rules:
+
+```http
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://jbeditor.com
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+```
+
+If the preflight is accepted, the browser fires the real request. If not, the real request never happens; you see a CORS error in the console.
+
+Why this design:
+
+The browser is enforcing the **server's policy** about who can call its API. The server alone decides which origins, methods, and headers are allowed. The preflight gives the server a chance to say no *before* a state-changing request runs. Without it, a malicious site could send a `DELETE` to your bank's API and the bank's server would have to process it before deciding "should this have been allowed?"
+
+Why it sometimes shows up unexpectedly:
+
+- You added `Content-Type: application/json` to a request — that's not in the safe list; preflight triggered.
+- You added a custom header (`X-API-Key`, `X-User-Id`) — preflight triggered.
+- Your fetch became `PATCH` or `DELETE` — preflight triggered.
+
+The fix is usually server-side: configure CORS to allow your origin, method, and headers. Every backend framework has a CORS middleware (Express's `cors`, Gin's `cors`, etc.). Most teams set `Access-Control-Max-Age: 86400` so the browser caches the preflight result for a day — saves one round trip per request after the first.
+
+The everyday debug: you see a CORS error → check the Network panel → find the OPTIONS request → read its response. The reason is in the headers. Fix the server's CORS config; the real request starts working.
+
+</InterviewQuestion>

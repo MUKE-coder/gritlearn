@@ -1,0 +1,188 @@
+<!--
+  A "restaurant API" simulated in localStorage. Five endpoints:
+
+    GET    /api/menu          → list dishes
+    POST   /api/orders        → place an order
+    GET    /api/orders        → list orders
+    PATCH  /api/orders/:id    → mark served
+    DELETE /api/orders/:id    → cancel
+
+  Each button hits the right simulated endpoint and logs the HTTP
+  request/response in the trace panel.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Restaurant API — make orders</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 900px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .menu-item, .order-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.5rem 0.7rem; border: 1px solid #e4e4e7; border-radius: 6px;
+        background: #fff; margin-bottom: 6px; font-size: 0.9rem;
+      }
+      button {
+        padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      }
+      button:hover { background: #f4f4f5; }
+      button.order  { background: #15803d; color: #fff; border-color: #15803d; }
+      button.serve  { background: #fbbf24; color: #18181b; border-color: #fbbf24; }
+      button.cancel { background: #fff; color: #b91c1c; border-color: #fca5a5; }
+      .trace {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin-top: 0.5rem; max-height: 18rem; overflow-y: auto;
+      }
+      .trace .row { padding: 2px 0; border-bottom: 1px solid #1f2937; }
+      .verb { display: inline-block; min-width: 4.5rem; font-weight: 700; }
+      .verb.GET    { color: #7fff5b; }
+      .verb.POST   { color: #38bdf8; }
+      .verb.PATCH  { color: #c084fc; }
+      .verb.DELETE { color: #f87171; }
+      .status { color: #fbbf24; }
+      .empty { color: #71717a; padding: 0.3rem 0; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>Restaurant API — REST in action</h1>
+    <p>Each button below makes a "request" to a fake server (persisted to localStorage). The trace panel at the bottom shows the equivalent HTTP request and status code.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>🍽 Menu — GET /api/menu</h2>
+        <div id="menu"></div>
+      </div>
+      <div class="col">
+        <h2>🧾 Orders — GET /api/orders</h2>
+        <div id="orders"></div>
+      </div>
+    </div>
+
+    <h2>HTTP trace</h2>
+    <div class="trace" id="trace"></div>
+
+    <p style="margin-top: 1rem;">
+      <button id="reset" style="background: #fff; border-color: #d4d4d8;">reset everything</button>
+    </p>
+
+    <script>
+      const MENU = [
+        { id: "burger",  name: "Cheeseburger",  price: 12000 },
+        { id: "salad",   name: "Garden Salad",  price:  8000 },
+        { id: "pizza",   name: "Margherita",    price: 18000 },
+        { id: "ramen",   name: "Tonkotsu Ramen", price: 15000 },
+      ];
+
+      const STORAGE_KEY = "restaurant-orders";
+      const traceEl = document.getElementById("trace");
+      const menuEl  = document.getElementById("menu");
+      const ordersEl = document.getElementById("orders");
+
+      function loadOrders() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+      function saveOrders(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+
+      function trace(verb, path, status, body) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML = `<span class="verb ${verb}">${verb}</span>${path}  <span class="status">${status}</span>` +
+          (body ? `  ${JSON.stringify(body)}` : "");
+        traceEl.prepend(row);
+      }
+
+      function renderMenu() {
+        menuEl.innerHTML = MENU.map(item =>
+          `<div class="menu-item">
+            <span>${item.name} — UGX ${item.price.toLocaleString()}</span>
+            <button class="order" data-id="${item.id}">place order</button>
+          </div>`
+        ).join("");
+        menuEl.querySelectorAll("button").forEach(b => {
+          b.addEventListener("click", () => placeOrder(b.dataset.id));
+        });
+      }
+
+      function renderOrders() {
+        const orders = loadOrders();
+        if (orders.length === 0) {
+          ordersEl.innerHTML = `<div class="empty">no orders yet — place one from the menu</div>`;
+          return;
+        }
+        ordersEl.innerHTML = orders.map(o => {
+          const menuItem = MENU.find(m => m.id === o.itemId);
+          return `<div class="order-item">
+            <span>${o.id.slice(0, 8)} — ${menuItem.name} <em style="color:#71717a">(${o.status})</em></span>
+            <span>
+              ${o.status === "pending" ? `<button class="serve" data-id="${o.id}">mark served</button>` : ""}
+              <button class="cancel" data-id="${o.id}">cancel</button>
+            </span>
+          </div>`;
+        }).join("");
+        ordersEl.querySelectorAll("button.serve").forEach(b => {
+          b.addEventListener("click", () => markServed(b.dataset.id));
+        });
+        ordersEl.querySelectorAll("button.cancel").forEach(b => {
+          b.addEventListener("click", () => cancelOrder(b.dataset.id));
+        });
+      }
+
+      function placeOrder(itemId) {
+        const orders = loadOrders();
+        const newOrder = {
+          id: crypto.randomUUID(),
+          itemId,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        orders.push(newOrder);
+        saveOrders(orders);
+        trace("POST", "/api/orders", "201 Created", { itemId });
+        renderOrders();
+      }
+
+      function markServed(orderId) {
+        const orders = loadOrders();
+        const o = orders.find(o => o.id === orderId);
+        if (!o) {
+          trace("PATCH", `/api/orders/${orderId.slice(0, 8)}`, "404 Not Found");
+          return;
+        }
+        o.status = "served";
+        saveOrders(orders);
+        trace("PATCH", `/api/orders/${orderId.slice(0, 8)}`, "200 OK", { status: "served" });
+        renderOrders();
+      }
+
+      function cancelOrder(orderId) {
+        const orders = loadOrders();
+        const before = orders.length;
+        const next = orders.filter(o => o.id !== orderId);
+        if (next.length === before) {
+          trace("DELETE", `/api/orders/${orderId.slice(0, 8)}`, "404 Not Found");
+          return;
+        }
+        saveOrders(next);
+        trace("DELETE", `/api/orders/${orderId.slice(0, 8)}`, "204 No Content");
+        renderOrders();
+      }
+
+      document.getElementById("reset").addEventListener("click", () => {
+        localStorage.removeItem(STORAGE_KEY);
+        traceEl.innerHTML = "";
+        trace("DELETE", "/api/orders", "204 No Content");
+        renderOrders();
+      });
+
+      // initial render — log it as a GET
+      trace("GET", "/api/menu",   "200 OK");
+      trace("GET", "/api/orders", "200 OK");
+      renderMenu();
+      renderOrders();
+    </script>
+  </body>
+</html>

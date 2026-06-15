@@ -1,0 +1,128 @@
+<!--
+  Four buttons hitting a fake REST API (jsonplaceholder.typicode.com).
+  Each fires a different HTTP method against /posts. The right panel
+  shows the status code, status text, and parsed JSON body.
+
+  Demonstrates that:
+    GET    → 200 OK + body
+    POST   → 201 Created + new resource
+    PUT    → 200 OK + replaced resource
+    DELETE → 200 OK (this API returns 200, real APIs often return 204)
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>HTTP methods + status codes</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 800px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      .btn-row { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+      .btn-row button {
+        padding: 0.55rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-weight: 600; font-size: 0.9rem; text-align: left;
+        font-family: ui-monospace, monospace;
+      }
+      .btn-row button:hover { background: #f4f4f5; }
+      .verb { display: inline-block; min-width: 4.5rem; }
+      .verb.get    { color: #15803d; }
+      .verb.post   { color: #1e40af; }
+      .verb.put    { color: #b45309; }
+      .verb.patch  { color: #6d28d9; }
+      .verb.delete { color: #b91c1c; }
+
+      .status-line {
+        font-family: ui-monospace, monospace; font-size: 0.95rem;
+        background: #0a0a0d; color: #ededee; padding: 0.65rem 0.9rem;
+        border-radius: 4px; line-height: 1.5;
+      }
+      .status-line.s2xx { border-left: 3px solid #16a34a; }
+      .status-line.s4xx { border-left: 3px solid #f59e0b; }
+      .status-line.s5xx { border-left: 3px solid #dc2626; }
+      .status-line .code { color: #7fff5b; font-weight: 700; }
+
+      pre.body {
+        margin-top: 0.5rem; background: #0a0a0d; color: #ededee; padding: 0.7rem 0.85rem;
+        border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        max-height: 20rem; overflow-y: auto; white-space: pre-wrap;
+      }
+      .label { font-size: 0.75rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>HTTP methods + status codes — fire and see</h1>
+    <p>Each button sends one request to <code>jsonplaceholder.typicode.com</code> (a public fake API). Watch how the verb changes the status code and body.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Choose a request</h2>
+        <div class="btn-row">
+          <button data-m="GET"    data-u="https://jsonplaceholder.typicode.com/posts/1">
+            <span class="verb get">GET</span> /posts/1
+          </button>
+          <button data-m="POST"   data-u="https://jsonplaceholder.typicode.com/posts">
+            <span class="verb post">POST</span> /posts
+          </button>
+          <button data-m="PUT"    data-u="https://jsonplaceholder.typicode.com/posts/1">
+            <span class="verb put">PUT</span> /posts/1
+          </button>
+          <button data-m="PATCH"  data-u="https://jsonplaceholder.typicode.com/posts/1">
+            <span class="verb patch">PATCH</span> /posts/1
+          </button>
+          <button data-m="DELETE" data-u="https://jsonplaceholder.typicode.com/posts/1">
+            <span class="verb delete">DELETE</span> /posts/1
+          </button>
+          <button data-m="GET"    data-u="https://jsonplaceholder.typicode.com/posts/9999">
+            <span class="verb get">GET</span> /posts/9999  (will 404)
+          </button>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Response</h2>
+        <div class="status-line" id="status">click a button…</div>
+        <div class="label">body</div>
+        <pre class="body" id="body">—</pre>
+      </div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const bodyEl   = document.getElementById("body");
+
+      async function send(method, url) {
+        statusEl.textContent = "…";
+        statusEl.className = "status-line";
+        bodyEl.textContent = "";
+        try {
+          const opts = { method, headers: { "Content-Type": "application/json" } };
+          if (method !== "GET" && method !== "DELETE") {
+            opts.body = JSON.stringify({ title: "Demo", body: "From the lesson", userId: 1 });
+          }
+          const res = await fetch(url, opts);
+          const cls =
+            res.status >= 500 ? "s5xx" :
+            res.status >= 400 ? "s4xx" : "s2xx";
+          statusEl.className = "status-line " + cls;
+          statusEl.innerHTML = `<span class="code">${res.status}</span> ${res.statusText}`;
+          const text = await res.text();
+          try {
+            bodyEl.textContent = JSON.stringify(JSON.parse(text), null, 2);
+          } catch {
+            bodyEl.textContent = text || "(empty body)";
+          }
+        } catch (e) {
+          statusEl.className = "status-line s5xx";
+          statusEl.textContent = "network error: " + e.message;
+        }
+      }
+
+      document.querySelectorAll("button[data-m]").forEach((b) => {
+        b.addEventListener("click", () => send(b.dataset.m, b.dataset.u));
+      });
+    </script>
+  </body>
+</html>

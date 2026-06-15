@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "phases": [
     {
       "id": "phase-01",
@@ -76,9 +76,9 @@
         { "slug": "phase-02/git-remotes", "title": "Git remotes, push, pull", "available": true },
         { "slug": "phase-02/github-prs", "title": "GitHub: PRs and collaboration", "available": true },
         { "slug": "phase-02/merge-conflicts", "title": "Resolving merge conflicts", "available": true },
-        { "slug": "phase-02/http-deeper", "title": "HTTP deeper: methods, status codes, headers", "available": false },
-        { "slug": "phase-02/what-is-an-api", "title": "What an API is", "available": false },
-        { "slug": "phase-02/json-in-depth", "title": "JSON in depth", "available": false },
+        { "slug": "phase-02/http-deeper", "title": "HTTP deeper: methods, status codes, headers", "available": true },
+        { "slug": "phase-02/what-is-an-api", "title": "What an API is", "available": true },
+        { "slug": "phase-02/json-in-depth", "title": "JSON in depth", "available": true },
         { "slug": "phase-02/milestone-refactor", "title": "Milestone: Refactor the Phase 1 app", "available": false }
       ]
     },

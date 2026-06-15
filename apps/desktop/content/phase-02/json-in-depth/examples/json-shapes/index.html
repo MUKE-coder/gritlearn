@@ -1,0 +1,114 @@
+<!--
+  Two panels:
+  Left — the six legal JSON shapes, rendered with parsed output.
+  Right — the four common gotchas (undefined, NaN, Date, function)
+  showing what JSON.stringify does to each.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JSON shapes and gotchas</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      .col.bad { border-color: #fda4af; }
+      .col.good { border-color: #86efac; }
+      .row {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;
+        padding: 0.55rem 0; border-bottom: 1px solid #f4f4f6;
+      }
+      .row:last-child { border-bottom: 0; }
+      .row .label { font-size: 0.78rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem; }
+      code, pre {
+        background: #0a0a0d; color: #ededee; padding: 4px 8px; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+      }
+      pre { padding: 6px 9px; white-space: pre-wrap; }
+      .accent-g { color: #7fff5b; }
+      .accent-y { color: #fbbf24; }
+      .accent-r { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <h1>JSON — what's legal and what's not</h1>
+
+    <div class="grid">
+
+      <div class="col good">
+        <h2>✓ The six legal shapes</h2>
+        <div class="row">
+          <div><div class="label">string</div><code>"hello"</code></div>
+          <div><div class="label">parsed JS</div><pre id="r1"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">number</div><code>3.14</code></div>
+          <div><div class="label">parsed JS</div><pre id="r2"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">boolean</div><code>true</code></div>
+          <div><div class="label">parsed JS</div><pre id="r3"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">null</div><code>null</code></div>
+          <div><div class="label">parsed JS</div><pre id="r4"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">array</div><code>[1, "two", true]</code></div>
+          <div><div class="label">parsed JS</div><pre id="r5"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">object</div><code>{"a": 1}</code></div>
+          <div><div class="label">parsed JS</div><pre id="r6"></pre></div>
+        </div>
+      </div>
+
+      <div class="col bad">
+        <h2>✗ Common gotchas — what stringify does</h2>
+        <div class="row">
+          <div><div class="label">undefined</div><code>{ a: undefined }</code></div>
+          <div><div class="label">stringified</div><pre id="g1"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">NaN</div><code>{ a: NaN }</code></div>
+          <div><div class="label">stringified</div><pre id="g2"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">Date</div><code>{ at: new Date() }</code></div>
+          <div><div class="label">stringified</div><pre id="g3"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">function</div><code>{ fn: () => {} }</code></div>
+          <div><div class="label">stringified</div><pre id="g4"></pre></div>
+        </div>
+        <div class="row">
+          <div><div class="label">undefined IN array</div><code>[1, undefined, 3]</code></div>
+          <div><div class="label">stringified</div><pre id="g5"></pre></div>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+      function show(id, parsed) {
+        document.getElementById(id).textContent = JSON.stringify(parsed);
+      }
+
+      show("r1", JSON.parse('"hello"'));
+      show("r2", JSON.parse('3.14'));
+      show("r3", JSON.parse('true'));
+      show("r4", JSON.parse('null'));
+      show("r5", JSON.parse('[1, "two", true]'));
+      show("r6", JSON.parse('{"a": 1}'));
+
+      document.getElementById("g1").textContent = JSON.stringify({ a: undefined });
+      document.getElementById("g2").textContent = JSON.stringify({ a: NaN });
+      document.getElementById("g3").textContent = JSON.stringify({ at: new Date("2026-06-15T18:00:00Z") });
+      document.getElementById("g4").textContent = JSON.stringify({ fn: () => {} });
+      document.getElementById("g5").textContent = JSON.stringify([1, undefined, 3]);
+    </script>
+  </body>
+</html>
