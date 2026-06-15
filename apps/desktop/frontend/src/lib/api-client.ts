@@ -1,13 +1,19 @@
 import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { getToken, setToken, deleteToken } from "./wails-bridge";
 
-// In Wails dev, "/api" is proxied to http://localhost:8080 via Vite.
-// In Wails production, the frontend is served from file:// — we need the
-// full API URL. Configure via VITE_API_URL or default to localhost:8080.
+// API URL resolution:
+//  1. VITE_API_URL build-time env var wins if set (used by dev to point at a
+//     local API, used by ops to override the production target).
+//  2. In a Wails-built binary (window.go.main.App is bound), default to the
+//     deployed production API — without this, a fresh installer points at
+//     localhost:8080, which doesn't exist on the user's machine, and every
+//     network request fails. That was the v0.1.0 "app opens blank" bug.
+//  3. In a browser dev context (no Wails bindings), use "/api" so Vite's dev
+//     proxy can rewrite it.
 const API_URL =
   import.meta.env.VITE_API_URL ||
   (typeof window !== "undefined" && !!window.go?.main?.App
-    ? "http://localhost:8080/api"
+    ? "https://api.jbeditor.com/api"
     : "/api");
 
 export const apiClient = axios.create({

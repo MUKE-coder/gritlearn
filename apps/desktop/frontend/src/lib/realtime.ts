@@ -14,7 +14,7 @@ function resolveWsUrl(): string {
   const apiUrl =
     (import.meta.env.VITE_API_URL as string | undefined) ||
     (typeof window !== "undefined" && (window as any).go?.main?.App
-      ? "http://localhost:8080/api"
+      ? "https://api.jbeditor.com/api"
       : "/api");
   if (apiUrl.startsWith("http://") || apiUrl.startsWith("https://")) {
     return apiUrl.replace(/^http/, "ws") + "/ws";

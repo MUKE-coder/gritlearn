@@ -44,7 +44,9 @@ func (a *App) startup(ctx context.Context) {
 
 	a.apiURL = os.Getenv("VITE_API_URL")
 	if a.apiURL == "" {
-		a.apiURL = "http://localhost:8080/api"
+		// Production default: the deployed API. Override with VITE_API_URL
+		// when running locally against your own backend.
+		a.apiURL = "https://api.jbeditor.com/api"
 	}
 	dataDir, err := os.UserConfigDir()
 	if err != nil {
