@@ -98,7 +98,7 @@ export function HeroEditor() {
     }
     if (runRef.current) {
       tweens.push(gsap.to(runRef.current, {
-        boxShadow: "0 0 0 6px rgba(127,255,91,0.18)",
+        boxShadow: "0 0 0 6px rgba(95,227,176,0.18)",
         duration: 1.4,
         repeat: -1,
         yoyo: true,

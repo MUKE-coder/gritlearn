@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Onest, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { Navbar } from "@/components/navbar";
@@ -21,6 +21,22 @@ export const metadata: Metadata = {
   title: "JEditor — Code you can finally see",
   description:
     "JBEditor (JEditor for short) — the IDE that teaches you to code by analogy while you build real projects. A native desktop editor with an analogy-first curriculum that works offline.",
+  // Next picks up /icon, /apple-icon, /manifest from app/ by convention,
+  // but we hand-wire here so the favicon variants in /public are served
+  // directly with the right type/size hints.
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0d",
 };
 
 // noFlashScript: applies the saved theme to <html> before paint so the

@@ -1,0 +1,49 @@
+JEditor — End User License Agreement
+
+Copyright (c) 2026 JEditor
+
+This software is provided under the following terms.
+
+1. GRANT OF LICENSE
+   You are granted a personal, non-exclusive, non-transferable license to
+   install and use JEditor on any computer you own or control. There is no
+   limit on the number of personal devices.
+
+2. CURRICULUM CONTENT
+   The lessons, exercises, examples, and other written content bundled with
+   JEditor are provided for your personal learning use. You may copy
+   snippets for your own notes; you may not republish or resell the
+   curriculum in whole.
+
+3. SOURCE CODE & SAMPLES
+   Code samples shown in lessons (the snippets you can copy/paste from
+   examples) are provided under a permissive MIT-style license. You can use
+   them in your own projects, commercial or otherwise, without attribution.
+
+4. THIRD-PARTY COMPONENTS
+   JEditor uses several open-source components, including Wails (MIT), the
+   Monaco editor (MIT), React (MIT), TanStack Router (MIT), and the
+   Microsoft Edge WebView2 Runtime. These components retain their original
+   licenses; nothing in this agreement supersedes them.
+
+5. PRIVACY
+   JEditor stores your progress and notes locally on your computer. If you
+   sign in with an account, your progress also syncs to jbeditor.com so you
+   can continue across devices. We do not sell user data.
+
+6. UPDATES
+   JEditor periodically checks for updates. You can disable this in the
+   Settings panel.
+
+7. WARRANTY
+   The software is provided "as is", without warranty of any kind. In no
+   event shall the authors be liable for any claim, damages, or other
+   liability arising from the use of the software.
+
+8. ACCEPTANCE
+   By clicking "I Agree" below, you confirm that you have read these terms
+   and agree to them. If you do not agree, click Cancel to exit the
+   installer.
+
+For the full project license and contribution terms, see:
+   https://jbeditor.com/legal

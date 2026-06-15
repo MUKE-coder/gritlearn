@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 /* ─── Theme tokens ───────────────────────────────────────────────────
-   Engineering-console aesthetic — near-black surfaces, neon lime
-   accent (#7fff5b, the SpacetimeDB / terminal-prompt green), cyan as
+   Engineering-console aesthetic — near-black surfaces, mint accent
+   (#5FE3B0 — fresh, polished, matches the JEditor logomark), cyan as
    the secondary accent. Two modes: dark default, light override via
    .light class on <html>. Mono labels everywhere metadata appears.
    ─────────────────────────────────────────────────────────────────── */
@@ -20,11 +20,11 @@
   --text-primary: #ededee;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
-  --accent: #7fff5b;
-  --accent-hover: #6aea48;
-  --accent-glow: rgba(127, 255, 91, 0.35);
-  --accent-soft: rgba(127, 255, 91, 0.12);
-  --success: #7fff5b;
+  --accent: #5FE3B0;
+  --accent-hover: #48D29B;
+  --accent-glow: rgba(95, 227, 176, 0.35);
+  --accent-soft: rgba(95, 227, 176, 0.12);
+  --success: #5FE3B0;
   --danger: #f43f5e;
   --warning: #fbbf24;
   --info: #38bdf8;
@@ -41,11 +41,11 @@
   --text-primary: #18181b;
   --text-secondary: #52525b;
   --text-muted: #71717a;
-  --accent: #15803d;
-  --accent-hover: #166534;
-  --accent-glow: rgba(21, 128, 61, 0.25);
-  --accent-soft: rgba(21, 128, 61, 0.08);
-  --success: #15803d;
+  --accent: #0F9568;
+  --accent-hover: #0C7E58;
+  --accent-glow: rgba(15, 149, 104, 0.25);
+  --accent-soft: rgba(15, 149, 104, 0.08);
+  --success: #0F9568;
   --danger: #be123c;
   --warning: #b45309;
   --info: #0369a1;
