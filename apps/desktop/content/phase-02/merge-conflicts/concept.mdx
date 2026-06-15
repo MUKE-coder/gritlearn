@@ -1,0 +1,470 @@
+## Resolving merge conflicts
+
+Most merges happen automatically — Git is good at combining edits that touched different parts of a file, or different files entirely. But occasionally two people edit the same lines, and Git can't decide which version should win. It stops, writes both versions into the file separated by special markers, and asks you to pick. This is a **merge conflict** — the moment Git hands the keys back to a human. Once you've resolved a few, they stop being scary and become routine.
+
+<Analogy>
+A merge conflict is **two co-authors who edited the same paragraph of a manuscript without telling each other**.
+
+Two writers are working on the same novel. They split the chapters between them. Ada is rewriting chapter 4; Lin is rewriting chapter 7. When they email their revisions to the editor, the editor combines both — chapter 4 from Ada, chapter 7 from Lin, everything else unchanged. Easy. The two changes touched different parts of the book; merging is mechanical.
+
+But sometimes both writers — without coordinating — happen to rewrite the same paragraph. Ada changed "She turned and ran" to "She sprinted away." Lin changed it to "She bolted into the alley." Two different rewrites of the *same* sentence. The editor can't auto-combine these; there's no obvious right answer. So the editor leaves the manuscript open at that page, writes **both versions in the margin with brackets around each**, and emails it back: *"You two need to talk about this paragraph — which version wins, or do we want a third option that combines them?"*
+
+That's a merge conflict. The "conflicting paragraph" is a region of source code that two branches changed differently. Git, like the editor, doesn't guess — it writes both versions into the file with markers and waits for a human to pick:
+
+```text
+<<<<<<< HEAD
+const greeting = "She sprinted away.";
+=======
+const greeting = "She bolted into the alley.";
+>>>>>>> feature/lin-edits
+```
+
+Three lines of marker plus both versions. The human reads them, decides what should actually be there, and edits the section by hand — removing the markers and leaving the resolution. Then `git add`, `git commit`. The merge completes.
+
+Three things this loop teaches once you've done it:
+
+1. **Conflicts are rare on healthy projects.** If everyone branches from main, works on their own area, and merges often, two people rarely edit the same lines. The conflicts you'll hit will be on actively-changing files (a shared config, a big utility, a route file).
+
+2. **Conflicts are not failure.** Git stopping is *correct behavior*. It refused to silently overwrite either author's work. The human pause is the safety mechanism — you'd rather pause and look than wake up with a teammate's work gone.
+
+3. **Resolution is just editing.** The conflict markers are plain text. You delete them, type what you want, save. There's no special "resolve" command other than `git add` once you've finished editing. Most editors highlight the markers visually and offer "accept incoming / accept current / accept both" buttons — but underneath, you're just editing text.
+
+The mistake to avoid: treating the conflict as Git's problem instead of yours. The editor can't decide which version is right. The conflict marker is asking you, the human, to make a call. Make it; commit; move on.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a merge conflict — two branches edit the same line, Git writes both versions with markers"
+  caption="Both edits get written into the file. You read both, decide, and edit the final version yourself."
+>
+
+```
+   main edited:                feature edited:
+   ─────────────               ───────────────
+   greeting = "Hi"             greeting = "Hello"
+
+                  ↓
+                  ▼ git merge feature
+
+   In the file, Git writes:
+
+   <<<<<<< HEAD            ← your current branch (main)'s version
+   greeting = "Hi"
+   =======                 ← separator
+   greeting = "Hello"
+   >>>>>>> feature         ← incoming branch's version
+
+   You edit the file:
+   greeting = "Hello"     ← keep one, or write a new version
+
+   Then:
+   git add the resolved file
+   git commit               ← completes the merge
+```
+
+</Illustration>
+
+### What triggers a conflict
+
+Git auto-merges when:
+- Two branches edited *different files* (no overlap).
+- Two branches edited *different lines* of the same file (Git combines them).
+- Only one branch edited a particular line.
+
+Git stops and asks when:
+- Two branches edited *the same line* (or very close — within a few lines) differently.
+- One branch deleted a file, the other modified it.
+- Both branches added a new file with the same name and different contents.
+
+The first case is by far the most common. The other two are rarer but worth recognizing.
+
+### What a conflict looks like in your file
+
+When `git merge` (or `git pull` or `git rebase`) hits a conflict, Git modifies the file with conflict markers and stops:
+
+```js
+function greet(name) {
+<<<<<<< HEAD
+  return "Hi, " + name + "!";
+=======
+  return "Hello, " + name + ".";
+>>>>>>> feature/formal-greeting
+}
+```
+
+The four lines of markers:
+
+- `<<<<<<< HEAD` — start of *your current branch's* version (whatever branch you were on when you merged).
+- `=======` — separator between the two versions.
+- `>>>>>>> feature/formal-greeting` — end marker, with the name of the *incoming* branch.
+
+The lines between `<<<<<<<` and `=======` are what's on your branch. The lines between `=======` and `>>>>>>>` are what's on the branch you're merging in. Both are still in your file; Git is showing you both so you can decide.
+
+If the conflict spans multiple chunks of the file, you'll get multiple sets of markers — each independent.
+
+### The resolution loop
+
+```bash
+git status                          # see which files have conflicts
+# ↑ shows "both modified: greet.js" for conflicted files
+
+# Open greet.js in your editor. Edit the conflict section
+# to reflect what you actually want. Remove all four marker lines.
+
+git add greet.js                    # mark the file as resolved
+git status                          # confirm "all conflicts fixed but you are still merging"
+git commit                          # complete the merge
+# (Git pre-fills a message like "Merge branch 'feature/...' into main".)
+```
+
+Step 2 — the edit — is where the actual decision happens. Five common resolutions:
+
+1. **Keep yours** (the lines between `<<<<<<<` and `=======`). Delete everything from `=======` through `>>>>>>>`.
+2. **Keep theirs** (the lines between `=======` and `>>>>>>>`). Delete from `<<<<<<<` through `=======`.
+3. **Keep both.** Delete only the three marker lines (`<<<<<<<`, `=======`, `>>>>>>>`) and leave both versions. Common when both changes are valid additions.
+4. **Combine into something new.** Delete the markers and write a third version that incorporates both intents. Most "real" resolutions look like this.
+5. **Talk to the other author.** If you have no idea which is right, message the person who made the conflicting commit and ask. Common when conflicts span complex logic.
+
+The wrong move: blindly clicking "Accept incoming" without reading both versions. You might be silently throwing away your teammate's work — or your own.
+
+### Modern editors help
+
+VS Code, JetBrains, and most editors highlight conflict markers visually:
+
+- The marker lines get a colored background.
+- Three buttons appear above each conflict: **"Accept current"** (yours), **"Accept incoming"** (theirs), **"Accept both"** (concatenate).
+- A "Compare" view splits the editor to show both versions side by side.
+
+The buttons just edit the text — they're shortcuts for steps 1, 2, 3 above. For option 4 (combine), you still edit by hand.
+
+For complex conflicts, the dedicated **three-way merge tool** view shows:
+- Left: the version from your branch.
+- Right: the version from the incoming branch.
+- Middle: the **common ancestor** — what both branches started from.
+
+Seeing the ancestor often makes "what did each side change?" much clearer than the two-pane diff alone.
+
+### Aborting a merge
+
+If the conflict is bigger than you thought, or you started it accidentally, you can back out:
+
+```bash
+git merge --abort                   # undo the in-progress merge
+```
+
+The file goes back to its pre-merge state. Conflict markers gone. Your branch is back to where you started. Useful when you realize "I want to pull main into a clean branch first," or "I picked the wrong direction to merge."
+
+The opposite — committing the half-resolved state — is sometimes done as `git commit --no-verify` or with the `mergetool` workflow. Most teams just push through to a finished resolution; partial commits during conflicts are an anti-pattern.
+
+### Preventing conflicts in the first place
+
+You can't always avoid them, but three habits dramatically cut the rate:
+
+1. **Pull often.** Sync your branch with main daily. If `main` moves while your branch is open, you want to catch up incrementally — one day of changes is rarely conflicting; two weeks of changes might overlap a lot.
+
+   ```bash
+   # On your feature branch:
+   git fetch
+   git merge origin/main        # or git rebase origin/main
+   ```
+
+2. **Small, focused PRs.** A branch open for two days touching one file is unlikely to conflict. A branch open for three weeks touching twenty files almost certainly will.
+
+3. **Coordinate big changes.** If you and a teammate are about to refactor the same file, Slack them. *"I'm starting a big change in `payment.ts` today, going to push end of day."* Five seconds of communication prevents an hour of conflict resolution.
+
+### Rebases produce conflicts too
+
+`git rebase main` replays your commits on top of main. If any of those commits conflict with main's changes, you'll get the same `<<<<<<<` / `=======` / `>>>>>>>` markers — but the workflow is slightly different:
+
+```bash
+git rebase main
+# CONFLICT (content): Merge conflict in greet.js
+# Resolve all conflicts manually, mark them as resolved with "git add",
+# then run "git rebase --continue".
+
+# Edit the file, fix the markers.
+git add greet.js
+git rebase --continue              # NOT git commit
+```
+
+Two differences:
+- `git rebase --continue` is the equivalent of `git commit` for rebases.
+- You might hit conflicts on *multiple* commits as the rebase replays each one. Resolve, continue, resolve, continue.
+
+To abort a rebase mid-conflict: `git rebase --abort`.
+
+### Conflict markers in a binary file
+
+If a conflict happens in a non-text file (an image, a PDF), Git can't insert markers — there's no "line" to put them between. Both versions exist in your working directory; you pick one and add:
+
+```bash
+git checkout --ours image.png       # keep your version
+# or
+git checkout --theirs image.png     # keep theirs
+
+git add image.png
+git commit
+```
+
+Same applies to text files where the conflict is so tangled that line-based merging makes a mess — `--ours` and `--theirs` give you the whole file from one side.
+
+### What "ours" and "theirs" really mean
+
+Subtle but important: in a `git merge`, "ours" is the branch you're currently on; "theirs" is the incoming branch. But in a `git rebase`, the meaning *flips*:
+
+- In `git rebase main` (while on `feature`), the rebase replays your commits on top of main. So "ours" is `main` (the base) and "theirs" is `feature` (your commits being replayed).
+
+This trips people up. Read the documentation for whichever command you're running; don't assume.
+
+For the daily case (`git merge`), the rule holds: "ours" = current branch.
+
+### `git mergetool` — graphical resolution
+
+```bash
+git mergetool                       # opens a configured merge tool
+```
+
+Launches a side-by-side merge UI in your configured tool (e.g. `meld`, `kdiff3`, VS Code's built-in). Useful for complex conflicts — three panes (yours, theirs, ancestor), drag-and-drop resolution.
+
+Most modern devs use their editor's built-in conflict UI instead of a separate tool. Either works; the underlying mechanism is the same (read both versions, decide, save, `git add`).
+
+### When the conflict is bigger than the conflict markers
+
+Sometimes the conflict markers are just the surface symptom. Two branches both refactored a large function in incompatible ways; resolving just the marked lines produces a Frankenstein function that doesn't compile or test. In that case:
+
+1. Pick a base (usually the version closer to what you want).
+2. Resolve the markers to that version (delete the other side).
+3. Then manually port over the meaningful changes from the other side.
+4. Test (run the file, run the test suite) before committing.
+
+This is more work than the marker pattern suggests — but it's the right work. The markers tell you *where* the conflict is; understanding it might require more thought than the markers convey.
+
+<ExampleProject
+  src="conflict-markers"
+  title="Read the markers — what do they mean?"
+  description="A file with three conflict regions. Each region is annotated so you can see exactly what the markers are saying: 'current branch shows X; incoming branch shows Y; pick one.' Practice reading them until they become readable code, not gibberish."
+/>
+
+<ExampleProject
+  src="resolve-walkthrough"
+  title="A real conflict from start to finish"
+  description="Walks through the entire resolution: git merge, conflict appears, status shows it, open the file, edit each region, save, add, commit. Six steps, the rhythm you'll repeat dozens of times in a career."
+/>
+
+<Exercise
+  title="Cause and resolve a merge conflict on purpose"
+  starter={`Create a fresh practice repo (or use your existing one).
+
+  1. On main, create a file:
+       echo "Hello, world." > greeting.txt
+       git add greeting.txt
+       git commit -m "init: add greeting"
+
+  2. Branch and edit:
+       git checkout -b feature/formal
+       echo "Good morning, world." > greeting.txt
+       git commit -am "feat: use formal greeting"
+
+  3. Switch back to main and make a CONFLICTING edit:
+       git checkout main
+       echo "Hi there, world!" > greeting.txt
+       git commit -am "feat: use casual greeting"
+
+  4. Try to merge:
+       git merge feature/formal
+
+     You'll see "CONFLICT (content): Merge conflict in greeting.txt".
+
+  5. Run git status — note that greeting.txt is "both modified."
+
+  6. Open greeting.txt. You'll see:
+       <<<<<<< HEAD
+       Hi there, world!
+       =======
+       Good morning, world.
+       >>>>>>> feature/formal
+
+  7. Resolve it. Try ALL THREE options in separate attempts:
+       a. Keep yours: delete the bottom section and the markers.
+       b. Keep theirs: delete the top section and the markers.
+       c. Combine: write something new like "Hello and good morning, world!"
+
+  8. After each attempt, run:
+       git add greeting.txt
+       git commit
+     (Git pre-fills the merge message; accept it.)
+
+  9. Run git log --oneline --graph. See the merge commit and the
+     two branches.
+
+  10. To redo the exercise: git reset --hard <commit-before-merge>
+      and try a different resolution.
+
+Bonus: now do the same but with git rebase instead of git merge.
+Notice the differences in the conflict workflow.`}
+>
+
+- A new repo (or branch in an existing repo) was used to deliberately create a conflict.
+- The student saw "CONFLICT (content): Merge conflict in ..." in the terminal.
+- `git status` was run during the conflict and showed "both modified" for the conflicted file.
+- The conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) were inspected by reading the file.
+- The student tried at least **two** of the three resolution strategies (keep yours, keep theirs, combine).
+- Each attempt was completed with `git add` + `git commit` to finalize the merge.
+- `git log --oneline --graph` was run afterward and the student understood the merge-commit structure visible there.
+- Bonus: the student tried the same exercise with `git rebase` and noted the workflow difference (`--continue` vs. `commit`).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What do the symbols `<<<<<<<`, `=======`, and `>>>>>>>` mean in a file?
+
+**A:** **They're Git's conflict markers. They appear in a file when Git couldn't auto-merge two branches and needs you to decide which version wins.**
+
+```text
+<<<<<<< HEAD
+Hi, world.
+=======
+Hello, world.
+>>>>>>> feature/formal
+```
+
+Reading the markers:
+
+- **`<<<<<<< HEAD`** — start of *your current branch's* version. ("HEAD" is shorthand for the current branch's tip.)
+- **`=======`** — separator between the two versions.
+- **`>>>>>>> feature/formal`** — end of the *incoming branch's* version, labeled with that branch's name.
+
+Both versions are present in the file. Git is showing you both because it doesn't know which you want. Your job:
+
+1. **Read both versions.**
+2. **Decide** — keep one, keep both, or write a new version that combines them.
+3. **Delete the marker lines** (all four: `<<<<<<<`, the middle line, `=======`, `>>>>>>>`).
+4. **Save**, `git add`, `git commit`.
+
+Common mistake: leaving even one marker line in the file. Modern build tools won't compile a `.ts` file with `<<<<<<<` in it; tests will fail. Always remove all the markers.
+
+A file can have *multiple* conflict regions if the two branches edited multiple separate areas. Each region has its own four-marker set. Resolve each independently.
+
+Modern editors (VS Code, JetBrains) highlight the markers visually and offer one-click "accept current" / "accept incoming" / "accept both" buttons that do the marker removal for you. Same outcome; less typing.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does Git stop on a merge conflict instead of just picking one version?
+
+**A:** **Because Git has no way to know which version is correct. The "safe default" — silently overwriting either side — would lose someone's work without warning.**
+
+Think about what's happening: two people made different changes to the same line of code. Both edits represent some intent. Neither is "the right answer" in a way Git could detect. The options Git could have chosen:
+
+- **Always pick the current branch's version.** This silently throws away the incoming changes — your teammate's work would vanish into thin air.
+- **Always pick the incoming version.** Same problem, your own work loses.
+- **Pick "the latest by timestamp."** Timestamps are unreliable (clocks drift, commits get rewritten); also, "later" isn't the same as "better."
+- **Stop and ask the human.** ← what Git does.
+
+The stop *is* the correct behavior. It's Git protecting both authors from losing work to a guess. Once a human looks at the two versions, the decision is usually obvious — they understand the intent of both edits in a way the tool can't.
+
+Concrete consequences:
+
+- **Merge conflicts are not failures.** They're the safety mechanism working. A merge with no conflicts isn't "better"; it just means the two branches didn't overlap.
+- **The reviewer can see the resolution.** When you commit the merge, the resolved version is in the commit. A reviewer can see which version you picked and why.
+- **Auto-resolution tools should be used cautiously.** `--theirs` and `--ours` can be appropriate but blindly accepting one side will sometimes silently discard the other.
+
+The mental shift: stop seeing "CONFLICT" as Git complaining. It's Git pausing to let you make the call. The pause is good.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** You're mid-conflict and realize the merge was a bad idea. How do you back out?
+
+**A:** **`git merge --abort` (or `git rebase --abort` if you were rebasing). The working directory goes back to its pre-merge state — no half-resolved files, no conflict markers, no in-progress commit.**
+
+```bash
+git merge feature/risky
+# CONFLICT (content): Merge conflict in many-files.tsx
+# ...50 more conflict warnings...
+
+git merge --abort                 # undo everything; back to clean main
+```
+
+When to use it:
+
+- The conflict is bigger than you expected (10 files conflicted; you assumed there'd be one).
+- You realize you should pull main first into the *other* branch, not the other way around.
+- You picked the wrong direction (you should've merged main into feature, not feature into main).
+- The conflict turns out to require coordination you didn't have time for; you'll come back to it.
+
+After abort, your branch is back to exactly where it was before you ran `git merge`. No commits made. No file changes pending. You can pick a different strategy.
+
+`git rebase --abort` does the same for an in-progress rebase. Same rules: you're back to where you started.
+
+What `--abort` does **not** do:
+
+- It doesn't revert any commits you made *before* starting the merge. Only the merge itself is undone.
+- It doesn't lose any unrelated working-directory changes that were there before the merge (Git stops merges if you had uncommitted edits anyway).
+
+What you can't `--abort` after:
+
+- The merge commit has already been *committed*. If you committed the resolution and then realize it was wrong, you need `git reset --hard HEAD~` (warning: destructive) or `git revert HEAD` (creates a new commit that undoes the merge).
+
+The general principle: while Git is in the middle of an operation (mid-merge, mid-rebase, mid-cherry-pick), there's almost always an `--abort` option to back out cleanly. Use it when you spot trouble; don't soldier through a resolution you don't understand.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Your teammate's branch has 30 commits that all conflict with main. What's the most productive way to resolve?
+
+**A:** **Don't resolve at the merge step — first bring the branch up to date with main's intermediate changes, in small bites. Conflicts get smaller, more focused, and easier to reason about.**
+
+The bad path:
+
+```bash
+git checkout main
+git pull
+git merge teammate/big-branch     # 50 files conflicting; chaos
+```
+
+Resolving 50 simultaneous conflicts is overwhelming — you can't tell which conflict belongs to which conceptual change. The right approach is to get the branch caught up *before* attempting the final merge.
+
+**The good path** (executed on teammate/big-branch, not main):
+
+```bash
+git checkout teammate/big-branch
+git fetch origin
+git merge origin/main             # merge main's recent commits INTO the branch
+# Resolve conflicts — but only for what's actually in main, in context.
+git commit                         # complete the merge
+
+# Now the branch is current with main. Conflicts during the eventual
+# final merge into main will be smaller (only the branch's own changes
+# vs. current main).
+
+git checkout main
+git merge teammate/big-branch     # likely fast-forward or much cleaner now
+```
+
+Or, if the team uses rebase:
+
+```bash
+git checkout teammate/big-branch
+git fetch origin
+git rebase origin/main            # replay the branch on top of latest main
+# Resolve conflicts as each commit is replayed — one commit at a time
+```
+
+The rebase variant is even better for understanding: each replayed commit's conflicts are localized to *that commit's intent*. You can read the commit message ("feat: add product search bar"), understand what the change was trying to do, and resolve the conflict in that mental frame.
+
+Why this works:
+
+1. **Smaller resolutions.** Conflicts in one chunk are easier than conflicts in 30 chunks at once.
+2. **Conceptual framing.** Each commit's resolution is in the context of that commit's purpose.
+3. **Tests as you go.** After each conflict resolution, you can run the test suite. Caught bugs early are easier to fix.
+4. **Reviewer-friendly.** The eventual PR has a clean rebased branch; reviewer sees only the actual changes.
+
+For really large divergence (months of out-of-sync work), sometimes the answer is even more pragmatic: **start over.** Cherry-pick the meaningful commits from the old branch onto a fresh branch off latest main. The old branch's history is preserved, but the integration burden disappears.
+
+The general principle: **stay close to main.** A branch open for a week with daily `git merge origin/main` produces tiny conflicts. A branch open for two months without syncing produces nightmare conflicts. The discipline is in the syncing rhythm, not the conflict-resolution skill.
+
+</InterviewQuestion>

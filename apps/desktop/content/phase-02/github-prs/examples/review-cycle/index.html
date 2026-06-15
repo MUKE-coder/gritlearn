@@ -1,0 +1,142 @@
+<!--
+  A 6-step click-through of the PR review loop, alternating between
+  AUTHOR and REVIEWER perspective. Each step shows what just happened
+  and a one-line takeaway.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The review loop, step by step</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .timeline { margin-top: 1rem; }
+      .step {
+        display: grid; grid-template-columns: 60px 1fr; gap: 0.7rem;
+        padding: 0.7rem 0; border-bottom: 1px solid #e4e4e7;
+      }
+      .role {
+        display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+      }
+      .role .avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; color: #fff; font-size: 0.85rem;
+      }
+      .role.author .avatar { background: #15803d; }
+      .role.reviewer .avatar { background: #2563eb; }
+      .role .who { font-size: 0.72rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
+      .step-body { display: flex; flex-direction: column; gap: 0.3rem; }
+      .num { font-size: 0.75rem; color: #71717a; font-family: ui-monospace, monospace; }
+      .action { font-weight: 600; font-size: 0.96rem; }
+      .detail { font-size: 0.88rem; color: #52525b; }
+      .detail code { background: #f4f4f6; padding: 1px 5px; border-radius: 3px; font-size: 0.82rem; }
+      .takeaway {
+        font-size: 0.82rem; color: #166534; background: #ecfdf5;
+        border-left: 3px solid #16a34a; padding: 4px 9px; border-radius: 4px; margin-top: 0.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The review loop in 6 steps</h1>
+    <p>Same PR, two people. Author commits and pushes; reviewer reads and comments; loop until approved.</p>
+
+    <div class="timeline">
+
+      <div class="step">
+        <div class="role author">
+          <div class="avatar">A</div>
+          <div class="who">author</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 1</span>
+          <span class="action">Open the PR</span>
+          <span class="detail">
+            Push branch <code>feature/dark-mode</code>. Open PR titled "Add dark mode toggle." Description: what + why + test plan. Request review from <strong>lin</strong>.
+          </span>
+          <div class="takeaway">PR exists. CI starts running. Reviewer gets a notification.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="role reviewer">
+          <div class="avatar">L</div>
+          <div class="who">reviewer</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 2</span>
+          <span class="action">Read the diff, leave comments</span>
+          <span class="detail">
+            Opens "Files changed" tab. Reads navbar.tsx, theme-toggle.tsx, globals.css. Leaves two comments:
+            <br>· "What happens if localStorage is full?"
+            <br>· "Suggestion: prefer `useEffect` over inline script."
+            Submits as <strong>Request changes</strong>.
+          </span>
+          <div class="takeaway">Merge button is now blocked until reviewer re-approves.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="role author">
+          <div class="avatar">A</div>
+          <div class="who">author</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 3</span>
+          <span class="action">Address feedback</span>
+          <span class="detail">
+            Add try/catch around localStorage. For the inline-script question, reply: "The script avoids the flash of wrong theme before useEffect runs — that's why we kept it." Push two new commits. The PR auto-updates.
+          </span>
+          <div class="takeaway">Some feedback addressed in code; some pushed back on with explanation. Both are valid.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="role reviewer">
+          <div class="avatar">L</div>
+          <div class="who">reviewer</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 4</span>
+          <span class="action">Re-review just the new commits</span>
+          <span class="detail">
+            Uses "Compare changes since your last review" to see only the diff added since step 2. Reads the try/catch. Reads the inline-script reply, agrees with the reasoning. Resolves both conversations.
+          </span>
+          <div class="takeaway">Iterative review is fast — only the new changes need re-reading.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="role reviewer">
+          <div class="avatar">L</div>
+          <div class="who">reviewer</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 5</span>
+          <span class="action">Approve</span>
+          <span class="detail">
+            Clicks "Review changes" → "Approve" → "LGTM." The PR now shows a green checkmark next to lin's name. CI is also green. Merge button turns active.
+          </span>
+          <div class="takeaway">Author can now merge. (On some teams, only the author merges; on others, the approver does.)</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="role author">
+          <div class="avatar">A</div>
+          <div class="who">author</div>
+        </div>
+        <div class="step-body">
+          <span class="num">step 6</span>
+          <span class="action">Merge + cleanup</span>
+          <span class="detail">
+            Click <strong>"Squash and merge"</strong>. PR closes. GitHub prompts to delete the branch — delete it. Locally: <code>git checkout main &amp;&amp; git pull &amp;&amp; git branch -d feature/dark-mode</code>.
+          </span>
+          <div class="takeaway">Feature ships to main. The next deploy will include it.</div>
+        </div>
+      </div>
+
+    </div>
+  </body>
+</html>

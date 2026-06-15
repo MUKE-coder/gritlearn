@@ -1,0 +1,518 @@
+## GitHub PRs and collaboration
+
+A pull request (PR) is the social layer over Git's branch-and-merge model. You push a feature branch to GitHub; you open a PR; a teammate reviews the diff, leaves comments, asks for changes; you push more commits to the same branch (the PR auto-updates); reviewer approves; the merge button ships your work into `main`. The whole rhythm of modern software development — at any company, on any open-source project — happens through this loop. Learn it once, use it ten thousand times.
+
+<Analogy>
+A pull request is **the manuscript-to-editor handoff in publishing**.
+
+A novelist finishes a draft. They don't quietly slip it onto the printing press. They send the draft to an editor — who reads carefully, marks up the margins ("this character's motivation isn't clear here," "this paragraph repeats page 47"), and sends it back. The novelist revises. The editor reads again. Eventually the editor signs off, and *only then* does the manuscript move toward print.
+
+The pull request is that handoff for code. You're not pushing your changes directly into `main` (the printing press); you're submitting them for review. The reviewer sees the diff in a structured UI: every changed line, with the ability to click any line and leave a comment. You see the comments; you push more commits to the branch to address them; the PR auto-updates; the reviewer re-reviews. When they're satisfied, they approve, and the merge button is unlocked.
+
+The five things this loop gives you that nothing else does:
+
+1. **Two pairs of eyes.** The author writes; the reviewer catches what the author missed. Doesn't matter how senior the author — *everyone's* code is better after another developer reads it. A typo here. A missing edge case there. A simpler way to express the logic. The compounding quality improvement over a year is enormous.
+
+2. **A pause before "real."** Until merge, nothing is in `main`. Production is untouched. You can experiment in a PR — push, see the deploy preview, decide to abandon it — without any risk to the team.
+
+3. **A record of *why* a change happened.** Every PR has a title, a description, a discussion. Six months later when you're staring at a confusing line of code, you can find the PR that added it, read the original problem and the review discussion, and understand the context. Better than any comment.
+
+4. **A shared place for context.** "Closes #234" links a PR to a bug report. "@alice can you look at the database schema part?" pings a specific person. "Here's a screenshot of the new modal" attaches visual context. The PR becomes the conversation hub for the change — much richer than a commit message could be.
+
+5. **An automated checkpoint.** CI runs on every push to the branch: tests, linters, type checks, security scans. The merge button stays gray until CI passes. The reviewer sees the green check or the red X before they even read the diff. Bad code can't merge by accident.
+
+The shift the PR loop produces: **code stops being something you write and ship; it becomes something you write, propose, refine, and ship together.** That shift is the main reason a 5-person team using PRs ships safer code than a 5-person team without them, even if both are using Git. The branching mechanism is the same; the social layer is what makes it work.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a PR lifecycle from branch to merge with the review loop in the middle"
+  caption="Branch → push → open PR → review loop → approve → merge → main."
+>
+
+```
+   YOU                                    REVIEWER
+
+   1. git checkout -b feature/login
+   2. work, commit, commit
+   3. git push -u origin feature/login
+   4. Open PR on GitHub
+                              ──── PR opened ────►
+                                                    5. Read diff
+                                                    6. Leave comments
+                              ◀──── comments ─────
+   7. Address feedback
+   8. git commit + git push
+                              ──── new commits ───►
+                                                    9. Re-review
+                                                    10. ✓ Approve
+                              ◀──── approval ─────
+   11. Merge (button on GitHub or git merge locally)
+                                      │
+                                      ▼
+                                    MAIN
+                                    (production-ready code)
+```
+
+</Illustration>
+
+### Opening a PR — the everyday flow
+
+```bash
+# 1. Branch off main
+git checkout main && git pull
+git checkout -b feature/dark-mode
+
+# 2. Work
+# ... edit, commit, edit, commit ...
+
+# 3. Push
+git push -u origin feature/dark-mode
+```
+
+After pushing, GitHub usually shows a banner at the top of the repo: "Compare & pull request." Click it.
+
+Or go to `Pull requests` → `New pull request` → pick your branch as the source and `main` as the target.
+
+You'll see:
+
+- **Title.** Defaults to your first commit message. Edit it to be PR-level (a short summary of the *feature*, not one commit).
+- **Description.** Markdown. This is your message to reviewers — what changed, why, screenshots, links to bug reports.
+- **Reviewers.** Pick teammates whose approval you want.
+- **Labels.** Optional tags ("bug", "feature", "documentation").
+- **Linked issues.** "Closes #234" auto-closes the issue when the PR merges.
+
+Click "Create pull request." Done.
+
+### A good PR description
+
+The template most teams converge on:
+
+```markdown
+## What
+Adds dark mode toggle to the navbar. Persists preference to localStorage.
+
+## Why
+Fixes #234. Users on OLED displays were burning eye stamina on the
+white background; the survey in Q2 had it as the top requested feature.
+
+## How
+- New ThemeToggle component (apps/web/components/theme-toggle.tsx)
+- Adds `.light` class override to globals.css for the inverted palette
+- No-flash inline script in layout.tsx applies saved theme before paint
+
+## Test plan
+- [ ] Toggle works on landing page
+- [ ] Toggle works on /download page
+- [ ] Refresh preserves the chosen mode
+- [ ] Mobile drawer shows toggle row
+```
+
+What matters:
+- **"Why" is gold.** The reviewer can read the code to learn "what"; they can't reconstruct "why" without you saying it.
+- **Test plan as a checklist.** Helps the reviewer verify on their machine; helps you verify before requesting review.
+- **Links to issues/screenshots.** Visual context saves the reviewer hours of "wait, what does this look like?"
+
+A PR description that's just "fixes the thing" is the equivalent of a bad commit message — the reviewer can't help you efficiently.
+
+### The review loop
+
+The reviewer opens the PR. They see:
+
+- **Conversation tab:** PR description + every comment posted to the PR.
+- **Files changed tab:** the diff — every changed file, with the ability to click any line and leave a comment.
+- **Commits tab:** the list of commits on the branch.
+- **Checks tab:** CI results.
+
+They click into "Files changed" and read line by line. For any line that needs discussion, they click the `+` next to the line number and type a comment. The comment is anchored to that specific line; you'll see it inline when you re-open the PR.
+
+Common review comment types:
+
+- **"This logic is hard to follow."** Suggest a refactor.
+- **"Edge case: what happens if the array is empty?"** Catches missing handling.
+- **"Style: prefer `cn(...)` over template-literal soup."** Conventions.
+- **"Nit: typo in the comment."** Tiny issues; usually marked "nit" so the author knows they're optional.
+- **"Question: why this approach instead of X?"** Asks for context, not necessarily a change.
+- **"Suggestion:" (with a code block GitHub renders as a one-click commit).** The reviewer offers a literal patch you can accept with a button.
+
+When done, the reviewer at the top of the page picks one of three:
+
+- **Approve** — "looks good to me; ready to merge."
+- **Comment** — "I have feedback but I'm not blocking." Use when the work isn't done yet or the reviewer wants discussion.
+- **Request changes** — "I have feedback that should be addressed before merge." This *blocks* the merge button until the reviewer re-approves.
+
+### Addressing feedback
+
+You read the comments. For each:
+
+1. **Make the change** (or push back politely if you disagree — "fair point but I went this way because X").
+2. **Reply to the comment** so the reviewer knows you saw it: "Good catch, fixed in 7a3f9c2."
+3. **Resolve the conversation** (button next to the comment) when the discussion is settled.
+
+Push the new commits to the same branch — `git push` from the branch. The PR auto-updates with the new commits; the reviewer gets a notification.
+
+Don't squash or amend your commits during review unless your team specifically requests it — the reviewer can use GitHub's "compare since last review" feature to see only what changed since they last looked. Rewriting history mid-review breaks that.
+
+### When the reviewer approves
+
+You see a green check next to the reviewer's name. The "Merge pull request" button at the bottom turns green. You can:
+
+- **Merge** — combines the branch into main with a merge commit.
+- **Squash and merge** — flattens all branch commits into one commit on main. Many teams' default — keeps main's history clean.
+- **Rebase and merge** — replays branch commits onto main as individual commits, linear history, no merge commit.
+
+Three different shapes. Most teams pick one and stick with it. If your branch had `wip: ...` `fix typo` `oops` commits, "Squash and merge" hides that noise behind one clean commit message.
+
+Click the button. The PR closes, the branch is merged into main, and GitHub offers to delete the branch (do it — it's been merged, nothing's lost).
+
+### CI checks
+
+Every push to the PR triggers CI: tests, linters, type checks, security scans. The top of the PR shows the result:
+
+- **✓ All checks have passed** — green.
+- **● Some checks haven't completed yet** — yellow, with a spinner.
+- **✗ X / N checks were not successful** — red.
+
+A red check blocks the merge button (in most team configs). Click the failing check; GitHub shows the log. Fix what's broken, push, CI re-runs. Iterate until green.
+
+Common red-check causes for new contributors:
+- **Lint errors.** Your editor probably should've flagged them; fix and re-push.
+- **Type errors.** Same.
+- **Test failures.** Read the failing test, understand what scenario it covers, fix.
+- **Format issues.** Run the project's formatter (`pnpm format`, `cargo fmt`, etc.) and re-push.
+
+### Draft PRs
+
+Sometimes you want to push code for *early* feedback — "is this the right approach?" — before the work is done. Open the PR as a **draft**:
+
+```text
+Click the dropdown next to "Create pull request" → "Create draft pull request"
+```
+
+Draft PRs:
+- Don't show up in reviewers' default "needs review" feeds.
+- Don't allow merging (the button is disabled).
+- Have a "Ready for review" button you click when the work is done.
+
+Use them for: "spike" PRs to test an approach, work-in-progress sharing, or letting CI run on a branch you're still iterating on.
+
+### Pull request *templates*
+
+Many teams have a `.github/PULL_REQUEST_TEMPLATE.md` file in the repo. When anyone opens a PR, GitHub pre-fills the description with the template. Standardizes structure — every PR has the same sections.
+
+A real template:
+
+```markdown
+## Summary
+<!-- One sentence: what does this PR do? -->
+
+## Motivation
+<!-- Why is this change needed? Link related issues. -->
+
+## Test plan
+- [ ] Tests pass locally
+- [ ] Manually tested in browser
+- [ ] Edge case: empty input
+- [ ] Edge case: very large input
+
+## Screenshots
+<!-- For UI changes -->
+
+## Risks
+<!-- Anything specifically risky about this change -->
+```
+
+A good template makes "I forgot to think about the test plan" less likely. Pays for itself within a week.
+
+### Issues — the bug tracker side
+
+GitHub Issues are the planning/bug-tracking layer alongside PRs:
+
+```text
+   Issue #234: "Dark mode toggle doesn't persist on reload"
+                  ↓
+                  ▼
+   PR #235 (description: "Closes #234")
+                  ↓
+                  ▼
+   Merge → Issue #234 auto-closes
+```
+
+The linkage between issues and PRs is the chain of "problem → solution → shipped." When you `git log --oneline` in six months and see "feat: add dark mode toggle (#235)," you can click `#235` to see the discussion that led to the change.
+
+Conventions:
+- **Issues are problems.** "Dark mode toggle doesn't work on Safari."
+- **PRs are proposed solutions.** "Add Safari-specific class toggle handling."
+- **One PR can close many issues** (rare).
+- **One issue can be addressed by many PRs** (also rare; usually means it should've been split).
+
+For solo projects, you might skip issues and just open PRs directly. For team projects, issues come first.
+
+### Comparing forks — open-source contribution
+
+When you don't have direct push access to a repo (you're contributing to someone else's project), you fork, work on your fork, then open a PR from your fork → the original:
+
+```text
+   library/cool-thing (original)              you/cool-thing (your fork)
+   ─────────────────────────                   ──────────────────────
+                                                git clone your fork
+                                                git checkout -b fix/bug
+                                                ... commit ...
+                                                git push origin fix/bug
+                                                                ↓
+                                                                ▼
+                                               GitHub → Open PR:
+                                               base: library/cool-thing main
+                                               compare: you/cool-thing fix/bug
+                                                                ↓
+                                                                ▼
+                                          Maintainer reviews, merges
+                                          your fix into the original.
+```
+
+Same review loop, just across a repo boundary. The PR UI handles it transparently — to the reviewer, it's just another PR.
+
+### The everyday rhythm
+
+In a healthy team workflow, every change happens this way:
+
+1. Branch off main.
+2. Work in small commits with good messages.
+3. Push. Open a PR with a clear description.
+4. CI runs; you watch for green.
+5. Request review from a teammate.
+6. Address feedback; push fix-up commits.
+7. Reviewer approves.
+8. Merge (squash or merge commit, per team convention).
+9. Delete the branch.
+
+10-15 minutes of overhead per PR. The payoff: bug catches, knowledge sharing, history hygiene, audit trail. Every team that adopts PRs ships safer code than the same team without them.
+
+<ExampleProject
+  src="pr-anatomy"
+  title="A real PR — every part of the UI labeled"
+  description="A mock GitHub PR rendered in HTML so you can see every component: title, description, conversation, files-changed diff, review controls, merge button, CI status. Labels each section so the next time you open a real PR, you know exactly what you're looking at."
+/>
+
+<ExampleProject
+  src="review-cycle"
+  title="The review loop in 6 steps — see what each side does"
+  description="A click-through of the same PR from both perspectives — author and reviewer. Step 1: author opens PR. Step 2: reviewer comments. Step 3: author addresses. Step 4: reviewer approves. Step 5: CI greens. Step 6: merge. The whole rhythm in one walkthrough."
+/>
+
+<Exercise
+  title="Make a real PR on your own repo"
+  starter={`Using your practice repo on GitHub:
+
+  1. Make sure main is clean and pushed.
+  2. Create a feature branch:
+       git checkout -b feature/about-section
+  3. Add a new file, commit:
+       echo "# About\n\nA hand-written project." > ABOUT.md
+       git add ABOUT.md
+       git commit -m "feat: add about section"
+  4. Push the branch:
+       git push -u origin feature/about-section
+  5. Open the GitHub web UI. You should see a banner: "feature/about-section
+     had recent pushes. Compare & pull request." Click it.
+  6. Fill out the PR:
+     - Title: "Add ABOUT.md"
+     - Description: A short "what" and "why" — at least 3 sentences.
+     - Leave reviewers empty (you don't have one).
+     - Click "Create pull request."
+  7. On the PR page, click "Files changed" tab. See the diff.
+  8. Click any line in the diff and add a comment to yourself — try the
+     comment UI. Resolve it.
+  9. Edit ABOUT.md locally (add another paragraph), commit, push:
+       git commit -am "docs: expand about section"
+       git push
+     Notice the PR auto-updates with the new commit.
+  10. Approve your own PR (or use "Comment" to add an approval-style
+     note). Then click "Merge pull request" → "Confirm merge."
+  11. Delete the branch (GitHub prompts you).
+  12. Locally:
+       git checkout main
+       git pull
+       git branch -d feature/about-section
+     Confirm main now has ABOUT.md and your branch is gone.
+
+Bonus: Open a second PR with a 'Closes #1' in the description. First
+create an Issue #1 ("Add ABOUT section") on the repo. The PR merge
+should auto-close the issue.`}
+>
+
+- A feature branch was created and pushed to GitHub.
+- A PR was opened with a meaningful title (NOT "Update ABOUT.md") and a description with at least "what" and "why" content.
+- The student navigated all four PR tabs (Conversation, Commits, Checks, Files changed) at least once.
+- At least one line comment was left on the PR (even if self-addressed) and resolved.
+- An additional commit was pushed to the branch *after* the PR was open — the PR auto-updated with the new commit.
+- The PR was merged via the GitHub button (any merge strategy).
+- The feature branch was deleted both on GitHub (via the prompt) and locally (`git branch -d`).
+- Bonus: an Issue was created and linked via "Closes #X" in the PR description; merging the PR auto-closed the issue.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do teams require pull requests instead of letting people push to main directly?
+
+**A:** **Because the PR is a checkpoint where another human reads the change before it becomes production reality. The benefits compound across every change.**
+
+Five concrete things the PR gate adds that direct-to-main doesn't:
+
+1. **Second-pair review.** No matter how senior the author, every PR catches things. A typo. A missing edge case. A simpler approach. The aggregate quality boost over a year is enormous; teams that drop reviews ship measurably worse code.
+
+2. **CI as a gate.** Tests, linters, type checks run on every PR. Code that fails them can't merge. Direct push to main means broken code can land before anyone notices.
+
+3. **A pause before "real."** Production is whatever's in main. Until the PR merges, main is unchanged. You can post a PR, see CI fail, fix it — without ever exposing the broken state to teammates or deploys.
+
+4. **A "why" record.** The PR description, the discussion, the linked issue — all of it lives on the PR forever. Six months later when someone asks "why does this code do X?", they can find the PR and read the original context. Better than commit messages alone.
+
+5. **Audit and onboarding.** A new engineer reads recent PRs to understand "how does work flow through this codebase?" The PR list is a teaching tool. Direct-to-main provides none of that.
+
+The trade-off is small overhead per change (10-15 minutes of PR creation + review). Teams that do this well process PRs same-day. The cost is real but tiny next to the cost of a bug that ships because nobody read the change.
+
+The anti-pattern: requiring PRs but always self-approving them. The PR mechanism without the review is just paperwork. The value is in the *review*, not the click.
+
+The opposite anti-pattern: requiring infinite reviews for tiny PRs. Two-line documentation fixes shouldn't need three approvals; pragmatic teams have lighter rules for low-risk changes. The PR is a *tool*, calibrated to the change's risk.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between an Issue and a Pull Request on GitHub?
+
+**A:** **An Issue is "here's a problem to solve." A Pull Request is "here's my proposed solution — please review and merge."** They sit on either side of the development loop.
+
+The lifecycle:
+
+```text
+   Issue #234              PR #235                     main
+   ─────────               ───────                     ────
+   "Dark mode    ────────► "Add dark mode    ───►     Code lands.
+    toggle                  toggle component"          Issue auto-closes
+    needed"                  (closes #234)             when PR merges.
+                            review → approve → merge
+```
+
+Differences in their UI:
+
+- **Issues** have a title, body, comments, labels, milestone, assignees. No code attached. Useful for bugs, feature requests, design discussions, anything pre-implementation.
+
+- **PRs** have everything an issue has PLUS a branch, a diff, line-by-line review controls, CI integration, and a merge button. PRs are issues that come with code.
+
+In practice:
+
+- **Bugs start as Issues.** Someone hits a bug; they file an issue describing the problem. Triage labels it. Someone picks it up.
+- **The PR comes from the implementation.** The fixer makes a branch, fixes it, opens a PR. The PR's description links to the issue (`Closes #234`). When the PR merges, the issue auto-closes.
+- **Discussion happens on whichever has more context.** Design debates usually on the issue; code-level discussions on the PR.
+
+For small projects, you might skip issues entirely and just open PRs directly. For team projects, issues are the planning layer; PRs are the execution layer.
+
+A handy way to remember: **Issues are "should we do this?" PRs are "I did this."** The first is open-ended; the second has code attached and a merge button waiting.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between "Merge," "Squash and merge," and "Rebase and merge" on GitHub?
+
+**A:** **Three ways to combine your branch's commits into main, each producing a different shape in history.**
+
+**1. Merge (creates a merge commit):**
+
+```text
+Before:  main ─── A ─── B
+                       \
+         feature:       C ── D ──┐
+                                  ▼
+After:   main ─── A ─── B ─────── M
+                       \         /
+                        C ── D ──
+```
+
+Preserves all branch commits AND adds a merge commit (M) tying the two histories together. `git log --graph` shows the branch clearly. Three commits added to main: C, D, M.
+
+**2. Squash and merge (flattens to one commit):**
+
+```text
+Before:  main ─── A ─── B
+                       \
+         feature:       C ── D
+                                  ▼
+After:   main ─── A ─── B ─── (C+D)   ← single new commit on main
+                                       message comes from the PR title
+```
+
+All branch commits are combined into ONE commit on main. The branch's individual commits are *not* in main's history; only the combined result. PR title becomes the commit message. Common team default; keeps main's history clean.
+
+**3. Rebase and merge (linear, no merge commit):**
+
+```text
+Before:  main ─── A ─── B
+                       \
+         feature:       C ── D
+                                  ▼
+After:   main ─── A ─── B ─── C' ── D'   ← individual commits, replayed
+```
+
+Each branch commit becomes its own commit on main, but with new SHAs. No merge commit, no branch trace in `git log`. Looks like everything happened linearly on main.
+
+When to pick each:
+
+- **Merge** when you want to *see* "this work was on a branch." Preserves the literal history. Better for long-lived branches or when the branch's individual commits are meaningful.
+
+- **Squash and merge** when the branch's commits are noisy ("wip", "fix typo", "actually fix typo"). Most teams default to this; main's history is a clean sequence of features, not noisy WIP fragments.
+
+- **Rebase and merge** when you want linear history AND each commit on the branch is meaningful. Less common; requires disciplined commits on the branch.
+
+The team usually picks one and configures GitHub to default to it. Match the convention. Most modern teams pick **squash** because it gives a clean main without requiring authors to be careful about their branch commits.
+
+One nuance: squash loses the per-commit attribution. If the branch had four people pushing commits, main only sees one commit author. Use merge instead when attribution matters.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What makes a "good" pull request — and why does it matter for the reviewer?
+
+**A:** **A good PR is small, focused, well-described, and easy to review in under 15 minutes. Bad PRs are large, multi-purpose, undescribed — and they get rubber-stamped or rejected instead of reviewed.**
+
+Five attributes of a reviewable PR:
+
+1. **Small.** Under ~300 lines of code change if possible. A reviewer can read 300 lines carefully; 3000 lines, they skim. Many teams aim for <500 lines; some have a hard limit. Big changes can usually be split into a sequence of smaller PRs ("first PR: extract helper", "second PR: use helper in feature").
+
+2. **One concern.** "Fixes login bug" is one PR. "Fixes login bug + refactors navbar + adds dark mode" is three PRs. Mixed concerns make the PR slow to review and risky to revert.
+
+3. **Good description.**
+
+   ```markdown
+   ## What
+   Adds dark mode toggle to the navbar.
+
+   ## Why
+   Top-requested feature from Q2 survey. Fixes #234.
+
+   ## Test plan
+   - [ ] Toggle works
+   - [ ] Refresh preserves choice
+   - [ ] Mobile drawer works
+   ```
+
+   Two sentences of "what" + one of "why" + a test checklist. The reviewer knows the scope before they open the diff.
+
+4. **Green CI.** Don't ask for review while tests are red. The reviewer's first action would be "fix the tests." Wait for green, then request review.
+
+5. **Screenshots for UI changes.** A 30-line CSS change might affect 12 screens. A screenshot tells the reviewer what to expect; "before and after" shots are best.
+
+Why this matters for the reviewer's experience:
+
+- A 50-line PR with clear description takes 5 minutes to review well. The reviewer leaves *useful* comments because they had time to engage with the change.
+- A 2000-line PR with description "various fixes" takes 30 minutes to even understand. The reviewer either rubber-stamps it (defeating the point) or leaves the surface-level "looks fine" comment.
+
+The asymmetry: writing a good PR adds 10 minutes; the reviewer saves 30. Multiply across a team and the throughput difference is huge.
+
+The biggest single tip: **rebase your branch onto main and squash WIP commits before requesting review.** A messy commit history in the PR makes line-by-line review hard. A clean commit sequence (one commit = one logical change) makes review fast.
+
+And: **be the kind of PR author you'd want to review.** It's the same loop, infinitely repeated.
+
+</InterviewQuestion>

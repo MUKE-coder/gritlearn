@@ -1,0 +1,521 @@
+## Git remotes, push, pull
+
+A remote is a copy of your repository that lives somewhere else — usually on GitHub, GitLab, or your company's server. The whole point of having a remote is that multiple people (including future-you on a different machine) can sync with it. Three commands carry 95% of the work: `push` to send your local commits to the remote, `pull` to bring the remote's commits to your local, and `fetch` to peek at what's on the remote without modifying your local branches.
+
+<Analogy>
+A Git remote is **a shared document on a cloud drive**.
+
+Picture a Google Doc that you and your team all have local copies of. Each person edits their copy on their laptop — quickly, offline-friendly, no lag. Periodically, everyone syncs: their local changes go up to the cloud, the cloud's latest version comes back down to their laptop. Two people can edit at the same time; the doc software merges automatically when there's no conflict, asks you to resolve when there is.
+
+Git remotes are that cloud document for code. You work locally — every commit, every branch switch, every diff — without touching the network. When you want your work visible to the team, you `git push` (upload your local commits to the remote). When you want the team's latest, you `git pull` (download their commits to your local). Between syncs, your laptop is the only place your new commits exist; the remote is the only place the team's *combined* history lives.
+
+```text
+   YOUR LAPTOP                                    GITHUB (the remote)
+   ───────────                                    ──────────────────
+   git commit            ──── git push ────►      remote receives your commits
+                         ◀──── git pull ────       remote sends you team's commits
+
+   git fetch             ◀── peek only ────       see what's on remote
+                                                   without changing anything local
+```
+
+Three rules that make this work in practice:
+
+1. **Push often.** A commit that only exists on your laptop is one hardware failure away from being gone. Push at least once a day; ideally after every coherent commit-set. This is also what makes your work visible — until you push, your teammates can't see it.
+
+2. **Pull before you push.** If teammates have pushed since your last sync, your push will be rejected ("remote has commits you don't have"). Pull first, integrate their work (Git usually does this automatically), then push. The exception: a fresh feature branch nobody else has touched — push freely.
+
+3. **Branches push separately.** Pushing `main` doesn't push your `feature/login` branch. Each branch is its own thread to push or pull. New branches need the `-u` flag the first time (`git push -u origin feature/login`) to tell Git "remember this branch maps to that remote one."
+
+The mental shift: stop thinking of GitHub as "the one true repo." Every clone — yours, every teammate's, GitHub's — is a *full* repo with the same history. GitHub is just the one everyone agrees to sync through. If GitHub vanished tomorrow, anyone with a clone could become the new "canonical" remote in 30 seconds. That decentralization is Git's superpower; the cloud-doc analogy stretches a little here, because no Google Doc copy is a full server. Every Git clone is.
+</Analogy>
+
+<Illustration
+  alt="Diagram of multiple local clones syncing through a single GitHub remote"
+  caption="Each developer has a full clone. GitHub is the shared sync point. Push, pull, fetch."
+>
+
+```
+   ┌────────────────────┐               ┌────────────────────┐
+   │  Ada's laptop      │               │  Lin's laptop      │
+   │  (full clone)      │               │  (full clone)      │
+   │  ...feature-login  │               │  ...fix-checkout   │
+   └──────┬──────▲──────┘               └──────┬──────▲──────┘
+          │      │                             │      │
+       push    pull                          push   pull
+          │      │                             │      │
+          ▼      │                             ▼      │
+   ┌────────────────────────────────────────────────────────┐
+   │           GitHub  (the "central" remote)               │
+   │           main, feature-login, fix-checkout, …         │
+   └──────┬──────▲──────────────────────────────────────────┘
+          │      │
+       push    pull
+          │      │
+   ┌──────▼──────┴──────┐
+   │  Sam's laptop      │
+   │  (full clone)      │
+   │  ...refactor-cart  │
+   └────────────────────┘
+```
+
+</Illustration>
+
+### `git clone` — bring a remote down
+
+You haven't worked on the project yet; you want to start:
+
+```bash
+git clone https://github.com/MUKE-coder/gritlearn.git
+cd gritlearn
+```
+
+What this does:
+
+1. Downloads the entire repository (every commit, every branch, every tag) into a folder named `gritlearn`.
+2. Sets up the remote called `origin` pointing back at the GitHub URL.
+3. Checks out the default branch (usually `main`) into your working directory.
+
+From here, every other Git command works because you have a full repo locally. The link to GitHub stays — `origin` is set up automatically.
+
+For private repos, use the SSH form: `git clone git@github.com:MUKE-coder/gritlearn.git`. SSH requires uploading your public key to GitHub first (Settings → SSH Keys). One-time setup; from then on, every push/pull uses key-based auth, no password.
+
+### `origin` — the default remote name
+
+When you clone, Git names the remote `origin` by convention. You'll see it in every command:
+
+```bash
+git push origin main               # push main to origin
+git pull origin main               # pull main from origin
+git remote -v                      # show all remotes with URLs
+```
+
+`origin` isn't magic — it's just a name. You can rename it (`git remote rename origin upstream`), add more remotes (`git remote add backup https://...`), or remove it. Most teams stick with `origin`; some open-source projects use `upstream` for "the project's main repo" and `origin` for "my fork."
+
+For your single-remote everyday case: `origin` is the name, no need to think about it.
+
+### `git push` — upload your commits
+
+```bash
+git push                            # push current branch to its tracked remote branch
+git push origin main                # push main to origin's main (explicit)
+git push -u origin feature/login    # push + set upstream (first push of a new branch)
+```
+
+The everyday case is the first one: a bare `git push` when you're on a branch that already knows its remote.
+
+The `-u` (or `--set-upstream`) flag is needed once per branch — it tells Git "from now on, this local branch tracks `origin/feature/login`." After that one push, plain `git push` knows where to go.
+
+What `git push` does mechanically:
+1. Compares your local branch's commits to the remote's version of that branch.
+2. Sends the commits you have that the remote doesn't.
+3. Updates the remote's branch pointer to your latest commit.
+
+What can go wrong:
+- **Remote has commits you don't have.** Push rejected. Solution: `git pull`, integrate, `git push`.
+- **You don't have permission.** Auth failure. Check your SSH key or token.
+- **You're on a detached HEAD or not on any branch.** Git refuses; check out a branch first.
+
+### `git pull` — download teammates' commits
+
+```bash
+git pull                            # pull current branch from its tracked remote
+git pull origin main                # explicit
+```
+
+`git pull` is actually **two commands in one**: `git fetch` (download) + `git merge` (integrate). It downloads any new commits from the remote, then merges them into your current branch.
+
+If you and a teammate both pushed to the same branch (and your changes don't conflict), `git pull` produces a merge commit that combines the histories. If you both edited the same lines, you get a merge conflict — covered in its own concept.
+
+Many teams configure `pull.rebase = true`:
+
+```bash
+git config --global pull.rebase true
+```
+
+This makes `git pull` do `fetch + rebase` instead of `fetch + merge`. Result: your local commits get replayed on top of the remote's latest, producing linear history instead of merge commits everywhere. Trade-off: rebasing rewrites your commits' SHAs, which is fine on your own work but careful on shared branches.
+
+### `git fetch` — peek without modifying
+
+```bash
+git fetch                           # download new commits from origin, don't merge
+git fetch origin main               # fetch only main from origin
+```
+
+`fetch` is the "peek" version of `pull`. It downloads new commits into Git's database, updates `origin/main` (the remote-tracking branch), but does *not* touch your local `main`. You can then `git log origin/main` to see what came in, `git diff main origin/main` to see how your local differs, and decide whether to merge or rebase manually.
+
+When to reach for `fetch` over `pull`:
+
+- You want to see what teammates did *before* integrating.
+- You're about to integrate carefully (rebasing, cherry-picking) and don't want pull's default merge.
+- You're on a different branch and want to update `origin/main` without checking it out.
+
+The everyday rhythm uses `pull`; `fetch` is the precise tool for special cases.
+
+### The push/pull dance on a feature branch
+
+Daily flow on a feature branch you share:
+
+```bash
+# Morning — sync with what teammates pushed overnight
+git checkout main
+git pull                            # main is now current
+git checkout feature/dark-mode
+git merge main                      # bring main's changes into your branch
+                                    # (or git rebase main, depending on team)
+
+# Work all day
+# ...
+git push                            # share your branch's progress
+```
+
+The pattern is "keep your branch up to date with main." This makes the eventual merge into main painless because your branch is always close to where main is.
+
+### Pushing a new branch — the first time
+
+```bash
+git checkout -b feature/new-thing    # create branch locally
+# work, commit
+git push -u origin feature/new-thing   # ← -u is required first time
+```
+
+The `-u` (`--set-upstream`) tells Git "this local branch should track this remote branch." From then on, `git push` and `git pull` know where to go.
+
+Without `-u`, Git complains:
+
+```text
+fatal: The current branch feature/new-thing has no upstream branch.
+To push the current branch and set the remote as upstream, use:
+    git push --set-upstream origin feature/new-thing
+```
+
+Git literally tells you the fix. Read its error messages — they're usually correct.
+
+### `git remote -v` — what remotes do I have?
+
+```bash
+$ git remote -v
+origin  git@github.com:MUKE-coder/gritlearn.git (fetch)
+origin  git@github.com:MUKE-coder/gritlearn.git (push)
+```
+
+Each remote shows two lines — the fetch URL and the push URL (usually the same). If you have multiple remotes (forking workflow, mirror, deployment remote), they all show here.
+
+To add a remote:
+```bash
+git remote add upstream https://github.com/original/project.git
+```
+
+To remove:
+```bash
+git remote remove upstream
+```
+
+To change a URL (you switched from HTTPS to SSH, or repo moved):
+```bash
+git remote set-url origin git@github.com:MUKE-coder/gritlearn.git
+```
+
+### SSH vs HTTPS — which to pick
+
+GitHub supports two protocols for clone/push/pull:
+
+- **HTTPS** — `https://github.com/...`. Authenticates with a Personal Access Token (PAT) instead of password (GitHub stopped accepting passwords for Git in 2021). The token is stored by Git's credential helper after the first use.
+
+- **SSH** — `git@github.com:...`. Authenticates with an SSH key pair. The public key lives on GitHub; the private key stays on your laptop. No password prompts after setup.
+
+Set up SSH once and you never type credentials again. Set up HTTPS and you'll periodically refresh tokens. SSH is the modern recommendation for personal use.
+
+For CI / deploy systems, HTTPS with a token is often easier — secrets management is the same as for any API key.
+
+### Working with a fork
+
+Open-source contribution flow: fork the repo on GitHub, clone *your fork*, contribute back via PR.
+
+```bash
+# Fork "library/cool-thing" on GitHub → "you/cool-thing"
+git clone git@github.com:you/cool-thing.git
+cd cool-thing
+
+# Add the original as "upstream"
+git remote add upstream git@github.com:library/cool-thing.git
+
+# Now you have two remotes:
+#   origin    → your fork
+#   upstream  → the original
+
+# Keep your main in sync with the original:
+git fetch upstream
+git checkout main
+git merge upstream/main             # bring original's main into yours
+git push origin main                # push to your fork
+
+# Work on a feature, push to your fork, open a PR from your fork → original.
+```
+
+This is *the* open-source contribution pattern. Every PR you've ever seen on a popular GitHub project came from this flow.
+
+### When push fails — the four common reasons
+
+Push errors look scary; they're usually one of four things:
+
+1. **"Updates were rejected because the remote contains work you do not have."**
+   Pull first, integrate, push again.
+
+2. **"Permission denied (publickey)."**
+   Your SSH key isn't set up or isn't authorized for the repo. Generate a key, upload to GitHub Settings → SSH Keys.
+
+3. **"The current branch has no upstream branch."**
+   First push of a new branch. Add `-u origin <branch-name>`.
+
+4. **"fatal: refusing to update checked out branch."**
+   You're trying to push to a branch someone has checked out on the remote (rare; typically pushing to a non-bare repo). Almost never happens with GitHub.
+
+Read Git's error messages literally — they usually tell you the exact command to run next.
+
+### What NOT to push
+
+A few things should never end up on the remote:
+
+- **Secrets.** `.env`, API keys, passwords. Use `.gitignore` to keep them out. If you accidentally commit one, **rotate it immediately** — even if you remove it in a follow-up commit, the secret is in history.
+- **Personal files.** `.DS_Store`, your IDE's local cache. `.gitignore` per project.
+- **Large binaries.** Git repos with multi-megabyte binaries get slow. Use Git LFS for those (or, ideally, don't track them at all — host artifacts in cloud storage and link).
+- **Generated files.** `node_modules`, `dist`, `build`. Recreatable from source; don't track.
+
+Once a file is in history, removing it takes work (`git filter-branch` or BFG). Better to gitignore it before the first commit.
+
+<ExampleProject
+  src="clone-pull-push"
+  title="The everyday clone → edit → pull → push loop, in pictures"
+  description="A walkthrough of cloning a repo, making a local change, syncing with someone else's pushed commit (pull), then pushing your own change. Each step shows the commands and what the remote and local look like at that point."
+/>
+
+<ExampleProject
+  src="track-upstream"
+  title="First push of a new branch — see why `-u` matters"
+  description="Side-by-side: pushing without -u (error) vs. with -u (success). Plus what 'tracking branch' actually means — your local branch knows its remote counterpart so subsequent push/pull commands need no arguments."
+/>
+
+<Exercise
+  title="Push your practice repo to GitHub"
+  starter={`If you don't already have a GitHub account, create one.
+
+  1. On GitHub: click '+' (top right) → 'New repository'.
+     Name it 'git-practice' (or whatever).
+     DON'T initialize it with a README — you already have one locally.
+     Click Create.
+
+  2. GitHub shows you the commands to push an existing repo. The
+     key one is:
+       git remote add origin git@github.com:<you>/git-practice.git
+       git branch -M main
+       git push -u origin main
+
+  3. Run those in your local practice repo from the previous lessons.
+
+  4. Refresh the GitHub page. Your commits, history, files — all there.
+
+  5. Create a new file locally, commit it, push:
+       echo "Hello from a push" > push-test.txt
+       git add push-test.txt
+       git commit -m "feat: add push test"
+       git push                       # no -u needed now
+
+  6. From GitHub's website, click the file you just pushed; click the
+     pencil icon to edit it; add a line; commit on the website with a
+     message.
+
+  7. Back on your laptop:
+       git pull
+     Confirm the file now has the line you added on the web.
+
+  8. Run 'git log --oneline'. Both the local commit and the
+     GitHub-website commit show up in your history.
+
+Bonus: SSH up if you haven't yet. Type 'ssh-keygen' (accept defaults),
+then add the contents of '~/.ssh/id_ed25519.pub' to GitHub Settings →
+SSH keys. From then on, no password prompts.`}
+>
+
+- A GitHub account exists; a new repo was created on GitHub (any name).
+- The local practice repo's `origin` remote was added pointing at the GitHub URL.
+- The first push succeeded with `-u`; subsequent pushes work without it.
+- A new commit made locally, pushed, appears on GitHub.
+- A commit made on GitHub (web edit) pulled to local successfully via `git pull`.
+- `git log --oneline` on local shows both the local-origin commit AND the GitHub-origin commit interleaved chronologically.
+- Bonus: SSH key set up; pushes/pulls work without password prompts.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `git fetch` and `git pull`?
+
+**A:** **`git fetch` downloads new commits from the remote but doesn't merge them into your local branch. `git pull` is `fetch` + `merge` (or `fetch` + `rebase`) in one command.**
+
+```bash
+# Fetch only — peek, don't touch local main
+git fetch
+git log origin/main    # see what teammates pushed
+git diff main origin/main   # compare local to remote
+
+# Pull — fetch + merge (or rebase)
+git pull
+```
+
+When to use each:
+
+- **`pull`** for the everyday case. You want your local up to date; you trust Git to integrate cleanly.
+- **`fetch`** when you want to *inspect* before integrating. Examples:
+  - Code review: "what's changed on main since I branched?"
+  - Cherry-picking: you want to pull in only specific commits from the remote.
+  - Preparing for a rebase: see what's there, decide on the integration strategy, then run `git rebase origin/main` (not pull).
+
+The mental model that helps:
+
+- `fetch` updates `origin/main` (the remote-tracking branch, not your local).
+- `merge`/`rebase` updates your local main using `origin/main`'s commits.
+- `pull` does both back-to-back.
+
+You can always `pull` instead of `fetch` + `merge`, but `fetch` lets you inspect or transform the integration. Teams that prefer linear history often configure `pull.rebase = true` so `pull` does fetch+rebase by default — same idea, less typing.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does `git push` need `-u` the first time you push a new branch?
+
+**A:** **Because Git needs to know which remote branch your local branch *tracks*. Without that, every push needs explicit arguments. The `-u` (`--set-upstream`) sets it once.**
+
+```bash
+git checkout -b feature/login
+
+# Without -u:
+git push
+# fatal: The current branch feature/login has no upstream branch.
+# To push the current branch and set the remote as upstream, use:
+#     git push --set-upstream origin feature/login
+
+git push --set-upstream origin feature/login   # or -u for short
+# success
+```
+
+After the first push with `-u`, Git remembers the tracking relationship:
+
+```text
+local:   feature/login    →   origin/feature/login   (remote-tracking branch)
+```
+
+From then on, plain `git push` and `git pull` know:
+- "Push current branch" → push to its tracking remote branch.
+- "Pull current branch" → pull from its tracking remote branch.
+
+`-u` is also why `git status` can say "your branch is ahead of origin/feature/login by 2 commits" — Git knows the relationship and can compare.
+
+You only need `-u` the first time. For every subsequent push from that branch, `git push` is enough. For *every other branch* you create, you'll need `-u` again on its first push.
+
+Some teams shortcut this by configuring `push.autoSetupRemote = true`:
+
+```bash
+git config --global push.autoSetupRemote true
+```
+
+Now plain `git push` from any new branch auto-sets the upstream. Modern Git default, slowly being rolled out.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Your push is rejected with "Updates were rejected because the remote contains work you do not have." What do you do?
+
+**A:** **Pull first, integrate the remote's commits with yours, then push again. Three possible scenarios.**
+
+The error means: someone pushed commits to the remote since you last pulled. Git won't let you push without those commits in your local history — that would silently overwrite their work.
+
+```bash
+git push
+# ! [rejected]        main -> main (fetch first)
+# error: failed to push some refs to 'origin'
+```
+
+Fix, in order of how often you'll do each:
+
+**1. Pull, then push.**
+
+```bash
+git pull
+git push
+```
+
+If your commits and the remote's commits touched different files (or different lines of the same file), Git auto-merges and creates a merge commit. Push works.
+
+**2. Pull with rebase, then push.**
+
+```bash
+git pull --rebase
+git push
+```
+
+Replays your local commits on top of the remote's. Produces linear history (no merge commit). Good when you don't want the "merge from origin/main" noise. Same result as #1 with cleaner shape.
+
+**3. Pull → resolve conflict → push.**
+
+If your commits and the remote's commits edited the same lines, Git stops and asks you to resolve. You edit the conflicted files, `git add`, `git commit` (or `git rebase --continue` if rebasing), then push.
+
+The mistake to avoid: `git push --force`. It rewrites the remote to match your local, **silently discarding** the remote's new commits. On a shared branch, you've just deleted your teammate's work. The rule:
+
+- **Never `--force` push on `main`** (or any shared branch).
+- **`--force-with-lease`** is the safer variant — it only force-pushes if the remote is in the state you last fetched. If anyone pushed since, it refuses. Use this if you must force-push (rebased your own feature branch, for instance).
+
+The everyday rule: when push is rejected, pull. The rejection is Git protecting you from accidentally erasing your teammates.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a "tracking branch" and why does it matter?
+
+**A:** **A tracking branch is the relationship between your local branch and a specific remote branch. It tells Git: "when I `push` or `pull` this local branch, default to talking to *that* remote branch."**
+
+After cloning, your local `main` automatically tracks `origin/main`. After `git push -u origin feature/login`, your local `feature/login` tracks `origin/feature/login`.
+
+What the tracking gets you:
+
+```bash
+git push                            # no args needed — knows where to go
+git pull                            # same
+git status                          # "your branch is ahead by 3 commits" — only works with tracking
+git fetch                           # updates origin/main automatically
+```
+
+Without tracking, every command would need explicit remote and branch arguments: `git push origin main`, `git pull origin main`, every time.
+
+Three commands that interact with tracking:
+
+```bash
+git branch -vv                      # show local branches AND their tracking remotes
+git branch --set-upstream-to=origin/main main    # set tracking for an existing branch
+git branch --unset-upstream main    # remove tracking
+```
+
+The `-vv` form is the most useful — shows you exactly which local branches map to which remote branches.
+
+Tracking branches are *local* — they live in your `.git/config`. They don't affect the remote; they just configure how *your* Git commands behave.
+
+A common confusion: "remote-tracking branch" (`origin/main`) vs. "tracking branch" (local `main` tracks `origin/main`). The remote-tracking branch (`origin/main`) is Git's local cache of the remote's state — it updates when you `fetch` or `pull`. The local branch's "tracking" is the *relationship* that defaults push/pull.
+
+In `git branch -a` you'll see them all:
+
+```text
+* main                              # local
+  feature/login                      # local
+  remotes/origin/main                # remote-tracking
+  remotes/origin/feature/login       # remote-tracking
+  remotes/origin/develop             # remote-tracking
+```
+
+The `remotes/origin/*` ones are your local snapshot of the remote's branches. Updated by fetch. Read-only.
+
+The everyday upshot: do `git push -u` on the first push of a new branch and the tracking is set. After that, you stop thinking about it and Git just works.
+
+</InterviewQuestion>

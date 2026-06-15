@@ -1,0 +1,149 @@
+<!--
+  An interactive simulation of the clone → edit → pull → push loop
+  between two laptops and a remote. Click through the steps; the
+  three panels (Ada's laptop, GitHub, Lin's laptop) update so you
+  see what each side knows at each moment.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The clone → pull → push loop</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1000px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.7rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.85rem; background: #fafafa; min-height: 12rem; }
+      .col h2 { margin: 0 0 0.4rem; font-size: 0.92rem; }
+      .col h2 .role { display: inline-block; margin-left: 0.3rem; padding: 0 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+      .col h2 .role.ada { background: #dcfce7; color: #166534; }
+      .col h2 .role.git { background: #1e293b; color: #f1f5f9; }
+      .col h2 .role.lin { background: #dbeafe; color: #1e40af; }
+      .commits { font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.55; min-height: 5rem; padding-top: 0.3rem; }
+      .commit { color: #ededee; background: #0a0a0d; padding: 4px 8px; border-radius: 4px; margin-bottom: 4px; }
+      .commit.ada { border-left: 3px solid #16a34a; }
+      .commit.lin { border-left: 3px solid #2563eb; }
+      .empty { color: #9ca3af; font-style: italic; padding: 0.3rem 0; }
+      .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 1.5rem; }
+      .actions button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+      }
+      .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .actions button:not(:disabled):hover { background: #f4f4f5; }
+      .actions button.primary { background: #15803d; color: #fff; border-color: #15803d; }
+      .actions button.reset { background: #fff; color: #71717a; border-color: #d4d4d8; }
+      .step {
+        margin-top: 0.85rem; padding: 0.6rem 0.85rem; background: #fef9c3;
+        border: 1px solid #fde68a; border-radius: 6px; font-size: 0.88rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Two laptops + one GitHub — the everyday sync</h1>
+
+    <div class="grid">
+      <div class="col">
+        <h2>💻 Ada's laptop <span class="role ada">local clone</span></h2>
+        <div class="commits" id="ada"></div>
+      </div>
+      <div class="col">
+        <h2>🐙 GitHub <span class="role git">remote</span></h2>
+        <div class="commits" id="github"></div>
+      </div>
+      <div class="col">
+        <h2>💻 Lin's laptop <span class="role lin">local clone</span></h2>
+        <div class="commits" id="lin"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button data-step="0" class="primary" id="next">Step 1 — Ada commits locally</button>
+      <button class="reset" id="reset">reset</button>
+    </div>
+
+    <div class="step" id="hint">Click the green button to run each step. Watch each panel update.</div>
+
+    <script>
+      const steps = [
+        {
+          do: (s) => { s.ada.push({ id: "A", who: "ada", msg: "init: README" }); },
+          hint: "Ada committed locally. Only her laptop knows about it.",
+          next: "Step 2 — Ada pushes to GitHub",
+        },
+        {
+          do: (s) => { s.github = [...s.ada]; },
+          hint: "git push: Ada's commits now exist on GitHub too.",
+          next: "Step 3 — Lin clones the repo",
+        },
+        {
+          do: (s) => { s.lin = [...s.github]; },
+          hint: "git clone: Lin downloaded everything from GitHub. All three now match.",
+          next: "Step 4 — Lin commits locally",
+        },
+        {
+          do: (s) => { s.lin.push({ id: "B", who: "lin", msg: "feat: add greeting" }); },
+          hint: "Lin committed. Only his laptop knows; GitHub and Ada are unaware.",
+          next: "Step 5 — Lin pushes to GitHub",
+        },
+        {
+          do: (s) => { s.github = [...s.lin]; },
+          hint: "git push: Lin's commit is on GitHub. Ada still has the old version locally.",
+          next: "Step 6 — Ada pulls",
+        },
+        {
+          do: (s) => { s.ada = [...s.github]; },
+          hint: "git pull: Ada downloaded Lin's commit. Everyone in sync again.",
+          next: "Done — reset to try again",
+        },
+      ];
+
+      const state = { ada: [], github: [], lin: [] };
+      let stepIdx = 0;
+
+      const adaEl = document.getElementById("ada");
+      const gitEl = document.getElementById("github");
+      const linEl = document.getElementById("lin");
+      const nextBtn = document.getElementById("next");
+      const hintEl = document.getElementById("hint");
+
+      function commitHtml(c) {
+        return `<div class="commit ${c.who}">${c.id} — ${c.msg}</div>`;
+      }
+      function render() {
+        adaEl.innerHTML = state.ada.length ? state.ada.map(commitHtml).join("") : `<div class="empty">no commits</div>`;
+        gitEl.innerHTML = state.github.length ? state.github.map(commitHtml).join("") : `<div class="empty">repo not yet pushed</div>`;
+        linEl.innerHTML = state.lin.length ? state.lin.map(commitHtml).join("") : `<div class="empty">not cloned yet</div>`;
+      }
+
+      function runStep() {
+        if (stepIdx >= steps.length) return;
+        steps[stepIdx].do(state);
+        hintEl.textContent = steps[stepIdx].hint;
+        stepIdx += 1;
+        if (stepIdx >= steps.length) {
+          nextBtn.disabled = true;
+          nextBtn.textContent = "✓ All steps done";
+        } else {
+          nextBtn.textContent = steps[stepIdx].next;
+        }
+        render();
+      }
+
+      function reset() {
+        state.ada = [];
+        state.github = [];
+        state.lin = [];
+        stepIdx = 0;
+        nextBtn.disabled = false;
+        nextBtn.textContent = "Step 1 — Ada commits locally";
+        hintEl.textContent = "Click the green button to run each step. Watch each panel update.";
+        render();
+      }
+
+      nextBtn.addEventListener("click", runStep);
+      document.getElementById("reset").addEventListener("click", reset);
+      render();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,95 @@
+<!--
+  Side-by-side terminal sessions: pushing without -u (error) vs.
+  pushing with -u (success). Plus a visual of what the tracking
+  relationship looks like in .git/config.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>First push of a branch — why -u matters</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 940px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      .col.bad { border-color: #fda4af; }
+      .col.good { border-color: #86efac; }
+      .term {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        white-space: pre-wrap;
+      }
+      .prompt { color: #7fff5b; }
+      .err { color: #f87171; }
+      .ok { color: #7fff5b; }
+      .muted { color: #71717a; }
+      .arrow { color: #38bdf8; }
+      pre.config {
+        background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.85rem;
+        border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>First push of a new branch</h1>
+
+    <div class="grid">
+      <div class="col bad">
+        <h3>❌ Without <code>-u</code></h3>
+        <div class="term"><span class="prompt">$</span> git checkout -b feature/login
+Switched to a new branch 'feature/login'
+
+<span class="prompt">$</span> # ... commit something ...
+
+<span class="prompt">$</span> git push
+<span class="err">fatal: The current branch feature/login has no upstream branch.
+To push the current branch and set the remote as upstream, use:
+
+    git push --set-upstream origin feature/login
+
+To have this happen automatically for branches without a tracking
+upstream, see 'push.autoSetupRemote' in 'git help config'.</span></div>
+      </div>
+
+      <div class="col good">
+        <h3>✓ With <code>-u</code></h3>
+        <div class="term"><span class="prompt">$</span> git checkout -b feature/login
+Switched to a new branch 'feature/login'
+
+<span class="prompt">$</span> # ... commit something ...
+
+<span class="prompt">$</span> git push -u origin feature/login
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+...
+<span class="ok">To github.com:MUKE-coder/gritlearn.git
+ * [new branch]      feature/login -> feature/login</span>
+<span class="ok">branch 'feature/login' set up to track 'origin/feature/login'.</span>
+
+<span class="prompt">$</span> git push                <span class="muted"># no -u needed anymore</span>
+Everything up-to-date</div>
+      </div>
+    </div>
+
+    <h2>What does "tracking" mean, concretely?</h2>
+    <p>After <code>-u</code>, Git writes this to <code>.git/config</code>:</p>
+<pre class="config">[branch "feature/login"]
+  remote = origin
+  merge = refs/heads/feature/login</pre>
+
+    <p>That's the "tracking" relationship — your local branch knows which remote branch to push to and pull from. <code>git status</code> can then say things like:</p>
+
+    <div class="term"><span class="prompt">$</span> git status
+On branch feature/login
+<span class="arrow">Your branch is ahead of 'origin/feature/login' by 2 commits.</span>
+  (use "git push" to publish your local commits)</div>
+
+    <p style="margin-top: 1.5rem;">For every subsequent branch, you need <code>-u</code> again on its first push — Git doesn't auto-track new branches unless you set <code>push.autoSetupRemote = true</code> in your global config:</p>
+
+    <div class="term"><span class="prompt">$</span> git config --global push.autoSetupRemote true
+<span class="muted"># Now every 'git push' from a new branch auto-sets the upstream.</span></div>
+  </body>
+</html>

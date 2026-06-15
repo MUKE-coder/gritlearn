@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "phases": [
     {
       "id": "phase-01",
@@ -73,9 +73,9 @@
         { "slug": "phase-02/version-control", "title": "What version control is", "available": true },
         { "slug": "phase-02/git-basics", "title": "Git basics: init, add, commit", "available": true },
         { "slug": "phase-02/git-branches", "title": "Git branches and merging", "available": true },
-        { "slug": "phase-02/git-remotes", "title": "Git remotes, push, pull", "available": false },
-        { "slug": "phase-02/github-prs", "title": "GitHub: PRs and collaboration", "available": false },
-        { "slug": "phase-02/merge-conflicts", "title": "Resolving merge conflicts", "available": false },
+        { "slug": "phase-02/git-remotes", "title": "Git remotes, push, pull", "available": true },
+        { "slug": "phase-02/github-prs", "title": "GitHub: PRs and collaboration", "available": true },
+        { "slug": "phase-02/merge-conflicts", "title": "Resolving merge conflicts", "available": true },
         { "slug": "phase-02/http-deeper", "title": "HTTP deeper: methods, status codes, headers", "available": false },
         { "slug": "phase-02/what-is-an-api", "title": "What an API is", "available": false },
         { "slug": "phase-02/json-in-depth", "title": "JSON in depth", "available": false },

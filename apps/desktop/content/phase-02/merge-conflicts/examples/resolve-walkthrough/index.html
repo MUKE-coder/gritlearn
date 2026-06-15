@@ -1,0 +1,121 @@
+<!--
+  Six-step walkthrough of resolving a real merge conflict.
+  Terminal-style commands + expected output, plus a small "what the
+  file looks like" panel at the relevant step.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Resolving a conflict end-to-end</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .step { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.85rem 1rem; background: #fafafa; margin-top: 1rem; }
+      .step h2 { font-size: 0.95rem; margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+      .num {
+        display: inline-block; width: 1.4rem; height: 1.4rem; line-height: 1.4rem; text-align: center;
+        background: #15803d; color: #fff; border-radius: 999px; font-size: 0.78rem; font-weight: 700;
+      }
+      .term {
+        background: #18181b; color: #ededee; padding: 0.55rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.5; margin: 0.35rem 0;
+        white-space: pre-wrap;
+      }
+      .term .prompt { color: #7fff5b; }
+      .term .err    { color: #f87171; }
+      .term .warn   { color: #fbbf24; }
+      .term .ok     { color: #7fff5b; }
+      .term .muted  { color: #71717a; }
+      .file {
+        background: #0a0a0d; color: #ededee; padding: 0.55rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.83rem; line-height: 1.55; margin: 0.35rem 0;
+        white-space: pre-wrap;
+      }
+      .file .head { background: #4f1d3a; color: #fda4af; }
+      .file .ours { background: #1a3a2c; color: #ededee; }
+      .file .sep  { background: #292524; color: #fbbf24; }
+      .file .they { background: #1e3a8a30; color: #ededee; }
+      .note { font-size: 0.85rem; color: #555; margin-top: 0.3rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Resolving a real conflict — six steps</h1>
+
+    <div class="step">
+      <h2><span class="num">1</span> Run the merge — see the conflict</h2>
+      <div class="term"><span class="prompt">$</span> git checkout main
+<span class="muted">Switched to branch 'main'</span>
+
+<span class="prompt">$</span> git merge feature/formal
+Auto-merging greet.js
+<span class="err">CONFLICT (content): Merge conflict in greet.js</span>
+<span class="warn">Automatic merge failed; fix conflicts and then commit the result.</span></div>
+      <div class="note">Git stopped mid-merge. <code>greet.js</code> now has conflict markers inside it.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">2</span> Confirm which files conflicted</h2>
+      <div class="term"><span class="prompt">$</span> git status
+On branch main
+
+<span class="warn">You have unmerged paths.</span>
+  (fix conflicts and run "git commit")
+
+<span class="warn">Unmerged paths:</span>
+  (use "git add &lt;file&gt;..." to mark resolution)
+        <span class="err">both modified:   greet.js</span></div>
+      <div class="note">One file conflicted. "both modified" means each branch changed it.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">3</span> Open the file — read both versions</h2>
+      <div class="term"><span class="prompt">$</span> cat greet.js</div>
+<div class="file">function greet(name) {
+<span class="head">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</span>
+<span class="ours">  return "Hi, " + name + "!";</span>
+<span class="sep">=======</span>
+<span class="they">  return "Hello, " + name + ".";</span>
+<span class="head">&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature/formal</span>
+}</div>
+      <div class="note">Top section = main's version. Bottom section = feature's version. You decide.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">3</span> Edit the file — pick a resolution</h2>
+      <div class="note">Delete all four marker lines and leave only the version you want. For this demo, we'll combine both:</div>
+<div class="file">function greet(name) {
+  return "Hello, " + name + ".";
+}</div>
+      <div class="note">Saved.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">5</span> Mark resolved + commit</h2>
+      <div class="term"><span class="prompt">$</span> git add greet.js
+
+<span class="prompt">$</span> git status
+On branch main
+<span class="warn">All conflicts fixed but you are still merging.</span>
+  (use "git commit" to conclude merge)
+
+<span class="prompt">$</span> git commit
+<span class="muted"># Git pre-fills the message:</span>
+<span class="muted">#   Merge branch 'feature/formal'</span>
+<span class="ok">[main 7f3a2c1] Merge branch 'feature/formal'</span></div>
+      <div class="note">The merge is complete. A merge commit (<span style="font-family:ui-monospace">7f3a2c1</span>) ties the two timelines together.</div>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">6</span> Verify with the log graph</h2>
+      <div class="term"><span class="prompt">$</span> git log --oneline --graph -5
+<span class="ok">*</span>   7f3a2c1 Merge branch 'feature/formal'
+<span class="ok">|\</span>
+<span class="ok">| *</span> 8b2e1f0 feat: use formal greeting
+<span class="ok">* |</span> c1d4e7a feat: use casual greeting
+<span class="ok">|/</span>
+<span class="ok">*</span>   a1b2c3d init: add greeting</div>
+      <div class="note">The graph shows both branches merging back into one. The conflict resolution is captured in the merge commit.</div>
+    </div>
+  </body>
+</html>
