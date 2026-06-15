@@ -1,0 +1,156 @@
+<!--
+  Weather path — a working in-browser Open-Meteo lookup.
+
+  Plain HTML + Tailwind CDN + vanilla JS so it runs without a build
+  step. The point is to show:
+    - Two-step fetch (geocode → forecast)
+    - The shape of the response
+    - A discriminated state machine (idle | loading | error | success)
+    - The current-conditions card you'll mirror in your Next.js port
+
+  In your milestone you'll port this to Next.js with proper typed
+  components, useState/useEffect, and React rendering — but starting
+  from the data shape here keeps you from getting lost in the API docs.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weather mini-app — Open-Meteo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body { font-family: ui-sans-serif, system-ui, sans-serif; }</style>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="mx-auto max-w-2xl px-5 py-12">
+      <h1 class="text-2xl font-bold">Weather mini-app</h1>
+      <p class="mt-1 text-sm text-slate-400">Search a city to see current conditions and a 5-day outlook. No API key needed — Open-Meteo is free.</p>
+
+      <form id="search" class="mt-6 flex gap-2">
+        <input
+          id="q"
+          type="text"
+          placeholder="e.g. Kampala, Berlin, Lima"
+          class="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
+          required
+        />
+        <button class="rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-300">
+          Search
+        </button>
+      </form>
+
+      <div id="view" class="mt-8"></div>
+    </div>
+
+    <script>
+      // In your Next.js port these would be TypeScript types:
+      //
+      //   type GeoHit = { name: string; country: string; latitude: number; longitude: number };
+      //   type Forecast = {
+      //     current: { temperature_2m: number; weather_code: number; wind_speed_10m: number };
+      //     daily:   { time: string[]; temperature_2m_max: number[]; temperature_2m_min: number[]; weather_code: number[] };
+      //   };
+      //   type State =
+      //     | { kind: "idle" }
+      //     | { kind: "loading" }
+      //     | { kind: "error";   message: string }
+      //     | { kind: "success"; location: GeoHit; forecast: Forecast };
+
+      const view = document.getElementById("view");
+      const form = document.getElementById("search");
+      const input = document.getElementById("q");
+      let state = { kind: "idle" };
+
+      // Open-Meteo weather codes — small subset, enough to demo.
+      const codeLabel = {
+        0:"Clear", 1:"Mostly clear", 2:"Partly cloudy", 3:"Overcast",
+        45:"Foggy", 48:"Rime fog",
+        51:"Light drizzle", 53:"Drizzle", 55:"Heavy drizzle",
+        61:"Light rain", 63:"Rain", 65:"Heavy rain",
+        71:"Light snow", 73:"Snow", 75:"Heavy snow",
+        80:"Rain showers", 81:"Heavy showers", 82:"Violent showers",
+        95:"Thunderstorm", 96:"Storm w/ hail", 99:"Severe storm",
+      };
+
+      async function search(query) {
+        state = { kind: "loading" };
+        render();
+        try {
+          // 1) Geocode the city name → lat/lon
+          const geoUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
+          geoUrl.searchParams.set("name", query);
+          geoUrl.searchParams.set("count", "1");
+          const geoRes = await fetch(geoUrl);
+          if (!geoRes.ok) throw new Error("Geocoding failed");
+          const geoData = await geoRes.json();
+          if (!geoData.results || geoData.results.length === 0) {
+            throw new Error("City not found");
+          }
+          const hit = geoData.results[0];
+
+          // 2) Forecast for those coordinates
+          const fcUrl = new URL("https://api.open-meteo.com/v1/forecast");
+          fcUrl.searchParams.set("latitude",  hit.latitude);
+          fcUrl.searchParams.set("longitude", hit.longitude);
+          fcUrl.searchParams.set("current",   "temperature_2m,weather_code,wind_speed_10m");
+          fcUrl.searchParams.set("daily",     "temperature_2m_max,temperature_2m_min,weather_code");
+          fcUrl.searchParams.set("timezone",  "auto");
+          const fcRes = await fetch(fcUrl);
+          if (!fcRes.ok) throw new Error("Forecast fetch failed");
+          const forecast = await fcRes.json();
+
+          state = { kind: "success", location: hit, forecast };
+        } catch (e) {
+          state = { kind: "error", message: e.message || String(e) };
+        }
+        render();
+      }
+
+      function render() {
+        if (state.kind === "idle") {
+          view.innerHTML = `<p class="text-sm text-slate-500">Enter a city above to begin.</p>`;
+          return;
+        }
+        if (state.kind === "loading") {
+          view.innerHTML = `<div class="rounded-xl border border-white/10 bg-white/5 p-6 animate-pulse"><div class="h-4 w-32 rounded bg-white/10"></div><div class="mt-4 h-10 w-24 rounded bg-white/10"></div></div>`;
+          return;
+        }
+        if (state.kind === "error") {
+          view.innerHTML = `<div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-200">${state.message}</div>`;
+          return;
+        }
+        const { location, forecast } = state;
+        const c = forecast.current;
+        const d = forecast.daily;
+        const days = d.time.slice(0, 5).map((iso, i) => {
+          const label = new Date(iso).toLocaleDateString(undefined, { weekday: "short" });
+          return `<div class="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-center">
+            <div class="text-xs text-slate-400">${label}</div>
+            <div class="mt-1 text-sm font-semibold">${Math.round(d.temperature_2m_max[i])}°</div>
+            <div class="text-xs text-slate-400">${Math.round(d.temperature_2m_min[i])}°</div>
+          </div>`;
+        }).join("");
+
+        view.innerHTML = `
+          <div class="rounded-xl border border-white/10 bg-gradient-to-br from-cyan-500/10 to-violet-500/10 p-6">
+            <div class="text-sm text-slate-300">${location.name}, ${location.country}</div>
+            <div class="mt-1 flex items-end gap-3">
+              <div class="text-5xl font-bold">${Math.round(c.temperature_2m)}°C</div>
+              <div class="mb-1 text-sm text-slate-300">${codeLabel[c.weather_code] || "—"}</div>
+            </div>
+            <div class="mt-3 text-xs text-slate-400">Wind ${Math.round(c.wind_speed_10m)} km/h</div>
+          </div>
+          <div class="mt-4 grid grid-cols-5 gap-2">${days}</div>
+        `;
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (q) search(q);
+      });
+
+      render();
+    </script>
+  </body>
+</html>

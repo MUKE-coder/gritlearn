@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "phases": [
     {
       "id": "phase-01",
@@ -52,7 +52,7 @@
         { "slug": "phase-01/ts-basic-types", "title": "TS basic types and inference", "available": true },
         { "slug": "phase-01/ts-interfaces", "title": "TS interfaces and types", "available": true },
         { "slug": "phase-01/ts-react-props", "title": "Typing React props and state", "available": true },
-        { "slug": "phase-01/milestone-portfolio", "title": "Milestone: Build a portfolio / weather app", "available": false }
+        { "slug": "phase-01/milestone-portfolio", "title": "Milestone: Build a portfolio / weather app", "available": true }
       ]
     },
     {

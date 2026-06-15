@@ -1,0 +1,319 @@
+## Milestone — ship a real Phase 1 project
+
+You've spent forty-six lessons learning the building blocks: HTML for structure, CSS for shape, JavaScript for behavior, React for composition, TypeScript for safety. Now you assemble them. This milestone is the first thing you'll send a friend a link to — a working app, on the public web, that you built end to end. Two shapes to pick from, both small enough to ship in a weekend, big enough to prove the curriculum landed.
+
+<Analogy>
+Phase 1's milestone is **cooking the first full meal after weeks of knife skills, mirepoix, stocks, and pan sauces**.
+
+Every previous lesson taught you one technique. You learned to dice an onion. You learned to deglaze. You learned to plate. Each on its own is a drill, not dinner. The cooking school's first **graduation dish** is the meal where the chef hands you a recipe — say, a roast chicken with pan jus and a green salad — and steps back. You don't get a step-by-step demo. You consult the recipe, you reach into your knife block, your spice rack, your pantry — and you compose the meal yourself, in real time, on the same line where everyone else is cooking.
+
+That's what this milestone is. The recipe is the brief below. The pantry is forty-six concepts. The kitchen is your editor — Monaco, with Tailwind autocompleting and TypeScript pointing out where you've forgotten an apostrophe. The dish is the project you'll deploy to a public URL by Sunday night.
+
+Two recipes to pick from, both shaped to use the same techniques:
+
+- **A. Portfolio site** — about you, the developer you're becoming. One page, three sections, a contact form. The right scope to focus on craft: typography, spacing, responsive layout, a tasteful animation or two.
+- **B. Weather mini-app** — fetch a public API, render results, type the response. The right scope to practice React state, conditional rendering, and TypeScript at a boundary.
+
+Both deploy the same way (Vercel free tier, one git push) and both take roughly the same weekend. Pick one. Resist building both — the win is *shipping*, not starting.
+
+What this milestone gives you that no individual lesson can:
+
+- **The integration practice.** Lessons quarantine concepts; real apps blend them.
+- **The "where does this go?" practice.** You'll wrestle with file structure, when to break a component out, when to extract a type. Those decisions only make sense once you've made them on your own code.
+- **A link to send a recruiter.** Your first public-URL deliverable. Worth more than any course completion certificate.
+- **A baseline you can refactor in Phase 2.** Milestone 2 is "refactor this app with Phase 2's techniques" — closures, modules, error handling, clean code. So whatever you ship this weekend, you'll touch again later with better tools.
+
+The exit criterion isn't "perfect." It's *shipped*. A public URL that works on a phone and a laptop, and a Git repo you're not embarrassed to share.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the two milestone paths showing what techniques each one exercises"
+  caption="Same techniques, two shapes. Both ship to a public URL by the weekend."
+>
+
+```
+   PATH A — Portfolio                      PATH B — Weather mini-app
+
+   ┌──────────────────────────────┐        ┌────────────────────────────────┐
+   │  Hero (name, tagline, CTA)   │        │   Search bar (input + button)  │
+   │  About (one paragraph)       │        │  ────────────────────────────  │
+   │  Projects (3 cards)          │        │   Current conditions card      │
+   │  Contact (form OR mailto)    │        │   5-day forecast strip         │
+   └──────────────────────────────┘        └────────────────────────────────┘
+
+   USES:                                   USES:
+   ✓ HTML semantic structure               ✓ React useState + handlers
+   ✓ CSS / Tailwind for layout             ✓ fetch + JSON
+   ✓ Flexbox / Grid for sections           ✓ useEffect for the search call
+   ✓ A React component per section         ✓ Conditional rendering (loading/error)
+   ✓ Tailwind responsive utilities         ✓ TypeScript types for the API response
+   ✓ A small motion / transition           ✓ Tailwind layout + responsive
+
+   DEPLOY:   Vercel free, one git push     DEPLOY:   Vercel free, one git push
+   TIME:     1 weekend                     TIME:     1 weekend
+```
+
+</Illustration>
+
+### Stack
+
+Both paths use the same stack so you don't shop for tools — you just build.
+
+- **Next.js (App Router)** — Vite + plain React also fine. Next gives you free deploy on Vercel.
+- **TypeScript** — `strict: true` from the start. The error messages will hurt for a day, then save you a hundred bugs.
+- **Tailwind CSS** — every Phase 1 lesson on styling assumed this. No CSS files.
+- **Shadcn/ui (optional)** — for the portfolio path. Install three components, use them, stop.
+
+### What the brief is — Path A: Portfolio
+
+A single-page personal site with these sections:
+
+1. **Hero** — your name, a one-line tagline, two CTAs (View work / Contact). One full-width background, gradient or image.
+2. **About** — one paragraph (3–5 sentences) about who you are and what you're learning. A small headshot or avatar.
+3. **Projects** — three cards. Each card has: thumbnail (placeholder is fine), title, one-sentence description, and a "View" link. For the *first* project, link it to the GitHub repo of your milestone weather app (if you do both later) or another small thing you've built.
+4. **Skills strip** — a row of language/tool chips: HTML, CSS, JS, React, TypeScript, Tailwind. Six to twelve total.
+5. **Contact** — either a form with `<form action="https://formspree.io/..." />` (or similar zero-backend service) or a big mailto button with your email. Don't write a backend yet — that's Phase 3.
+6. **Footer** — copyright, a couple of social links.
+
+Constraints that prove the curriculum landed:
+
+- **Mobile first.** Test on a phone-sized viewport. Nothing horizontally scrolls. Tap targets are ≥44px.
+- **One Tailwind theme.** Pick a primary color and a neutral palette. Use them consistently. No 17 shades of grey.
+- **Responsive grid.** Projects section is 1 column on phone, 2 on tablet, 3 on desktop.
+- **Semantic HTML.** Header / main / footer. The projects section is a `<section>`. The page has one `<h1>`.
+- **Accessible.** Every image has alt text. The contact form's inputs have labels.
+
+### What the brief is — Path B: Weather mini-app
+
+A single page that fetches and displays weather:
+
+1. **Search bar** — a text input + a "Search" button. Empty state on first load.
+2. **Current conditions card** — temperature (big), feels-like, conditions (sunny / cloudy / rain), wind, humidity. Show the city name and the current time.
+3. **5-day forecast** — a horizontal strip of small cards, one per day: day label, icon, high/low.
+4. **Loading and error states** — a skeleton or spinner while the request is in flight; a useful error message if the city wasn't found.
+
+Stack additions:
+
+- A free weather API. **Open-Meteo** is the easiest — no API key, generous free tier. Endpoint: `https://api.open-meteo.com/v1/forecast?...`. Two requests: geocode the city name, then fetch the forecast for those coordinates.
+- A small icon set for the weather conditions — Lucide React works (`<Sun />`, `<Cloud />`, `<CloudRain />`).
+
+Constraints that prove the curriculum landed:
+
+- **TypeScript at the API boundary.** Declare a `WeatherResponse` type that matches the parts of the API response you use. The fetch call returns `Promise<WeatherResponse>`.
+- **Discriminated union for state.** `type FetchState = { kind: "idle" } | { kind: "loading" } | { kind: "error"; message: string } | { kind: "success"; data: WeatherResponse }`. Render based on `state.kind`. (You've now done this pattern professionally.)
+- **No prop drilling.** The page's state lives in the page component; children take typed props.
+- **Responsive.** Forecast strip scrolls horizontally on phone, sits side by side on desktop.
+
+### What "done" looks like
+
+Both paths share the same exit criteria:
+
+- The site is live at a public URL. (Vercel free tier — `vercel deploy`. Five minutes.)
+- The code lives in a public GitHub repo with a `README.md` that:
+  - Has a 2-sentence description.
+  - Links to the live URL.
+  - Has a screenshot.
+  - Lists the techniques the project uses.
+- Lighthouse score (in Chrome devtools → Lighthouse):
+  - Performance ≥ 90.
+  - Accessibility ≥ 95.
+  - Best Practices ≥ 95.
+- It works on a phone-sized viewport without horizontal scroll.
+- The TypeScript build runs clean (`pnpm build` succeeds with no errors).
+
+You're not aiming for "I want to keep iterating on this for two more weeks." You're aiming for *deployed and Lighthouse-green by Sunday night*.
+
+### Weekend plan
+
+**Saturday morning** — set up.
+
+- `pnpm create next-app@latest` (TypeScript, Tailwind, App Router, ESLint).
+- Push the empty scaffold to GitHub.
+- `vercel deploy` the empty scaffold so the URL exists from the start.
+
+**Saturday afternoon** — structure.
+
+- Stub every section as a separate component file.
+- Get the rough layout looking right in light mode at desktop.
+- Don't worry about polish.
+
+**Saturday evening** — content.
+
+- Real text. Real placeholder images. Real (or stubbed) data.
+- Path A: write your About paragraph. Add three project cards (link to *something*, even if it's a fork).
+- Path B: wire the Open-Meteo fetch. Get the success-state UI rendering.
+
+**Sunday morning** — responsive + polish.
+
+- Test on phone viewport. Fix every overflow.
+- Tighten typography. Pick one accent color and apply it consistently.
+- Add one small motion: a fade-in on scroll, or a button hover that feels good.
+
+**Sunday afternoon** — finish.
+
+- Loading and error states (Path B especially).
+- Alt text. ARIA labels on icon-only buttons.
+- Lighthouse pass.
+- Update README. Take the screenshot. Push.
+
+**Sunday evening** — ship.
+
+- Final deploy. Open the live URL on your phone. Text the link to someone.
+
+### Common traps you'll hit, and the right move
+
+- **You spend 4 hours picking a color palette.** Stop. Use any two-color palette from [coolors.co](https://coolors.co). Pick one accent and one neutral. Move on.
+- **You start adding features beyond the brief.** Stop. The win is *shipping*. The brief is small on purpose. Add the bonus features in week 2.
+- **Path B's API response is too rich.** Type only the fields you actually display. You don't have to model every nested object.
+- **The Lighthouse Performance score is 67.** Almost always: a huge un-optimized image. Resize the hero image to ≤1600px wide and convert to WebP.
+- **You can't decide between A and B.** Default to A (Portfolio). It's the link you'll send to recruiters. Do B on the side as practice.
+
+### After you ship
+
+- Pin the repo on your GitHub profile.
+- Add a "Latest projects" line to your CV with the URL.
+- Open the next phase (Phase 2 — Programming Foundations) knowing that everything you build there will improve *this exact codebase* in Milestone 2.
+
+You're past "learning to code in theory." You have a public URL. The next phase is about going deeper on the things you just used.
+
+<ExampleProject
+  src="portfolio-skeleton"
+  title="Portfolio path — minimal scaffold with the 5 sections"
+  description="A single HTML file that lays out the five sections of the Path A portfolio with placeholder content and Tailwind via CDN. Use it as a visual reference for what 'done' looks like at a structure level — then rebuild it in Next.js + components as your own."
+/>
+
+<ExampleProject
+  src="weather-app-skeleton"
+  title="Weather path — Open-Meteo fetch with typed response"
+  description="A working in-browser weather lookup that hits Open-Meteo, types the response, and renders a current-conditions card. No build step. Use it to see the data shape, then port the same logic into your Next.js project with proper components."
+/>
+
+<Exercise
+  title="Ship Path A or Path B by Sunday night"
+  starter={`Pick one path. Build it. Deploy it. Open the URL on your phone.
+
+PATH A — Portfolio site (1 page, 5 sections, contact form/link)
+PATH B — Weather mini-app (Open-Meteo fetch, search + current + forecast)
+
+Steps:
+
+  1. pnpm create next-app@latest my-milestone
+       (TypeScript, Tailwind, App Router, ESLint — all yes)
+
+  2. Push to a public GitHub repo. Commit messages should be small
+     and descriptive ("add hero section", "wire weather fetch") — not
+     "stuff" or "WIP".
+
+  3. vercel deploy from the empty scaffold so the public URL exists
+     before you write a single component.
+
+  4. Build the brief. Test on a phone viewport along the way.
+
+  5. Add the loading / error states (Path B) or the contact mechanism
+     (Path A — Formspree or a mailto button).
+
+  6. Update README.md with description, live URL, screenshot, and a
+     short "Built with" list.
+
+  7. Run Lighthouse. Fix the obvious wins (images, alt text, contrast).
+
+  8. Final 'vercel --prod'. Send the URL to someone.
+
+Use TypeScript (strict). Use Tailwind. Use semantic HTML. No CSS files.
+Don't reach for libraries the brief doesn't mention.`}
+>
+
+- The project has a **public GitHub repo** with a non-trivial commit history (≥ 6 commits, each with a meaningful message).
+- The project is **deployed** at a public URL — visiting the URL renders the working app.
+- The **README** has a description, a link to the live URL, a screenshot, and a list of techniques used.
+- **TypeScript** is enabled with `strict: true`. `pnpm build` runs clean.
+- **Tailwind** drives the styling — no CSS files (a `globals.css` for `@tailwind` directives is fine).
+- The page is **mobile-responsive** — no horizontal scroll at phone widths; tap targets ≥ 44px.
+- For Path A: all five sections present, contact mechanism functional, semantic HTML (`<header>`/`<main>`/`<footer>`).
+- For Path B: search → fetch → render works end to end; loading state visible during fetch; error state visible for unknown cities; TypeScript types the API response.
+- **Lighthouse** (mobile): Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95.
+- The URL is sharable — the kind of thing you'd send a friend.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between *learning the language* and *shipping a project*, and why does the milestone matter?
+
+**A:** **Learning isolates one technique at a time so you can understand it. Shipping forces you to compose every technique you've learned, in real conditions, on your own decisions.**
+
+In a lesson, you're handed scope ("write a function that does X"), tooling ("here's the editor file"), and validation ("the test is green if you're right"). All three crutches are gone in a real project: the scope is "build a portfolio that works", the tooling is whatever you stand up, and the validation is "does the live URL work on a phone."
+
+That mismatch is why most learners hit a wall after the lessons run out — they know every technique but can't sequence them on their own code. The milestone closes that gap deliberately: a brief that's narrow enough to finish in a weekend, wide enough that you'll make a hundred small decisions of your own (file structure, component boundaries, when to extract a type, what color the primary button is).
+
+The output is also the credential. A recruiter doesn't care that you finished a 50-hour course. They click your portfolio URL, open devtools, and see whether the thing works. The milestone is the first artifact in your career that's reviewable by anyone — and the second one (Milestone 2 in Phase 2) is going to *be* this one, refactored. So the skills you build here keep paying off.
+
+The shortest version: lessons teach you what's possible. Milestones teach you what's *yours*.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does the brief say "ship a small thing" rather than "ship the perfect thing"?
+
+**A:** Because **a shipped project beats a perfect plan**. Three concrete reasons:
+
+1. **Feedback only exists after release.** A live URL gets tested by you, by your friends, by the device you forgot you had. The first round of fixes you make after deploying is twice as valuable as anything you would have anticipated in your head.
+
+2. **Scope creep is the leading cause of unfinished projects.** "It should also have a blog" or "I want to add dark mode first" or "let me redesign the hero with this new style." Each addition feels small in isolation; together they push the deploy date six months out, which in practice means *forever*. The brief is small because small is shippable.
+
+3. **The next phase wants this codebase.** Milestone 2 in Phase 2 is "refactor your Phase 1 app with closures, modules, error handling, and clean code." If Milestone 1 isn't shipped, you don't have material for Milestone 2 — and you've fallen behind the curriculum's reinforcement plan.
+
+The technique the brief is pointing you toward: **release early, then improve in iterations the public can see**. The portfolio you put up this weekend will look different in three months — and that's the point. A live URL has a future. A "still polishing the hero" project has a tab in your editor that you close before bed.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How do you decide where to put state in a small React app like the weather mini-app?
+
+**A:** **As close to where it's used as possible, and lifted no further than necessary.**
+
+For the weather app specifically:
+
+- **The page-level state** lives in the page component (`app/page.tsx`): the search query, the current fetch state (`idle | loading | error | success`), and the resulting data. Everything below the page is read-only — passes through as props.
+- **Form draft state** (the input's value before the user clicks "Search") can live either in the page (lifted) or in a small `SearchBar` component (local). Both are fine; for a single search box, local is slightly cleaner because no other component cares about half-typed input.
+- **Display components** (`CurrentCard`, `ForecastStrip`) have no state. They take props, render UI. Easier to type, easier to test.
+
+The general rule: state lives where the *write* happens. Components that only read pass the props down. When two siblings both need to write to the same state, lift it to their closest common parent — that's "lifting state up." In a small app the common parent is usually just the page itself; no Context, no Redux, no Zustand needed.
+
+When does the rule break? Once *three or more* unrelated parts of the tree need the same write — a theme toggle in the header, an auth banner, and a settings page all reading user preferences. That's Context. For this milestone, you're nowhere near that. Page-level `useState` is enough; you can ship a polished Phase 1 app without ever reaching for Context. Phase 3 will give you the call to do that properly.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does "TypeScript at the API boundary" mean for the weather app, and why is it worth the extra typing?
+
+**A:** **It means writing a type that describes the parts of the API response your app actually uses, and using that type as the return type of the fetch.**
+
+```ts
+type Forecast = {
+  current: { temperature_2m: number; weather_code: number; wind_speed_10m: number };
+  daily:   { time: string[]; temperature_2m_max: number[]; temperature_2m_min: number[] };
+};
+
+async function fetchForecast(lat: number, lon: number): Promise<Forecast> {
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?...`);
+  if (!res.ok) throw new Error("Forecast fetch failed");
+  return res.json();
+}
+```
+
+What this gives you, that `Promise<any>` doesn't:
+
+- **Autocomplete inside the render**. `data.current.temperature_2m` autocompletes; `data.current.tempurature_2m` (typo) gets a red squiggle.
+- **The display component's props have correct types**. `<CurrentCard temperature={data.current.temperature_2m} />` is type-checked end to end.
+- **Refactors are safe**. If you later add or rename a field, the build tells you every spot you need to update.
+- **The reviewer sees the contract**. They read `Promise<Forecast>` and know what comes back; they don't have to chase the body.
+
+What it does *not* give you: a guarantee the API actually returns that shape. TypeScript types vanish at build time. If Open-Meteo changes their schema, the type says `temperature_2m: number` but the runtime gets `undefined` — and you'll see `undefined°C` on the page. The professional next step (Phase 3) is validating with Zod at the boundary: `ForecastSchema.parse(json)`. For this milestone, the static type is enough — you trust Open-Meteo's stable API and ship.
+
+The cost is one type declaration (maybe 8 lines) and one `Promise<T>` annotation. The win is the editor and build catching nine bugs in advance for every one you ship. Strictly worth it, even for a weekend project.
+
+</InterviewQuestion>

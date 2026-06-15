@@ -1,0 +1,136 @@
+<!--
+  Portfolio path — a one-page personal site scaffold.
+
+  Tailwind via CDN so it runs without a build step. Use this file as a
+  visual reference for "this is what the five sections look like when
+  they're stitched together." Then rebuild the same thing in your
+  Next.js project as proper components (Hero, About, Projects, Skills,
+  Contact, Footer) so you get the React + TypeScript composition
+  practice the milestone is really about.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your Name — developer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html { scroll-behavior: smooth; }
+      body { font-family: ui-sans-serif, system-ui, sans-serif; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased">
+    <!-- ─── Nav ─────────────────────────────────────────────────── -->
+    <header class="sticky top-0 z-10 border-b border-white/10 bg-slate-950/85 backdrop-blur">
+      <div class="mx-auto flex h-14 max-w-3xl items-center justify-between px-5">
+        <a href="#" class="font-semibold tracking-tight">Your Name</a>
+        <nav class="flex gap-5 text-sm text-slate-300">
+          <a href="#projects" class="hover:text-white">Projects</a>
+          <a href="#about"    class="hover:text-white">About</a>
+          <a href="#contact"  class="hover:text-white">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ─── Hero ────────────────────────────────────────────────── -->
+    <section class="border-b border-white/10">
+      <div class="mx-auto max-w-3xl px-5 py-24 text-center">
+        <p class="text-sm font-medium uppercase tracking-wider text-cyan-300">Developer · Learner</p>
+        <h1 class="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+          Hi, I'm <span class="bg-gradient-to-r from-cyan-300 to-violet-300 bg-clip-text text-transparent">Your Name</span>.
+        </h1>
+        <p class="mx-auto mt-5 max-w-xl text-base text-slate-300 sm:text-lg">
+          I build small, working things on the web. Currently learning my way through JEditor's curriculum and shipping projects as I go.
+        </p>
+        <div class="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <a href="#projects" class="rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-300">See my work</a>
+          <a href="#contact"  class="rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:bg-white/10">Get in touch</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── About ───────────────────────────────────────────────── -->
+    <section id="about" class="border-b border-white/10">
+      <div class="mx-auto grid max-w-3xl gap-8 px-5 py-20 sm:grid-cols-[100px_1fr] sm:items-center">
+        <div class="mx-auto h-24 w-24 overflow-hidden rounded-full border border-white/15 bg-white/5">
+          <div class="flex h-full w-full items-center justify-center text-2xl font-bold text-slate-300">YN</div>
+        </div>
+        <div>
+          <h2 class="text-xl font-semibold">About</h2>
+          <p class="mt-2 text-slate-300">
+            Three to five sentences. Where you are. What you're learning. What you're aiming at next. Make it sound like you — not like a CV. One specific detail beats three vague claims.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Projects ────────────────────────────────────────────── -->
+    <section id="projects" class="border-b border-white/10">
+      <div class="mx-auto max-w-3xl px-5 py-20">
+        <h2 class="text-xl font-semibold">Projects</h2>
+        <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <article class="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            <div class="h-32 bg-gradient-to-br from-cyan-500/30 to-violet-500/30"></div>
+            <div class="p-4">
+              <h3 class="font-semibold">Project one</h3>
+              <p class="mt-1 text-sm text-slate-300">One-sentence description of what it does.</p>
+              <a href="#" class="mt-3 inline-block text-sm font-medium text-cyan-300 hover:underline">View →</a>
+            </div>
+          </article>
+          <article class="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            <div class="h-32 bg-gradient-to-br from-emerald-500/30 to-cyan-500/30"></div>
+            <div class="p-4">
+              <h3 class="font-semibold">Project two</h3>
+              <p class="mt-1 text-sm text-slate-300">Another short description. Real link, not a placeholder.</p>
+              <a href="#" class="mt-3 inline-block text-sm font-medium text-cyan-300 hover:underline">View →</a>
+            </div>
+          </article>
+          <article class="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            <div class="h-32 bg-gradient-to-br from-rose-500/30 to-amber-500/30"></div>
+            <div class="p-4">
+              <h3 class="font-semibold">Project three</h3>
+              <p class="mt-1 text-sm text-slate-300">Three is the minimum count that signals "I ship things."</p>
+              <a href="#" class="mt-3 inline-block text-sm font-medium text-cyan-300 hover:underline">View →</a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Skills ──────────────────────────────────────────────── -->
+    <section class="border-b border-white/10">
+      <div class="mx-auto max-w-3xl px-5 py-16">
+        <h2 class="text-xl font-semibold">Built with</h2>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">HTML</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">CSS</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">JavaScript</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">TypeScript</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">React</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">Next.js</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200">Tailwind</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Contact ─────────────────────────────────────────────── -->
+    <section id="contact">
+      <div class="mx-auto max-w-3xl px-5 py-20 text-center">
+        <h2 class="text-xl font-semibold">Get in touch</h2>
+        <p class="mt-2 text-slate-300">The fastest way to reach me is email. Or send a message and I'll get back within a day.</p>
+        <a href="mailto:you@example.com" class="mt-6 inline-block rounded-lg bg-cyan-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-300">you@example.com</a>
+      </div>
+    </section>
+
+    <footer class="border-t border-white/10">
+      <div class="mx-auto flex max-w-3xl items-center justify-between px-5 py-6 text-sm text-slate-400">
+        <span>© Your Name</span>
+        <div class="flex gap-4">
+          <a href="#" class="hover:text-slate-200">GitHub</a>
+          <a href="#" class="hover:text-slate-200">LinkedIn</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
