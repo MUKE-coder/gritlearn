@@ -305,6 +305,16 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 	desktopSyncHandler := &handlers.DesktopSyncHandler{DB: db}
 	r.GET("/api/content_manifests/latest", desktopSyncHandler.LatestContentManifest)
 
+	// Public desktop-release endpoints — the marketing /download page
+	// and the in-app "Check for updates" both poll /api/desktop/latest.
+	// /download proxies to a presigned GitHub asset URL so private repo
+	// releases work without exposing GITHUB_TOKEN to the client. See
+	// handlers/desktop_release_handler.go for the resolution order.
+	desktopReleaseHandler := handlers.NewDesktopReleaseHandler()
+	r.GET("/api/desktop/latest", desktopReleaseHandler.GetLatest)
+	r.GET("/api/desktop/download", desktopReleaseHandler.GetDownload)
+	r.GET("/api/desktop/diagnostics", desktopReleaseHandler.GetDiagnostics)
+
 	// Public auth routes
 	auth := r.Group("/api/auth")
 	{

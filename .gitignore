@@ -65,3 +65,7 @@ pnpm-debug.log*
 .env.production
 .env.production.*
 apps/*/.env.production
+
+# TypeScript incremental build cache
+apps/*/tsconfig.tsbuildinfo
+tsconfig.tsbuildinfo

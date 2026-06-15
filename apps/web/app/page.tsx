@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   detectPlatform,
-  downloads,
+  fallbackRelease,
   getDownload,
   type Platform,
 } from "@/lib/platform";
@@ -24,7 +24,8 @@ export default function HomePage() {
   // default; the visitor can still click any of the four tiles below.
   const [platform, setPlatform] = useState<Platform>("windows");
   useEffect(() => setPlatform(detectPlatform()), []);
-  const primary = getDownload(platform);
+  const downloads = fallbackRelease.downloads;
+  const primary = getDownload(fallbackRelease, platform) ?? downloads[0];
 
   return (
     <div className="flex flex-col">
@@ -57,13 +58,13 @@ export default function HomePage() {
             >
               Sign up free <ArrowRight className="h-4 w-4" />
             </Link>
-            <a
-              href={primary.url}
+            <Link
+              href="/download"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-5 py-3 text-sm font-semibold text-foreground hover:bg-bg-hover transition-colors"
             >
               <Download className="h-4 w-4" />
               Download for {primary.label}
-            </a>
+            </Link>
           </div>
           <p className="mt-3 text-[12px] text-text-muted">
             One signup. Works offline after that. No credit card. No AI features
@@ -219,9 +220,9 @@ export default function HomePage() {
 
           <div className="mt-14 grid gap-4 sm:grid-cols-2">
             {downloads.map((d) => (
-              <a
+              <Link
                 key={d.platform}
-                href={d.url}
+                href="/download"
                 className={`group flex items-start gap-4 rounded-xl border bg-bg-secondary p-5 transition-all ${
                   d.platform === platform
                     ? "border-accent/60 ring-1 ring-accent/40"
@@ -245,8 +246,17 @@ export default function HomePage() {
                     {d.filename}
                   </p>
                 </div>
-              </a>
+              </Link>
             ))}
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/download"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover transition-colors"
+            >
+              Open the downloads page <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
 
           <div className="mt-10 flex items-center justify-center gap-2 text-[12px] text-text-muted">
@@ -279,7 +289,7 @@ export default function HomePage() {
               Sign up free <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="/#download"
+              href="/download"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-5 py-3 text-sm font-semibold text-foreground hover:bg-bg-hover transition-colors"
             >
               <Download className="h-4 w-4" /> See downloads

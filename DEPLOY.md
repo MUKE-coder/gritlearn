@@ -118,7 +118,32 @@ verification email should land in your inbox within seconds.
 
 ---
 
-## 7. MinIO bucket bootstrap
+## 7. GitHub Token (for /download to find releases)
+
+The marketing `/download` page reads the latest release from GitHub via
+`/api/desktop/latest`. If the `gritlearn` repo stays private, the API
+needs a token to call GitHub.
+
+1. [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens)
+   → **Generate new token (fine-grained)**.
+2. Repository access: **Only select repositories** → `gritlearn`.
+3. Permissions → Repository → **Contents: Read-only**.
+4. Paste the token into Dokploy's Environment as `GITHUB_TOKEN=...`.
+5. Redeploy.
+
+Verify:
+```bash
+curl https://api.jbeditor.com/api/desktop/diagnostics | jq .
+```
+You should see `github_test.ok: true` and `github_test.latest_tag` for
+your most recent release. The full release flow is in `RELEASING.md`.
+
+The token is **optional** if the repo is public — GitHub allows 60
+anonymous requests/hour per IP and the API caches for 10 minutes.
+
+---
+
+## 8. MinIO bucket bootstrap
 
 The compose stack ships a MinIO container, but the upload bucket has to
 exist before the api can write to it.
@@ -141,24 +166,25 @@ After the first deploy:
 
 ---
 
-## 8. Smoke test checklist
+## 9. Smoke test checklist
 
 After all six containers are green:
 
 - [ ] `https://api.jbeditor.com/health` returns 200
 - [ ] `https://jbeditor.com` renders the landing page
 - [ ] `https://www.jbeditor.com` redirects to apex
+- [ ] `https://jbeditor.com/download` renders (fallback OK if no GitHub release yet)
 - [ ] `https://admin.jbeditor.com` redirects to `/login`
 - [ ] Sign up at `https://jbeditor.com/register` — receive verification email
 - [ ] Verify, log in, hit the dashboard
 - [ ] Pulse dashboard loads at `/pulse/ui/`
 - [ ] Sentinel dashboard loads at `/sentinel/ui`
 
-If all eight pass, the platform is live.
+If all nine pass, the platform is live.
 
 ---
 
-## 9. Updates
+## 10. Updates
 
 Dokploy can auto-deploy on every push to `main`. Turn that on once you
 trust the smoke tests. Until then, hit **Deploy** manually after each
