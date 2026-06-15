@@ -1,0 +1,720 @@
+## Server actions
+
+Server actions are the modern way to **mutate data from your own UI**. Mark a function with `"use server"`, and you can call it directly from a form's `action` prop or from a button's `onClick` — the framework wires up the network call invisibly. You don't write a route handler; you don't write a fetch wrapper; you don't even write a loading state (React's `useTransition` handles it). The mental model is: "the function looks local, runs on the server." Once you see it work, the old API-handler-plus-client-fetch dance feels like ceremony you shouldn't have had to do.
+
+<Analogy>
+A server action is **a kitchen bell behind the dining counter that the waiter rings to send the order straight to the chef**.
+
+The traditional way to get food in this restaurant: the waiter walks to a separate "order desk" (route handler), writes a paper ticket (the JSON body of a `fetch`), hands it to a runner (the network), the runner carries it to the kitchen, the chef cooks, the runner brings the result back to the waiter, the waiter walks to the diner with the result. Six steps. Lots of paper. Lots of moving parts.
+
+The server action way: there's a discreet bell behind the dining counter, wired directly to the kitchen. The waiter rings it; the chef receives the order; the food arrives. No paper ticket. No runner. Same result, fewer moving parts.
+
+In code:
+
+```tsx
+// app/posts/new/page.tsx
+async function createPost(formData: FormData) {
+  "use server";
+  const title = formData.get("title") as string;
+  await db.post.create({ data: { title } });
+  revalidatePath("/posts");
+}
+
+export default function NewPostPage() {
+  return (
+    <form action={createPost}>
+      <input name="title" />
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+The `createPost` function is *defined in the same file as the form*. It looks like a local function. But because of the `"use server"` directive inside it, the framework knows to run it on the server. When the user clicks submit:
+
+1. The framework automatically does the network round trip for you.
+2. The function executes on the server — direct DB access, env vars, all the server-side power.
+3. `revalidatePath("/posts")` invalidates the cached `/posts` page.
+4. The user is on the next render with fresh data.
+
+You wrote no API endpoint. You wrote no fetch wrapper. You wrote no loading state (the form handles it). You wrote no JSON serialization (form data is automatic). The function looks local; it runs on the server; the wiring is invisible.
+
+Three patterns the bell-behind-the-counter analogy captures:
+
+1. **Same file, server execution.** The function lives next to the UI that calls it. No flipping between two files (page.tsx and route.ts) to follow one feature.
+
+2. **Progressive enhancement.** Forms with `action={serverAction}` work *even before JavaScript loads* — they degrade to a regular form submit. Critical for low-bandwidth users, accessibility, and SEO.
+
+3. **Built-in state.** `useTransition` (or `useFormStatus`) gives you the pending state without a `useState`. The framework knows the action is in flight; you just consume that state.
+
+When to use a server action vs. a route handler:
+
+- **Server action** when your own UI triggers the mutation (form submit, button click in a page).
+- **Route handler** when a *different program* calls the API (mobile app, webhook, third-party integration).
+
+For 80%+ of in-app mutations — every "Save," "Create," "Delete" button on every page — a server action is the right shape. Route handlers exist for the genuinely API-shaped cases.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the server-action flow vs the route-handler-plus-client-fetch flow"
+  caption="Same operation, two architectures. Server actions skip the manual API + fetch layer."
+>
+
+```
+   ROUTE HANDLER + CLIENT FETCH (the old way)         SERVER ACTION (the modern way)
+   ─────────────────────────────────────────         ───────────────────────────────
+
+   page.tsx                                            page.tsx
+     UI form                                            UI form ──┐
+        ↓                                                          │  (the framework wires up
+        fetch("/api/posts", { POST, body })                        │   the network call)
+                                                                   │
+     route.ts                                                       ▼
+       export async function POST(req) {              server action runs server-side
+         const body = await req.json()                  → access db, env, etc.
+         await db.post.create(...)                      → revalidatePath("/posts")
+         return Response.json(result)
+       }                                                ▼
+                                                       next render → fresh data
+
+   ✗ Two files                                        ✓ One file
+   ✗ Manual JSON serialization                        ✓ FormData / JS values, automatic
+   ✗ Manual error handling on both sides              ✓ React error boundary catches
+   ✗ Manual loading state                             ✓ useFormStatus / useTransition
+   ✗ Doesn't work without JS                          ✓ Progressive enhancement
+```
+
+</Illustration>
+
+### The minimum example
+
+```tsx
+// app/notes/new/page.tsx
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
+
+async function createNote(formData: FormData) {
+  "use server";
+  const title = formData.get("title") as string;
+  const body = formData.get("body") as string;
+  await db.note.create({ data: { title, body } });
+  revalidatePath("/notes");   // refresh the cached notes list
+}
+
+export default function NewNotePage() {
+  return (
+    <form action={createNote} className="p-8">
+      <input name="title" placeholder="Title" />
+      <textarea name="body" placeholder="Body" />
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+When the user submits:
+
+1. The browser sends a multipart form submission to the page's URL.
+2. The framework intercepts it, calls `createNote` with the `FormData`.
+3. `createNote` runs on the server — creates the note in the DB.
+4. `revalidatePath("/notes")` clears the cached `/notes` page.
+5. The page re-renders; the new note appears in the list.
+
+No API endpoint. No fetch call. No loading state code. The form `action` prop accepts a server action directly.
+
+### `"use server"` placement — two patterns
+
+Server actions can be defined two ways:
+
+**Inline** in a server component (the simple case):
+
+```tsx
+export default function Page() {
+  async function action(formData: FormData) {
+    "use server";
+    // ...
+  }
+  return <form action={action}>...</form>;
+}
+```
+
+The `"use server"` directive lives inside the function. The function is defined inside the component but runs on the server.
+
+**Module-level** for actions used in multiple places:
+
+```ts
+// app/actions/notes.ts
+"use server";
+
+import { db } from "@/lib/db";
+
+export async function createNote(formData: FormData) {
+  const title = formData.get("title") as string;
+  await db.note.create({ data: { title, body: "" } });
+}
+
+export async function deleteNote(id: string) {
+  await db.note.delete({ where: { id } });
+}
+```
+
+```tsx
+// app/notes/page.tsx
+import { createNote, deleteNote } from "@/app/actions/notes";
+
+// use createNote and deleteNote anywhere in this file
+```
+
+The `"use server"` at the top of the file marks **every export** as a server action. You can then import these actions into any component.
+
+The module-level form is the more common one in real apps — you collect all your actions in `actions/` or `lib/actions/` and import where needed.
+
+### Forms with actions
+
+The form's `action` prop accepts a server action:
+
+```tsx
+<form action={createNote}>
+  <input name="title" />
+  <button type="submit">Create</button>
+</form>
+```
+
+When the form submits, the action receives a `FormData` object. Read fields with `.get(name)`:
+
+```ts
+async function createNote(formData: FormData) {
+  "use server";
+  const title = formData.get("title") as string;
+  const body = formData.get("body") as string;
+  // ...
+}
+```
+
+The `as string` cast is needed because `formData.get()` can technically return `string | File | null`. For text fields, it's always `string`. For file inputs, it'd be `File`. For missing fields, `null`.
+
+A cleaner pattern with Zod:
+
+```ts
+import { z } from "zod";
+
+const CreateSchema = z.object({
+  title: z.string().min(1),
+  body: z.string().optional().default(""),
+});
+
+async function createNote(formData: FormData) {
+  "use server";
+  const parsed = CreateSchema.parse({
+    title: formData.get("title"),
+    body: formData.get("body"),
+  });
+  await db.note.create({ data: parsed });
+}
+```
+
+Zod handles the validation and the type narrowing in one step.
+
+### Calling from a client component
+
+Server actions can also be called from client components — useful for buttons that aren't inside a form:
+
+```tsx
+// components/DeleteButton.tsx
+"use client";
+
+import { deleteNote } from "@/app/actions/notes";
+
+export function DeleteButton({ noteId }: { noteId: string }) {
+  return (
+    <button onClick={() => deleteNote(noteId)}>
+      Delete
+    </button>
+  );
+}
+```
+
+The client component imports the server action and calls it like a normal function. The framework handles the network round trip automatically. The function still runs on the server.
+
+This is the magic that makes server actions feel like "the function looks local, runs on the server" — the same syntax works whether you're calling from a server component, a client component, or a form's `action` prop.
+
+### `useTransition` — pending state
+
+For actions triggered from client components, you can wrap the call in `useTransition` to get a pending flag:
+
+```tsx
+"use client";
+import { useTransition } from "react";
+import { deleteNote } from "@/app/actions/notes";
+
+export function DeleteButton({ noteId }: { noteId: string }) {
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <button
+      disabled={isPending}
+      onClick={() => startTransition(() => deleteNote(noteId))}
+    >
+      {isPending ? "Deleting…" : "Delete"}
+    </button>
+  );
+}
+```
+
+`isPending` is `true` while the server action is running. Useful for disabling buttons and showing loading states without manual `useState` plumbing.
+
+### `useFormStatus` — pending state for forms
+
+For form submissions, there's an even simpler pattern using `useFormStatus`:
+
+```tsx
+"use client";
+import { useFormStatus } from "react-dom";
+
+export function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? "Saving…" : "Save"}
+    </button>
+  );
+}
+```
+
+`useFormStatus` reads the pending state of the *nearest enclosing form*. Drop the `SubmitButton` inside any `<form action={...}>` and it shows the right state automatically.
+
+### `useFormState` — server-validated forms
+
+For forms that need server-side validation that the user sees on the page:
+
+```tsx
+"use client";
+import { useFormState } from "react-dom";
+import { createNote } from "@/app/actions/notes";
+
+export function NoteForm() {
+  const [state, formAction] = useFormState(createNote, { error: null });
+
+  return (
+    <form action={formAction}>
+      <input name="title" />
+      {state.error && <p className="text-red-500">{state.error}</p>}
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+The action is wrapped; it now takes a `previousState` argument and returns a new state:
+
+```ts
+"use server";
+
+export async function createNote(
+  previousState: { error: string | null },
+  formData: FormData
+) {
+  const title = formData.get("title") as string;
+  if (!title) return { error: "Title required" };
+  await db.note.create({ data: { title } });
+  return { error: null };
+}
+```
+
+The returned state is rendered automatically. The user sees the error message without you writing `useState` or a separate API endpoint.
+
+### `revalidatePath` and `revalidateTag` — refresh stale UI
+
+After a mutation, you usually want the page that displays the data to refresh. `revalidatePath` does this:
+
+```ts
+"use server";
+import { revalidatePath } from "next/cache";
+
+export async function createNote(formData: FormData) {
+  await db.note.create({ data: { ... } });
+  revalidatePath("/notes");   // invalidate cached /notes page
+}
+```
+
+The next user to navigate to `/notes` gets the fresh data; the cached version is gone.
+
+`revalidateTag` is the same idea but for tagged fetches:
+
+```ts
+// somewhere
+fetch("https://api.example.com/notes", {
+  next: { tags: ["notes"] },
+});
+
+// later, in an action
+revalidateTag("notes");   // invalidate every fetch tagged "notes"
+```
+
+Useful when many pages share a data source and you want to invalidate them all at once.
+
+### Redirects
+
+`redirect()` from `next/navigation` works in server actions:
+
+```ts
+"use server";
+import { redirect } from "next/navigation";
+
+export async function createNote(formData: FormData) {
+  const note = await db.note.create({ data: { ... } });
+  redirect(`/notes/${note.id}`);   // user lands on the new note's page
+}
+```
+
+`redirect()` throws (it never returns), so any code after it doesn't run. The framework intercepts the throw, sends a redirect response, the browser navigates.
+
+### Security — never trust client-side state
+
+A server action runs on the server, but it's *invoked* by the client. The client could lie about the inputs. **Always re-validate authorization and inputs in the action.**
+
+```ts
+"use server";
+import { cookies } from "next/headers";
+
+export async function deletePost(postId: string) {
+  // ✗ Don't trust the postId blindly
+  // ✓ Verify the current user owns this post
+  const session = cookies().get("session")?.value;
+  const user = await getUserFromSession(session);
+  if (!user) throw new Error("Not authenticated");
+
+  const post = await db.post.findUnique({ where: { id: postId } });
+  if (post?.userId !== user.id) throw new Error("Not authorized");
+
+  await db.post.delete({ where: { id: postId } });
+}
+```
+
+The auth check runs on every call. Even if a user crafted a request to delete *someone else's* post, the action would refuse. Same model as you'd use in a route handler — server actions don't escape security; they're just more ergonomic for the common UI-triggered case.
+
+### Error handling
+
+Throwing in a server action bubbles up to a React error boundary on the client. For controlled errors that should show inline (validation, etc.), return a state object via `useFormState` (above).
+
+```ts
+"use server";
+
+export async function createNote(formData: FormData) {
+  try {
+    const data = await validateAndSave(formData);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+```
+
+The client reads the returned state and renders appropriately. No `try/catch` on the client side — the action just returns its result.
+
+### When NOT to use server actions
+
+Three situations where a route handler is better:
+
+1. **External callers.** A mobile app, a webhook, a third-party integration. They can't call your server actions (those have specific request shapes the framework controls); they need a real REST endpoint.
+
+2. **Long-running operations.** Server actions are designed for request-response cycles. For a long process (video transcoding, batch import), use a route handler that returns immediately and queues a background job.
+
+3. **Public APIs.** Anything documented as part of a public API surface should be a route handler — explicit URL, explicit method, explicit body shape.
+
+For everything else — every "Save," "Delete," "Create" button in your own app — server actions are the modern default.
+
+<ExampleProject
+  src="form-action"
+  title="A complete form with server action, validation, pending state, and revalidation"
+  description="A new-note form that submits to a server action. Demonstrates useFormStatus for the pending state, server-side Zod validation, useFormState for error messages, and revalidatePath for refreshing the list. The full real-world shape in one example."
+/>
+
+<ExampleProject
+  src="server-vs-route-handler"
+  title="Same mutation — server action vs route handler, side by side"
+  description="The 'create note' operation implemented two ways. Left: a server action (one file, no fetch, no JSON). Right: a route handler + client fetch (two files, more code). Same result; vastly different code volume."
+/>
+
+<Exercise
+  title="Replace your /api/notes route handler with server actions"
+  starter={`Take the notes API you built in the route-handlers exercise. Now
+do the same thing using server actions, and notice the difference.
+
+  1. Create app/actions/notes.ts with "use server" at the top.
+     Export three functions:
+       - createNote(formData: FormData)
+       - updateNote(id: string, formData: FormData)
+       - deleteNote(id: string)
+     Each does the same thing as the corresponding route handler.
+
+  2. Create app/notes/page.tsx that:
+       - Lists all notes (server-rendered).
+       - Has a <form action={createNote}> with title + body fields.
+       - Each note has a "Delete" button that calls deleteNote.
+
+  3. Use Zod schemas for validation (same as the route handler).
+
+  4. Call revalidatePath("/notes") at the end of each action so the
+     list refreshes.
+
+  5. Use useFormStatus in a SubmitButton client component so the
+     button shows "Saving..." during submission.
+
+  6. (Optional but real) Use useFormState to display server-validated
+     errors inline in the form. If you submit with an empty title,
+     show "Title required" under the input without reloading the page.
+
+  Compare to the route-handler version:
+    - How many files?
+    - How many lines of code (including client fetch wrappers)?
+    - Does the form still work with JavaScript disabled?
+
+  7. Test:
+     - Create a note; see it appear in the list.
+     - Delete a note; see it removed.
+     - Edit a note (inline edit if you're up for it); see the
+       changes persist.
+     - Submit with an empty title; see the error message.
+     - Disable JavaScript in devtools; refresh; try to create a
+       note. It still works (progressive enhancement).`}
+>
+
+- `app/actions/notes.ts` exists with `"use server"` at the top and three exported functions.
+- `app/notes/page.tsx` is a server component that lists notes and includes a form with `action={createNote}`.
+- The form uses `useFormStatus` (via a `SubmitButton` client component) to show pending state.
+- Zod schemas validate the form data inside the action.
+- `revalidatePath("/notes")` is called after each mutation so the list refreshes.
+- Submitting with an empty title shows an error (either via `useFormState` or via the action returning early).
+- Delete buttons work and remove the note from the list.
+- The student tested with JavaScript disabled and the form still submitted successfully.
+- The student can articulate one or two specific ways the server action version is simpler than the route handler version.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `"use server"` do?
+
+**A:** **It marks a function (or a whole module) as a server action — a function that can be invoked from the client but runs on the server. The framework handles the network call automatically.**
+
+Two placement patterns:
+
+```tsx
+// Inline — function-level directive
+async function createPost(formData: FormData) {
+  "use server";
+  await db.post.create({ data: ... });
+}
+```
+
+```ts
+// Module-level — applies to all exports
+"use server";
+
+export async function createPost(formData: FormData) { ... }
+export async function deletePost(id: string) { ... }
+```
+
+What `"use server"` enables:
+
+1. **The function can be called from a client component or a form's `action` prop.** The framework wires up a POST to the page URL with the function's arguments serialized; the server runs the function; the result comes back.
+
+2. **The function code never ships to the browser.** Like server components, the body of a server action lives only on the server. Secrets, DB clients, internal logic — all safe.
+
+3. **It works with progressive enhancement.** Forms with `action={serverAction}` submit normally (without JavaScript) — they degrade to a regular POST that the framework still handles.
+
+What `"use server"` does NOT mean:
+
+- It doesn't make a component a server component. (That's the *absence* of `"use client"`.)
+- It doesn't change rendering behavior. It only affects functions you invoke.
+- It doesn't replace route handlers entirely. For genuine API endpoints (consumed by other programs), you still need a `route.ts`.
+
+A common confusion: `"use server"` and `"use client"` sound symmetric but they're not. `"use client"` marks a *component file* as running in the browser. `"use server"` marks a *function* as running on the server (even if it's called from a client component file).
+
+The mental check: "this function does something on the server, and I want to call it from the UI" → `"use server"`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When should you use a server action instead of a route handler?
+
+**A:** **For mutations triggered by your own UI (forms, button clicks). For everything where the caller is *not* your own page, use a route handler.**
+
+The decision tree:
+
+```text
+Who's calling this mutation?
+├─ Your own page's form / button     → server action
+├─ A different web app's frontend     → route handler
+├─ A mobile app                       → route handler
+├─ A webhook (Stripe, GitHub, etc.)   → route handler
+├─ A public API                       → route handler
+└─ A scheduled cron / background job  → route handler
+```
+
+Why server actions are better for in-app mutations:
+
+1. **One file instead of two.** The function lives next to the UI. No flipping between `page.tsx` and `route.ts`.
+
+2. **No fetch wrapper.** You don't write `fetch("/api/notes", { method: "POST", body: JSON.stringify(data) })`. You just call the function.
+
+3. **Built-in pending state.** `useFormStatus` and `useTransition` give you loading indicators without manual `useState`.
+
+4. **Built-in error handling.** Server actions integrate with React's error boundaries.
+
+5. **Progressive enhancement.** Forms still submit if JavaScript hasn't loaded yet.
+
+6. **Automatic revalidation.** `revalidatePath` after the mutation refreshes the relevant pages.
+
+Why route handlers are still right for external callers:
+
+- **They have a URL.** Mobile apps and webhooks can hit a URL; they can't invoke a server action.
+- **They have a documented HTTP shape.** Other programs need to know the method, the body format, the status codes. A server action's wire format isn't a public contract — it's a framework detail.
+- **They're versionable.** `/api/v1/products` vs `/api/v2/products` — public APIs evolve via URL versioning.
+
+In a typical full-stack Next.js app:
+
+- ~80% of mutations are server actions (in-app forms and buttons).
+- ~20% are route handlers (webhooks, public APIs, mobile-app backends).
+
+The decision is "who's calling?" Your own UI → server action. Anything else → route handler.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How does `useFormStatus` know about the pending state of a form?
+
+**A:** **It reads from React's internal context that tracks the nearest enclosing `<form>` with a server action. Drop a component with `useFormStatus` inside any such form and it picks up the form's state automatically.**
+
+```tsx
+"use client";
+import { useFormStatus } from "react-dom";
+
+function SubmitButton() {
+  const { pending, data, method, action } = useFormStatus();
+  return <button disabled={pending}>{pending ? "Saving…" : "Save"}</button>;
+}
+
+// Usage anywhere inside a form:
+<form action={createNote}>
+  <input name="title" />
+  <SubmitButton />              // ← reads state from the enclosing form
+</form>
+```
+
+The mechanism:
+
+1. The framework wraps every `<form action={serverAction}>` in an internal React context that holds the form's pending state.
+2. While the action is in flight, the context's `pending` is `true`.
+3. Any client component that calls `useFormStatus` inside that form sees the value.
+4. When the action resolves, `pending` flips to `false`; the component re-renders.
+
+Three useful properties this design has:
+
+1. **No prop drilling.** The button doesn't receive the pending state as a prop. It just reads it from context.
+
+2. **Each form has its own state.** Two forms on the same page each track independently. The button inside form A doesn't reflect form B's pending state.
+
+3. **Works with multiple components.** A spinner *and* a "saving…" message *and* a disabled overlay can all read the same pending state without coordinating.
+
+Notes on usage:
+
+- `useFormStatus` must be called inside a client component (it's a hook).
+- It must be called inside the *form*, not the same component as the form. If you call `useFormStatus` directly in the component that renders the `<form>`, it returns `{ pending: false }` always — it doesn't see its own form.
+
+Compare with the older pattern that needed a manual state:
+
+```tsx
+// Old, manual
+const [pending, setPending] = useState(false);
+async function onSubmit() {
+  setPending(true);
+  try { await createNote(...); }
+  finally { setPending(false); }
+}
+return <button disabled={pending}>{pending ? "…" : "Save"}</button>;
+```
+
+`useFormStatus` is the framework's version — same outcome, zero plumbing.
+
+`useFormState` is the cousin for *returned state* from the action (validation errors, success messages). Both work together: `useFormState` for the action's result, `useFormStatus` for the in-flight state.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is "progressive enhancement" listed as a benefit of server actions?
+
+**A:** **Because a `<form action={serverAction}>` submits as a normal HTML form even before JavaScript loads. The page still works for users with slow networks, JS disabled, screen readers that prefer minimal JS, or bots that can't execute scripts.**
+
+The traditional React/SPA approach:
+
+```tsx
+"use client";
+// Without JS, this form is non-functional
+async function onSubmit(e) {
+  e.preventDefault();
+  await fetch("/api/notes", { method: "POST", body: JSON.stringify(data) });
+}
+
+return (
+  <form onSubmit={onSubmit}>
+    <input name="title" />
+    <button>Save</button>
+  </form>
+);
+```
+
+If JS hasn't loaded yet, the form might submit to the wrong URL, or do nothing at all. Users see a broken page.
+
+The server-action approach:
+
+```tsx
+// app/notes/new/page.tsx (server component)
+async function createNote(formData: FormData) {
+  "use server";
+  // ...
+}
+
+return (
+  <form action={createNote}>
+    <input name="title" />
+    <button>Save</button>
+  </form>
+);
+```
+
+Without JavaScript:
+
+1. The browser submits the form to the current URL (`POST /notes/new`).
+2. The framework recognizes the action, calls `createNote` on the server with the form data.
+3. The function runs; the server returns the next page render.
+4. The user sees the result.
+
+With JavaScript:
+
+1. The framework's client code intercepts the form submission.
+2. It calls the action via a fetch under the hood.
+3. The result is returned and applied to the page without a full reload.
+4. The user sees the result faster.
+
+*Both* paths produce the same outcome. The first path is slower but always works; the second is faster but requires JS.
+
+This is "progressive enhancement" — the experience improves as more capabilities are available, but never breaks on the simpler tier.
+
+Why it matters:
+
+1. **Slow networks.** A user on 3G might be on the page before all the JS loads. Server actions still work.
+
+2. **Accessibility tools.** Some assistive tech / older browsers / restrictive environments don't run JS. The form still works.
+
+3. **SEO.** Search engine crawlers may not execute JS. A form on a landing page (newsletter signup, contact) still works.
+
+4. **Resilience.** A buggy client-side JS file in production doesn't kill the entire form. The form still submits the server-side way.
+
+The traditional SPA pattern *only* works with JS. Server actions extend the React component model to also work without it. Few frameworks pull this off — Remix and Next.js are the headliners. For forms (the most failure-prone UI element), it's a meaningful upgrade.
+
+</InterviewQuestion>

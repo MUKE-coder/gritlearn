@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "phases": [
     {
       "id": "phase-01",
@@ -95,8 +95,8 @@
         { "slug": "phase-03/server-vs-client", "title": "Server components vs client components", "available": true },
         { "slug": "phase-03/rendering-strategies", "title": "Rendering strategies (SSR, SSG, ISR, client)", "available": true },
         { "slug": "phase-03/data-fetching", "title": "Data fetching in Next.js", "available": true },
-        { "slug": "phase-03/route-handlers", "title": "Route handlers (API routes)", "available": false },
-        { "slug": "phase-03/server-actions", "title": "Server actions", "available": false },
+        { "slug": "phase-03/route-handlers", "title": "Route handlers (API routes)", "available": true },
+        { "slug": "phase-03/server-actions", "title": "Server actions", "available": true },
         { "slug": "phase-03/what-is-a-database", "title": "What a database is", "available": false },
         { "slug": "phase-03/sql-basics", "title": "SQL basics (tables, rows, columns)", "available": false },
         { "slug": "phase-03/sql-queries", "title": "SQL queries (SELECT, WHERE, JOIN)", "available": false },

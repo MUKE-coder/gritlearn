@@ -1,0 +1,170 @@
+<!--
+  Fire GET / POST / PATCH / DELETE at a fake API in the browser.
+  The "API" is an in-page Map; trace shows the request, the route
+  handler that matched, and the response.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Try the API in your browser</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 820px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .form {
+        display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem; margin-top: 0.5rem;
+      }
+      .form label { font-family: ui-monospace, monospace; font-size: 0.85rem; color: #555; padding-top: 0.4rem; }
+      .form input, .form select, .form textarea {
+        padding: 0.45rem 0.75rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem;
+      }
+      .form textarea { min-height: 4rem; }
+      .send { margin-top: 0.7rem; padding: 0.5rem 1.1rem; border: 1px solid #15803d; background: #15803d; color: #fff; border-radius: 4px; cursor: pointer; font-weight: 600; }
+      .trace {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1.1rem; border-radius: 8px;
+        font-family: ui-monospace, monospace; font-size: 0.83rem; line-height: 1.7; min-height: 9rem;
+      }
+      .trace .req { color: #38bdf8; }
+      .trace .match { color: #fbbf24; }
+      .trace .res { color: #7fff5b; }
+      .trace .err { color: #f87171; }
+      .trace .body { color: #a78bfa; }
+      .examples {
+        display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;
+      }
+      .examples button {
+        padding: 0.3rem 0.7rem; border: 1px solid #d4d4d8; border-radius: 4px;
+        background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.78rem;
+      }
+      .examples button:hover { background: #f4f4f5; }
+    </style>
+  </head>
+  <body>
+    <h1>Try a CRUD API in your browser</h1>
+    <p>This page simulates the /api/notes endpoints from the exercise. Fire requests; see what the route handlers return.</p>
+
+    <h2>Make a request</h2>
+    <div class="form">
+      <label>method</label>
+      <select id="method">
+        <option>GET</option>
+        <option>POST</option>
+        <option>PATCH</option>
+        <option>DELETE</option>
+      </select>
+      <label>url</label>
+      <input id="url" type="text" value="/api/notes" />
+      <label>body (JSON)</label>
+      <textarea id="body" placeholder='leave empty for GET / DELETE'></textarea>
+    </div>
+    <button class="send" id="send">Send</button>
+
+    <div class="examples">
+      <button data-ex="list">GET /api/notes</button>
+      <button data-ex="create">POST /api/notes</button>
+      <button data-ex="read">GET /api/notes/:id</button>
+      <button data-ex="update">PATCH /api/notes/:id</button>
+      <button data-ex="delete">DELETE /api/notes/:id</button>
+      <button data-ex="bad">POST with invalid body</button>
+    </div>
+
+    <h2>Response trace</h2>
+    <div class="trace" id="trace"></div>
+
+    <script>
+      const notes = new Map();
+      let lastId = null;
+      const trace = document.getElementById("trace");
+
+      function log(cls, msg) {
+        const d = document.createElement("div");
+        d.className = cls;
+        d.innerHTML = msg;
+        trace.prepend(d);
+      }
+
+      function handle(method, url, body) {
+        const parts = url.replace(/^\//, "").split("/");
+        // /api/notes or /api/notes/:id
+        if (parts[0] !== "api" || parts[1] !== "notes") {
+          return { status: 404, body: { error: "Not found" } };
+        }
+        const id = parts[2];
+
+        if (method === "GET" && !id) {
+          return { status: 200, body: [...notes.values()] };
+        }
+        if (method === "POST" && !id) {
+          if (!body || !body.title || !body.body) {
+            return { status: 400, body: { error: "Invalid input", missing: ["title", "body"] } };
+          }
+          const newId = "n" + (notes.size + 1);
+          const note = { id: newId, title: body.title, body: body.body, createdAt: new Date().toISOString() };
+          notes.set(newId, note);
+          lastId = newId;
+          return { status: 201, body: note };
+        }
+        if (id) {
+          const existing = notes.get(id);
+          if (!existing) return { status: 404, body: { error: "Not found" } };
+          if (method === "GET")    return { status: 200, body: existing };
+          if (method === "PATCH") {
+            const updated = { ...existing, ...body };
+            notes.set(id, updated);
+            return { status: 200, body: updated };
+          }
+          if (method === "DELETE") {
+            notes.delete(id);
+            return { status: 204, body: null };
+          }
+        }
+        return { status: 405, body: { error: "Method not allowed" } };
+      }
+
+      function send() {
+        const method = document.getElementById("method").value;
+        const url = document.getElementById("url").value;
+        const bodyRaw = document.getElementById("body").value.trim();
+        let body = null;
+        if (bodyRaw) {
+          try { body = JSON.parse(bodyRaw); }
+          catch { log("err", "✗ body is not valid JSON"); return; }
+        }
+
+        log("req", `→ ${method} ${url}` + (body ? ` <span class="body">${JSON.stringify(body)}</span>` : ""));
+        // Identify which route handler matched
+        const parts = url.split("/").filter(Boolean);
+        const route = parts.length === 2 ? "/api/notes" : "/api/notes/[id]";
+        log("match", `  → matched ${route} → ${method}() handler`);
+
+        const res = handle(method, url, body);
+        const ok = res.status < 400;
+        log(ok ? "res" : "err",
+          `  ← ${res.status} ${res.body ? `<span class="body">${JSON.stringify(res.body).slice(0, 200)}</span>` : ""}`);
+        log("", "&nbsp;");
+      }
+
+      document.getElementById("send").addEventListener("click", send);
+
+      const examples = {
+        list:   { m: "GET",    u: "/api/notes",       b: "" },
+        create: { m: "POST",   u: "/api/notes",       b: '{ "title": "First note", "body": "Hello world" }' },
+        read:   { m: "GET",    u: "/api/notes/n1",    b: "" },
+        update: { m: "PATCH",  u: "/api/notes/n1",    b: '{ "body": "Updated body" }' },
+        delete: { m: "DELETE", u: "/api/notes/n1",    b: "" },
+        bad:    { m: "POST",   u: "/api/notes",       b: '{ "title": "Missing body field" }' },
+      };
+      document.querySelectorAll("[data-ex]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const e = examples[b.dataset.ex];
+          document.getElementById("method").value = e.m;
+          document.getElementById("url").value = e.u;
+          document.getElementById("body").value = e.b;
+          send();
+        });
+      });
+    </script>
+  </body>
+</html>

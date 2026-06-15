@@ -1,0 +1,152 @@
+<!--
+  All five CRUD-shaped route handlers on one page, annotated.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CRUD route handlers — full set</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 880px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin: 1.7rem 0 0.4rem; }
+      .file {
+        font-size: 0.75rem; color: #71717a; font-family: ui-monospace, monospace;
+        margin-top: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .meta {
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        display: grid; grid-template-columns: 110px 1fr; gap: 0.4rem; margin: 0.5rem 0;
+      }
+      .meta .l { color: #71717a; }
+      .verb {
+        display: inline-block; padding: 1px 8px; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-weight: 700; font-size: 0.78rem;
+      }
+      .verb.GET    { background: #ecfdf5; color: #166534; }
+      .verb.POST   { background: #dbeafe; color: #1e40af; }
+      .verb.PATCH  { background: #fef3c7; color: #b45309; }
+      .verb.DELETE { background: #fef2f2; color: #b91c1c; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1.05rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.55;
+        overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .accent  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .status {
+        font-size: 0.82rem; font-family: ui-monospace, monospace;
+        padding: 1px 7px; border-radius: 4px; display: inline-block;
+      }
+      .status.s2 { background: #ecfdf5; color: #166534; }
+      .status.s4 { background: #fef3c7; color: #b45309; }
+    </style>
+  </head>
+  <body>
+    <h1>A full CRUD route handler set</h1>
+    <p>Two files. Two folders. Five exports. The complete API surface for a single resource.</p>
+
+    <h2><span class="verb GET">GET</span> /api/products — list all</h2>
+    <div class="file">app/api/products/route.ts</div>
+    <div class="meta">
+      <span class="l">Status</span><span><span class="status s2">200 OK</span></span>
+      <span class="l">Body</span><span>none</span>
+      <span class="l">Returns</span><span>Array of products</span>
+    </div>
+<pre><span class="keyword">export async function</span> GET() {
+  <span class="keyword">const</span> products = <span class="keyword">await</span> db.product.findMany();
+  <span class="keyword">return</span> <span class="keyword">Response</span>.json(products);
+}</pre>
+
+    <h2><span class="verb POST">POST</span> /api/products — create</h2>
+    <div class="file">app/api/products/route.ts (same file)</div>
+    <div class="meta">
+      <span class="l">Status</span><span><span class="status s2">201 Created</span> (or <span class="status s4">400 Bad Request</span>)</span>
+      <span class="l">Body</span><span>{ name, priceCents }</span>
+      <span class="l">Returns</span><span>The new product</span>
+    </div>
+<pre><span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+
+<span class="keyword">const</span> CreateSchema = z.object({
+  name: z.string().min(1),
+  priceCents: z.number().int().positive(),
+});
+
+<span class="keyword">export async function</span> POST(request: <span class="keyword">Request</span>) {
+  <span class="keyword">const</span> json = <span class="keyword">await</span> request.json();
+  <span class="keyword">const</span> parsed = CreateSchema.safeParse(json);
+  <span class="keyword">if</span> (!parsed.success) {
+    <span class="keyword">return</span> <span class="keyword">Response</span>.json(
+      { error: <span class="string">"Invalid input"</span>, details: parsed.error.format() },
+      { status: 400 }
+    );
+  }
+  <span class="keyword">const</span> product = <span class="keyword">await</span> db.product.create({ data: parsed.data });
+  <span class="keyword">return</span> <span class="keyword">Response</span>.json(product, { status: 201 });
+}</pre>
+
+    <h2><span class="verb GET">GET</span> /api/products/:id — one product</h2>
+    <div class="file">app/api/products/[id]/route.ts</div>
+    <div class="meta">
+      <span class="l">Status</span><span><span class="status s2">200 OK</span> (or <span class="status s4">404 Not Found</span>)</span>
+      <span class="l">Body</span><span>none</span>
+      <span class="l">Returns</span><span>One product</span>
+    </div>
+<pre><span class="keyword">export async function</span> GET(
+  _: <span class="keyword">Request</span>,
+  { params }: { params: { id: string } }
+) {
+  <span class="keyword">const</span> product = <span class="keyword">await</span> db.product.findUnique({
+    where: { id: params.id },
+  });
+  <span class="keyword">if</span> (!product) {
+    <span class="keyword">return</span> <span class="keyword">Response</span>.json({ error: <span class="string">"Not found"</span> }, { status: 404 });
+  }
+  <span class="keyword">return</span> <span class="keyword">Response</span>.json(product);
+}</pre>
+
+    <h2><span class="verb PATCH">PATCH</span> /api/products/:id — update</h2>
+    <div class="file">app/api/products/[id]/route.ts (same file)</div>
+    <div class="meta">
+      <span class="l">Status</span><span><span class="status s2">200 OK</span></span>
+      <span class="l">Body</span><span>{ name?, priceCents? } — partial</span>
+      <span class="l">Returns</span><span>Updated product</span>
+    </div>
+<pre><span class="keyword">const</span> UpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  priceCents: z.number().int().positive().optional(),
+});
+
+<span class="keyword">export async function</span> PATCH(
+  request: <span class="keyword">Request</span>,
+  { params }: { params: { id: string } }
+) {
+  <span class="keyword">const</span> updates = UpdateSchema.parse(<span class="keyword">await</span> request.json());
+  <span class="keyword">const</span> product = <span class="keyword">await</span> db.product.update({
+    where: { id: params.id },
+    data: updates,
+  });
+  <span class="keyword">return</span> <span class="keyword">Response</span>.json(product);
+}</pre>
+
+    <h2><span class="verb DELETE">DELETE</span> /api/products/:id — delete</h2>
+    <div class="file">app/api/products/[id]/route.ts (same file)</div>
+    <div class="meta">
+      <span class="l">Status</span><span><span class="status s2">204 No Content</span></span>
+      <span class="l">Body</span><span>none</span>
+      <span class="l">Returns</span><span>empty body</span>
+    </div>
+<pre><span class="keyword">export async function</span> DELETE(
+  _: <span class="keyword">Request</span>,
+  { params }: { params: { id: string } }
+) {
+  <span class="keyword">await</span> db.product.delete({ where: { id: params.id } });
+  <span class="keyword">return</span> <span class="keyword">new</span> <span class="keyword">Response</span>(<span class="keyword">null</span>, { status: 204 });
+}</pre>
+
+    <h2 style="margin-top: 2rem;">The whole REST API in 2 files</h2>
+    <p>This is the entire shape every CRUD-shaped REST API takes. Replace <code>product</code> with <code>note</code>, <code>user</code>, <code>order</code>, etc. — the structure stays identical.</p>
+  </body>
+</html>

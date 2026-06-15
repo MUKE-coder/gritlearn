@@ -1,0 +1,639 @@
+## Route handlers — API endpoints in Next.js
+
+Sometimes you need a *real* API endpoint — a URL that returns JSON, that another app can call, that a webhook can hit, that your mobile app can fetch from. The App Router gives you these with **route handlers**: a `route.ts` file inside any `app/api/...` folder that exports named functions for each HTTP method. The shape mirrors the routing system you already know — folders are URLs, files are handlers, brackets are dynamic segments. The difference: instead of `page.tsx` returning JSX, `route.ts` returns JSON (or whatever HTTP response you build).
+
+<Analogy>
+A route handler is **a counter at the post office that knows exactly one job**.
+
+A post office has multiple counters. Each counter is labeled with the service it handles: "Stamps," "Packages," "Money Orders," "PO Box Pickup." When you walk up to a counter, you tell it what you need — buy stamps, send a package, etc. — and the clerk does that one job and hands you a result. Each counter is independent; the stamps clerk doesn't know how to weigh packages and the packages clerk doesn't sell stamps.
+
+A route handler is exactly the same shape, in code. You make a `route.ts` file inside a folder under `app/api/`. That file exports one function per HTTP method:
+
+```ts
+// app/api/products/route.ts
+export async function GET()  { /* fetch and return products */ }
+export async function POST() { /* create a product */ }
+```
+
+Each function is its own "counter" — it handles exactly one HTTP method on this URL. `GET /api/products` calls the `GET` function; `POST /api/products` calls the `POST` function. The two are completely separate; they share the same file because they share the same URL.
+
+What you get for free, that the rest of the app's machinery handles:
+
+1. **Routing.** Same folder-based system as pages. `app/api/users/[id]/route.ts` → `/api/users/:id`. Dynamic segments work the same way; you read them from the request the framework hands you.
+
+2. **TypeScript at every layer.** The request, the response, the params — all typed. Your IDE catches mismatches.
+
+3. **Server-side execution, no exposure to the browser.** Like server components, your route handler runs on the server. You can read env vars, call the database, use service-account credentials. None of it ships to the user.
+
+4. **Standard Web APIs.** The function receives a standard `Request` object (the same one the modern fetch API uses) and returns a standard `Response`. No framework-specific request/response objects to learn.
+
+The mental check for when to use a route handler vs. a server component:
+
+- **Use a server component** when the result is *HTML for a user's browser to render*. The page itself.
+- **Use a route handler** when the result is *JSON (or another non-HTML response) for a program to consume*. Other apps, mobile clients, webhooks, third-party integrations.
+
+In a typical full-stack Next.js app, you'll have far more server components than route handlers. Route handlers exist for the genuinely API-shaped cases: webhooks from Stripe / GitHub / Vercel, endpoints your mobile app calls, anything where the consumer is *not* your own page rendering.
+
+The next concept (server actions) covers an even tighter pattern — for in-app mutations, you don't even need a route handler. The shapes nest:
+
+- **Server component** → for rendering HTML.
+- **Server action** → for in-app mutations (form submits, in-page button clicks).
+- **Route handler** → for true API endpoints consumed by *other* programs.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the route-handler file shape, with named exports per HTTP method and where the URL comes from the folder path"
+  caption="Folders make the URL; named exports per method handle the request."
+>
+
+```
+   app/api/                                        URL
+   │
+   ├── products/route.ts                            /api/products
+   │     export async function GET()  { ... }       ← GET handler
+   │     export async function POST() { ... }       ← POST handler
+   │
+   ├── products/[id]/route.ts                       /api/products/:id
+   │     export async function GET({ params })      ← GET /api/products/47
+   │     export async function PATCH({ params })     ← PATCH /api/products/47
+   │     export async function DELETE({ params })    ← DELETE /api/products/47
+   │
+   └── webhooks/stripe/route.ts                     /api/webhooks/stripe
+         export async function POST(request) { ... } ← Stripe webhook target
+
+   Each function:
+   - Receives a Request object
+   - Returns a Response (use Response.json() for JSON, Response() for anything else)
+   - Runs on the server
+   - Can read cookies, headers, env vars, hit databases
+```
+
+</Illustration>
+
+### The minimum example — `GET`
+
+```ts
+// app/api/health/route.ts
+export async function GET() {
+  return Response.json({ status: "ok" });
+}
+```
+
+That's a working API endpoint at `/api/health`. Visit it in the browser; you'll see the JSON. `fetch("/api/health")` from anywhere — your client component, another service, curl — gets the JSON back.
+
+Three details:
+
+1. **`Response.json(data)`** is a shortcut that returns a `Response` with the JSON-encoded body and `Content-Type: application/json` header set. Use it everywhere you'd otherwise write `new Response(JSON.stringify(data), { headers: ... })`.
+
+2. **The function is `async`.** Same as server components — route handlers can `await` anything (DB queries, other fetches, third-party APIs).
+
+3. **No body needed for GETs.** The request typically has no body; you can read headers, query parameters, and cookies from the request, but there's nothing to JSON-parse.
+
+### Reading the request
+
+The function gets a `Request` object as its argument:
+
+```ts
+// app/api/search/route.ts
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get("q") ?? "";
+
+  const results = await searchProducts(q);
+  return Response.json({ q, results });
+}
+```
+
+What you can read off the request:
+
+- **`request.url`** — the full URL. Parse with `new URL(...)` to get query params.
+- **`request.headers`** — read auth tokens, content type, user agent.
+- **`request.cookies`** (via `next/headers`'s `cookies()`).
+- **`await request.json()`** — for POST/PUT/PATCH, parse the JSON body.
+- **`await request.formData()`** — for form submissions.
+
+For dynamic route params (`[id]` in the folder), they come through a second `context` argument:
+
+```ts
+// app/api/products/[id]/route.ts
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const product = await db.product.findUnique({ where: { id: params.id } });
+  if (!product) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json(product);
+}
+```
+
+### `POST` — create a resource
+
+```ts
+// app/api/products/route.ts
+export async function POST(request: Request) {
+  const body = await request.json();
+
+  // Validate (use Zod or similar — for brevity, manual check here)
+  if (!body.name || !body.priceCents) {
+    return Response.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const product = await db.product.create({
+    data: { name: body.name, priceCents: body.priceCents },
+  });
+
+  return Response.json(product, { status: 201 });
+}
+```
+
+Three patterns to internalize:
+
+1. **Always validate the body.** The body comes from a client you don't control. Zod is the modern default (covered in the JSON-in-depth concept). At minimum, check the required fields are present and are the right type.
+
+2. **Return proper status codes.** `201 Created` for a successful POST. `400 Bad Request` for malformed input. `401 Unauthorized` for missing auth. `404 Not Found` for "the thing you asked about doesn't exist." See the HTTP-deeper concept.
+
+3. **Include a `Location` header for `201`** (optional but conventional):
+
+   ```ts
+   return Response.json(product, {
+     status: 201,
+     headers: { Location: `/api/products/${product.id}` },
+   });
+   ```
+
+### `PATCH`, `PUT`, `DELETE`
+
+Same shape, different verbs:
+
+```ts
+// app/api/products/[id]/route.ts
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const updates = await request.json();
+  const product = await db.product.update({
+    where: { id: params.id },
+    data: updates,
+  });
+  return Response.json(product);
+}
+
+export async function DELETE(
+  _: Request,
+  { params }: { params: { id: string } }
+) {
+  await db.product.delete({ where: { id: params.id } });
+  return new Response(null, { status: 204 });   // No Content
+}
+```
+
+`PATCH` returns the updated resource; `DELETE` returns `204 No Content` (or sometimes the deleted resource — convention varies per team).
+
+### Validating with Zod
+
+Manual validation gets ugly fast. Zod (introduced in Phase 1) is the modern way:
+
+```ts
+import { z } from "zod";
+
+const CreateProduct = z.object({
+  name: z.string().min(1),
+  priceCents: z.number().int().positive(),
+  description: z.string().optional(),
+});
+
+export async function POST(request: Request) {
+  const json = await request.json();
+  const parsed = CreateProduct.safeParse(json);
+
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid input", details: parsed.error.format() },
+      { status: 400 }
+    );
+  }
+
+  const product = await db.product.create({ data: parsed.data });
+  return Response.json(product, { status: 201 });
+}
+```
+
+`parsed.data` is fully typed — no `any` to worry about. Type-safe at runtime AND at compile time.
+
+### Errors — return them, don't throw
+
+Throwing inside a route handler crashes the request with a generic 500. Returning a proper error response is almost always what you want:
+
+```ts
+// Bad — generic 500 with no detail
+if (!product) throw new Error("Not found");
+
+// Good — explicit 404 with a useful body
+if (!product) {
+  return Response.json({ error: "Not found" }, { status: 404 });
+}
+```
+
+Pattern: validate up front, return early on failures, only `throw` for truly unexpected errors (DB connection lost, malformed env config). The framework's default 500 page catches those.
+
+### Headers and cookies
+
+Set cookies on the response:
+
+```ts
+import { cookies } from "next/headers";
+
+export async function POST() {
+  cookies().set("session", "abc123", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,  // 7 days
+  });
+  return Response.json({ ok: true });
+}
+```
+
+Read headers:
+
+```ts
+import { headers } from "next/headers";
+
+export async function GET() {
+  const auth = headers().get("authorization");
+  if (!auth?.startsWith("Bearer ")) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const token = auth.slice(7);
+  // ... verify token ...
+}
+```
+
+Both `cookies()` and `headers()` are imported from `next/headers` and work in route handlers identically to how they work in server components.
+
+### Webhooks — the canonical use case
+
+The most common reason teams reach for route handlers: receiving webhooks from third-party services.
+
+```ts
+// app/api/webhooks/stripe/route.ts
+import { headers } from "next/headers";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
+
+export async function POST(request: Request) {
+  const body = await request.text();   // raw text for signature verification
+  const sig = headers().get("stripe-signature")!;
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(body, sig, SECRET);
+  } catch {
+    return new Response("Invalid signature", { status: 400 });
+  }
+
+  switch (event.type) {
+    case "checkout.session.completed":
+      await handlePurchase(event.data.object);
+      break;
+    // ... other event types ...
+  }
+
+  return new Response(null, { status: 200 });
+}
+```
+
+Webhooks read the raw body (not `request.json()`), verify a signature header, switch on the event type, then return a quick `200`. The pattern is the same for Stripe, GitHub, Vercel, Linear, every webhook-issuing service.
+
+### CORS — when you need it
+
+Route handlers only respond to requests; they don't add CORS headers automatically. If your API is consumed by *another origin* (a mobile app, a different domain), you need to add the headers:
+
+```ts
+export async function GET() {
+  const data = await getData();
+  return Response.json(data, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",        // or a specific origin
+      "Access-Control-Allow-Methods": "GET",
+    },
+  });
+}
+
+// Also handle OPTIONS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+```
+
+If the API is only consumed by your own Next.js pages (same origin), you don't need CORS — same-origin requests don't trigger it.
+
+### Runtime — Node vs edge
+
+By default, route handlers run on the **Node.js runtime** — the same place server components run. You have access to the full Node ecosystem (npm packages, Buffer, fs).
+
+For ultra-low-latency endpoints, you can switch to the **edge runtime**:
+
+```ts
+export const runtime = "edge";
+
+export async function GET() {
+  return Response.json({ time: Date.now() });
+}
+```
+
+Edge runs your code on Vercel's (or your provider's) CDN edges, milliseconds from the user. Trade-offs: smaller API surface (no Node packages that depend on Node primitives), 50ms cold-start vs. 500ms+ for Node, no DB connections that need TCP (Postgres specifically — use HTTP-based DB clients like `@neondatabase/serverless`).
+
+For most route handlers, **stick with Node** (the default). Reach for edge when you specifically need ultra-low latency for a simple endpoint.
+
+### When NOT to use a route handler
+
+For mutations triggered by your own UI (form submits, button clicks that update data), **prefer server actions** (next concept). They're simpler, more secure, and integrate naturally with the page lifecycle.
+
+Use a route handler when:
+- A *different* program (mobile app, webhook, integration) needs to call you.
+- You're building a public API.
+- The response needs to be JSON or a binary stream (not HTML).
+
+Use a server action when:
+- Your own UI triggers a mutation.
+- The mutation is part of the in-page flow.
+- You want automatic revalidation and integration with React's pending states.
+
+The decision is "who's calling this?" External → route handler. Your own page → server action.
+
+<ExampleProject
+  src="crud-handlers"
+  title="A full CRUD-shaped route handler set, on one page"
+  description="Five complete route handlers for a /products resource: list (GET), create (POST), read one (GET dynamic), update (PATCH), delete (DELETE). Each annotated with the status code, the input/output shape, and the Zod validation. The shape every REST resource follows."
+/>
+
+<ExampleProject
+  src="handler-dynamic-segments"
+  title="Try GET, POST, PATCH against a fake API in your browser"
+  description="A page with form controls that fire the four common methods at a fake API. The trace panel shows the request and response. Practice reading the HTTP shape before you write your own."
+/>
+
+<Exercise
+  title="Build a /api/notes CRUD endpoint set"
+  starter={`In your Next.js project, build a complete CRUD API for notes.
+Use in-memory storage for now (a Map at module top); we'll move
+to a real database in the Prisma concept.
+
+  1. lib/notes-store.ts:
+     export const notes = new Map<string, { id: string; title: string; body: string; createdAt: string }>();
+     export function genId() { return crypto.randomUUID(); }
+
+  2. app/api/notes/route.ts — exports:
+     - GET: returns Response.json([...notes.values()])
+     - POST: validates with Zod ({ title, body }), creates, returns 201 with the new note.
+
+  3. app/api/notes/[id]/route.ts — exports:
+     - GET: returns the note or 404.
+     - PATCH: validates partial body, updates, returns the updated note.
+     - DELETE: deletes, returns 204.
+
+  4. Use Zod schemas at the top of each file:
+     const CreateSchema = z.object({ title: z.string().min(1), body: z.string() });
+     const UpdateSchema = z.object({ title: z.string().min(1).optional(), body: z.string().optional() });
+
+  5. Test from your browser's console:
+     // List
+     await fetch("/api/notes").then(r => r.json());
+     // Create
+     await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Hello", body: "First note" }) }).then(r => r.json());
+     // Update (replace ID with the one returned above)
+     await fetch("/api/notes/<id>", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: "Updated body" }) }).then(r => r.json());
+     // Delete
+     await fetch("/api/notes/<id>", { method: "DELETE" });
+
+  6. Verify each returns the right status code (200 for GET, 201 for POST,
+     200 for PATCH, 204 for DELETE, 404 for unknown IDs, 400 for invalid body).`}
+>
+
+- `app/api/notes/route.ts` exists with GET and POST exports.
+- `app/api/notes/[id]/route.ts` exists with GET, PATCH, DELETE exports.
+- Zod schemas validate the bodies of POST and PATCH.
+- Invalid bodies return 400 with a useful error.
+- Unknown IDs return 404.
+- POST returns 201; DELETE returns 204; GET and PATCH return 200.
+- All five endpoints were tested from the browser's console and returned the expected results.
+- The student understands the difference between params (dynamic segments) and request body (POST/PATCH payload).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a page route and a route handler in Next.js?
+
+**A:** **A page route returns HTML for a browser to render. A route handler returns JSON (or any HTTP response) for a program to consume. Same routing system, different output.**
+
+```text
+PAGE                                ROUTE HANDLER
+────                                ─────────────
+app/products/page.tsx                app/api/products/route.ts
+
+→ /products                          → /api/products
+returns rendered HTML                returns JSON (or any Response)
+user navigates to it                  another program fetches from it
+default export Component             named exports GET/POST/etc.
+```
+
+A few concrete differences:
+
+1. **The file name.** Pages are `page.tsx` (or `page.jsx`). Route handlers are `route.ts` (or `route.js`).
+
+2. **The exports.** Pages default-export a React component. Route handlers export a named function per HTTP method (`GET`, `POST`, `PATCH`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`).
+
+3. **The return shape.** Pages return JSX (React elements). Route handlers return a `Response` object (often built with `Response.json(...)`).
+
+4. **The audience.** Pages are consumed by browsers — humans navigate to them. Route handlers are consumed by programs — your client-side JS fetches them, mobile apps call them, webhooks hit them.
+
+5. **The URL prefix convention.** Pages live in `app/*` (any path). Route handlers conventionally live in `app/api/*`, though the framework doesn't require it.
+
+When you'd use each:
+
+- **Page** — anything a user navigates to and reads.
+- **Route handler** — webhooks, internal APIs your client-side code calls, JSON endpoints other apps need.
+
+A common pattern: a page (`app/products/page.tsx`) renders the data on server-side; a route handler (`app/api/products/[id]/route.ts`) lets a different client (mobile app, third-party integration) fetch the same data programmatically.
+
+For mutations triggered by your own UI (form submits, button clicks), there's a third option — **server actions** — which is usually preferable to route handlers because it integrates with React's pending states and automatic revalidation. Route handlers are for when the consumer is *not* your own page.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do route handler files export `GET` and `POST` instead of having an if/else on the method?
+
+**A:** **Because Next.js needs to know at file-load time which methods this route supports — so it can return `405 Method Not Allowed` for unsupported methods without you writing the check, and so build-time analysis can verify the route's surface.**
+
+```ts
+// app/api/products/route.ts
+export async function GET() {
+  return Response.json([{ id: 1 }]);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  return Response.json({ created: body }, { status: 201 });
+}
+```
+
+What the framework does with this:
+
+- `GET /api/products` → calls the `GET` function.
+- `POST /api/products` → calls the `POST` function.
+- `PATCH /api/products` → automatically returns `405 Method Not Allowed` (no handler defined).
+- `OPTIONS /api/products` → automatically returns the right CORS preflight response (Allowed methods listed).
+
+The framework handles the "is this method supported?" check based on which functions are exported. You only write code for the methods you actually handle.
+
+Compare with a single-handler-per-route pattern (older approach):
+
+```ts
+// hypothetical: bad shape
+export default function handler(request, response) {
+  if (request.method === "GET") { ... }
+  else if (request.method === "POST") { ... }
+  else { response.status(405).end(); }
+}
+```
+
+Three problems:
+1. Build tools can't tell what methods you support without parsing the function body.
+2. You have to write the 405 check yourself in every handler.
+3. The methods are buried inside a function body instead of being a clear top-of-file declaration.
+
+The named-export pattern fixes all three: clear surface, automatic 405, build-time discoverable.
+
+This is also nicer for tooling — OpenAPI generators, route documentation, route-tree visualizers can all read your route surface by listing the exports without executing the code.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Should you `throw` errors from a route handler or `return` an error response?
+
+**A:** **Return error responses for expected failures (invalid input, missing resource, unauthorized). Throw only for truly unexpected errors (database down, environment misconfigured). Returning gives you control over the status code and body; throwing yields a generic 500.**
+
+```ts
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  // ✓ Return for expected errors
+  if (!isValidUUID(params.id)) {
+    return Response.json({ error: "Invalid ID format" }, { status: 400 });
+  }
+
+  const product = await db.product.findUnique({ where: { id: params.id } });
+
+  if (!product) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // ✗ Throw only for truly unexpected — DB connection lost, etc.
+  // The framework converts to 500. You usually don't need this branch.
+
+  return Response.json(product);
+}
+```
+
+Three reasons to prefer return-over-throw for the everyday cases:
+
+1. **Control over the response.** You pick the status code (400 vs 404 vs 422), the body shape (a useful `{ error: ... }` message vs. a generic crash report), the headers (e.g., `WWW-Authenticate` on 401).
+
+2. **No stack-trace leakage in production.** A thrown error becomes a 500 with whatever error message Next.js decides to expose. In dev, that's the full stack; in prod, it's usually generic — which means your callers can't tell what went wrong.
+
+3. **Easier for callers to handle.** A caller doing `if (!res.ok)` can read `res.status` and the body to react appropriately. A 500 with a generic body forces them to retry blindly.
+
+When throwing IS right:
+
+- **Unexpected system failures.** The database connection dropped. An env var that should always be set is missing. Code paths that should never be reachable.
+- **In helper functions.** A `validateUser()` helper throwing is fine — the route handler catches it and converts to a proper response.
+
+A pattern that combines both:
+
+```ts
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const validated = Schema.parse(body);              // throws on invalid
+    const result = await db.something.create({ data: validated });
+    return Response.json(result, { status: 201 });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return Response.json({ error: "Invalid input", details: err.errors }, { status: 400 });
+    }
+    console.error(err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+```
+
+Helpers throw; the handler catches and converts to appropriate responses. Best of both worlds.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When would you reach for the edge runtime in a route handler?
+
+**A:** **When you need ultra-low latency for a simple endpoint and your code doesn't depend on Node-specific APIs or long-running connections (like a Postgres TCP connection).**
+
+```ts
+// app/api/ping/route.ts
+export const runtime = "edge";
+
+export async function GET() {
+  return Response.json({ time: Date.now(), region: process.env.VERCEL_REGION });
+}
+```
+
+What edge gives you:
+
+1. **Sub-100ms response times worldwide.** Code runs at CDN edges (in many cities); response originates from the closest one to the user. Node-runtime endpoints originate from a single region (usually).
+
+2. **Faster cold starts.** Edge functions cold-start in ~50ms. Node serverless functions can take 500ms-2s on a cold start. For an infrequently-called endpoint, this matters.
+
+3. **Higher request capacity.** Edge runtime is built on V8 isolates, not Node containers — far more requests per dollar.
+
+What edge takes away:
+
+1. **No `fs`, no `child_process`, no native Node modules.** You can't read files from disk, exec shell commands, or use packages that depend on Node primitives.
+
+2. **No long-running database connections.** Postgres' TCP connections don't work well with edge's quick spin-up/down. You either need an HTTP-based DB client (Neon Serverless, PlanetScale's HTTP, Supabase HTTP) or a connection-pool service in the middle (PgBouncer + connection-string pooling).
+
+3. **Smaller Response APIs.** Some Node-specific Response/Request features don't exist; you work with standard Web APIs only.
+
+When to use edge:
+
+- **Geolocation, A/B test, redirect endpoints.** Tiny logic, no DB needed.
+- **Public read APIs with HTTP-based DB.** A Neon serverless lookup that's 5ms anyway, called from edge.
+- **Real-time-feel endpoints** — small queries that benefit from low latency.
+
+When to stay on Node (the default):
+
+- **Anything with a real database connection.** Most apps with Postgres / MySQL / MongoDB.
+- **Anything using a Node-specific npm package.** AWS SDK, Stripe SDK that uses Node primitives, image-processing libraries.
+- **Long-running operations.** Anything that takes more than a few hundred ms — edge has shorter time limits than Node serverless.
+
+The decision tree:
+
+- **Default to Node.** It's the most flexible runtime.
+- **Switch to edge** only when latency is the critical metric AND your endpoint is simple AND you've verified your dependencies work in the edge runtime.
+
+You can mix runtimes per route — some handlers Node, others edge — within the same Next.js project. The framework supports both.
+
+</InterviewQuestion>

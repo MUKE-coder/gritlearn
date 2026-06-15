@@ -1,0 +1,183 @@
+<!--
+  Same mutation, two architectures. Side-by-side counting files + lines.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Server action vs route handler</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1050px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 2px solid; border-radius: 10px; padding: 1rem; background: #fff; }
+      .col.bad  { border-color: #fda4af; background: #fef2f2; }
+      .col.good { border-color: #86efac; background: #ecfdf5; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .stat {
+        display: flex; gap: 1rem; font-family: ui-monospace, monospace; font-size: 0.85rem;
+        margin: 0.5rem 0 0.7rem; flex-wrap: wrap;
+      }
+      .stat span { padding: 1px 8px; border-radius: 4px; background: #fff; border: 1px solid #d4d4d8; }
+      .file {
+        font-size: 0.74rem; color: #71717a; font-family: ui-monospace, monospace;
+        margin-top: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.65rem 0.85rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.76rem; line-height: 1.55;
+        margin: 0.35rem 0;
+        overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .accent  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .verdict {
+        margin-top: 0.6rem; padding: 0.55rem 0.85rem; border-radius: 4px; font-size: 0.85rem;
+      }
+      .verdict.bad  { background: #fef2f2; color: #991b1b; border-left: 3px solid #dc2626; }
+      .verdict.good { background: #ecfdf5; color: #166534; border-left: 3px solid #16a34a; }
+    </style>
+  </head>
+  <body>
+    <h1>Same "create note" mutation, two architectures</h1>
+
+    <div class="grid">
+
+      <div class="col bad">
+        <h2>❌ Route handler + client fetch</h2>
+        <div class="stat">
+          <span>2 files</span><span>~45 lines</span><span>JS required to work</span>
+        </div>
+
+        <div class="file">app/api/notes/route.ts</div>
+<pre><span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">const</span> Schema = z.object({
+  title: z.string().min(1),
+  body: z.string().optional().default(<span class="string">""</span>),
+});
+
+<span class="keyword">export async function</span> POST(req: <span class="keyword">Request</span>) {
+  <span class="keyword">const</span> json = <span class="keyword">await</span> req.json();
+  <span class="keyword">const</span> parsed = Schema.safeParse(json);
+  <span class="keyword">if</span> (!parsed.success) {
+    <span class="keyword">return</span> <span class="keyword">Response</span>.json(
+      { error: parsed.error.issues[0].message },
+      { status: 400 }
+    );
+  }
+  <span class="keyword">const</span> note = <span class="keyword">await</span> db.note.create({ data: parsed.data });
+  <span class="keyword">return</span> <span class="keyword">Response</span>.json(note, { status: 201 });
+}</pre>
+
+        <div class="file">components/NoteForm.tsx</div>
+<pre><span class="string">"use client"</span>;
+<span class="keyword">import</span> { useState } <span class="keyword">from</span> <span class="string">"react"</span>;
+<span class="keyword">import</span> { useRouter } <span class="keyword">from</span> <span class="string">"next/navigation"</span>;
+
+<span class="keyword">export function</span> NoteForm() {
+  <span class="keyword">const</span> router = useRouter();
+  <span class="keyword">const</span> [pending, setPending] = useState(<span class="keyword">false</span>);
+  <span class="keyword">const</span> [error, setError] = useState&lt;string | <span class="keyword">null</span>&gt;(<span class="keyword">null</span>);
+
+  <span class="keyword">async function</span> onSubmit(e: <span class="keyword">React</span>.FormEvent&lt;HTMLFormElement&gt;) {
+    e.preventDefault();
+    setPending(<span class="keyword">true</span>);
+    setError(<span class="keyword">null</span>);
+    <span class="keyword">const</span> form = e.currentTarget;
+    <span class="keyword">const</span> data = <span class="keyword">Object</span>.fromEntries(<span class="keyword">new</span> FormData(form));
+    <span class="keyword">const</span> res = <span class="keyword">await</span> fetch(<span class="string">"/api/notes"</span>, {
+      method: <span class="string">"POST"</span>,
+      headers: { <span class="string">"Content-Type"</span>: <span class="string">"application/json"</span> },
+      body: <span class="keyword">JSON</span>.stringify(data),
+    });
+    setPending(<span class="keyword">false</span>);
+    <span class="keyword">if</span> (!res.ok) {
+      <span class="keyword">const</span> { error } = <span class="keyword">await</span> res.json();
+      setError(error);
+      <span class="keyword">return</span>;
+    }
+    form.reset();
+    router.refresh();
+  }
+
+  <span class="keyword">return</span> (
+    &lt;form onSubmit={onSubmit}&gt;
+      &lt;input name=<span class="string">"title"</span> /&gt;
+      &lt;textarea name=<span class="string">"body"</span> /&gt;
+      {error &amp;&amp; &lt;p&gt;{error}&lt;/p&gt;}
+      &lt;button disabled={pending}&gt;
+        {pending ? <span class="string">"Saving…"</span> : <span class="string">"Create"</span>}
+      &lt;/button&gt;
+    &lt;/form&gt;
+  );
+}</pre>
+        <div class="verdict bad">Two files. JSON serialization on both ends. Manual pending state, manual error state, manual form.reset, manual router.refresh. Doesn't work without JS.</div>
+      </div>
+
+      <!-- ── SERVER ACTION ── -->
+      <div class="col good">
+        <h2>✓ Server action</h2>
+        <div class="stat">
+          <span>1 file (+ small client component)</span><span>~25 lines</span><span>Works without JS</span>
+        </div>
+
+        <div class="file">app/notes/new/page.tsx (server component)</div>
+<pre><span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+<span class="keyword">import</span> { revalidatePath } <span class="keyword">from</span> <span class="string">"next/cache"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+<span class="keyword">import</span> { SubmitBtn } <span class="keyword">from</span> <span class="string">"@/components/SubmitBtn"</span>;
+
+<span class="keyword">const</span> Schema = z.object({
+  title: z.string().min(1),
+  body:  z.string().optional().default(<span class="string">""</span>),
+});
+
+<span class="keyword">async function</span> createNote(formData: FormData) {
+  <span class="string">"use server"</span>;
+  <span class="keyword">const</span> parsed = Schema.parse({
+    title: formData.get(<span class="string">"title"</span>),
+    body:  formData.get(<span class="string">"body"</span>),
+  });
+  <span class="keyword">await</span> db.note.create({ data: parsed });
+  revalidatePath(<span class="string">"/notes"</span>);
+}
+
+<span class="keyword">export default function</span> NewNotePage() {
+  <span class="keyword">return</span> (
+    &lt;form action={createNote}&gt;
+      &lt;input name=<span class="string">"title"</span> /&gt;
+      &lt;textarea name=<span class="string">"body"</span> /&gt;
+      &lt;SubmitBtn /&gt;
+    &lt;/form&gt;
+  );
+}</pre>
+
+        <div class="file">components/SubmitBtn.tsx (tiny client component)</div>
+<pre><span class="string">"use client"</span>;
+<span class="keyword">import</span> { useFormStatus } <span class="keyword">from</span> <span class="string">"react-dom"</span>;
+
+<span class="keyword">export function</span> SubmitBtn() {
+  <span class="keyword">const</span> { pending } = useFormStatus();
+  <span class="keyword">return</span> &lt;button disabled={pending}&gt;
+    {pending ? <span class="string">"Saving…"</span> : <span class="string">"Create"</span>}
+  &lt;/button&gt;;
+}</pre>
+        <div class="verdict good">One real file (the page). One tiny helper. Validation, mutation, revalidation, pending state — all wired up by being in the right place. Works without JS.</div>
+      </div>
+
+    </div>
+
+    <h2 style="margin-top: 2rem; font-size: 1rem;">The savings</h2>
+    <ul>
+      <li><strong>~45 lines → ~25 lines.</strong> Half the code for the same UX.</li>
+      <li><strong>2 files → 1 page + 1 tiny helper.</strong> No flipping between page.tsx and route.ts.</li>
+      <li><strong>0 fetch calls.</strong> The function looks local; runs on the server.</li>
+      <li><strong>0 useState lines.</strong> useFormStatus and the redirect handle the lifecycle.</li>
+      <li><strong>Works without JavaScript.</strong> Progressive enhancement, free.</li>
+    </ul>
+  </body>
+</html>

@@ -1,0 +1,144 @@
+<!--
+  Walk through the full form-with-server-action shape: action,
+  useFormStatus, useFormState, revalidatePath. Annotated source code.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A full form-action example</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 820px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.95rem; margin-top: 1.5rem; }
+      .file {
+        font-size: 0.74rem; color: #71717a; font-family: ui-monospace, monospace;
+        margin-top: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1.1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin: 0.45rem 0;
+        overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .accent  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .note {
+        font-size: 0.88rem; padding: 0.6rem 0.9rem; border-radius: 4px; margin-top: 0.6rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+      }
+      .step-marker {
+        display: inline-block; padding: 1px 8px; background: #15803d; color: #fff;
+        border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>A complete form with server action</h1>
+    <p>Three files. Real-world shape: validation, pending state, error display, list revalidation.</p>
+
+    <h2><span class="step-marker">1</span> The server action</h2>
+    <div class="file">app/actions/notes.ts</div>
+<pre><span class="string">"use server"</span>;
+
+<span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+<span class="keyword">import</span> { revalidatePath } <span class="keyword">from</span> <span class="string">"next/cache"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">const</span> Schema = z.object({
+  title: z.string().min(1, <span class="string">"Title required"</span>),
+  body:  z.string().optional().default(<span class="string">""</span>),
+});
+
+<span class="keyword">type</span> FormState = { error?: string };
+
+<span class="keyword">export async function</span> createNote(
+  prev: FormState,
+  formData: FormData
+): Promise&lt;FormState&gt; {
+  <span class="keyword">const</span> parsed = Schema.safeParse({
+    title: formData.get(<span class="string">"title"</span>),
+    body:  formData.get(<span class="string">"body"</span>),
+  });
+
+  <span class="keyword">if</span> (!parsed.success) {
+    <span class="keyword">return</span> { error: parsed.error.issues[0].message };
+  }
+
+  <span class="keyword">await</span> db.note.create({ data: parsed.data });
+  revalidatePath(<span class="string">"/notes"</span>);
+  <span class="keyword">return</span> {}; <span class="comment">// success — no error</span>
+}</pre>
+    <div class="note">The action takes `prev` (the previous form state) and `formData`. Returns the new state. Zod validates; revalidatePath refreshes the cached list.</div>
+
+    <h2><span class="step-marker">2</span> The form (client component)</h2>
+    <div class="file">components/NoteForm.tsx</div>
+<pre><span class="string">"use client"</span>;
+
+<span class="keyword">import</span> { useFormState, useFormStatus } <span class="keyword">from</span> <span class="string">"react-dom"</span>;
+<span class="keyword">import</span> { createNote } <span class="keyword">from</span> <span class="string">"@/app/actions/notes"</span>;
+
+<span class="keyword">function</span> SubmitButton() {
+  <span class="keyword">const</span> { pending } = useFormStatus();
+  <span class="keyword">return</span> (
+    &lt;button type=<span class="string">"submit"</span> disabled={pending}&gt;
+      {pending ? <span class="string">"Saving…"</span> : <span class="string">"Create note"</span>}
+    &lt;/button&gt;
+  );
+}
+
+<span class="keyword">export function</span> NoteForm() {
+  <span class="keyword">const</span> [state, formAction] = useFormState(createNote, {});
+
+  <span class="keyword">return</span> (
+    &lt;form action={formAction} className=<span class="string">"space-y-3"</span>&gt;
+      &lt;input name=<span class="string">"title"</span> placeholder=<span class="string">"Title"</span> className=<span class="string">"input"</span> /&gt;
+      &lt;textarea name=<span class="string">"body"</span> placeholder=<span class="string">"Body"</span> className=<span class="string">"textarea"</span> /&gt;
+      {state.error &amp;&amp; (
+        &lt;p className=<span class="string">"text-red-500"</span>&gt;{state.error}&lt;/p&gt;
+      )}
+      &lt;SubmitButton /&gt;
+    &lt;/form&gt;
+  );
+}</pre>
+    <div class="note">`useFormState` wraps the action and renders the returned state. `useFormStatus` (inside SubmitButton) reads the pending state of the enclosing form. No useState needed.</div>
+
+    <h2><span class="step-marker">3</span> The page</h2>
+    <div class="file">app/notes/page.tsx</div>
+<pre><span class="comment">// server component — lists notes, renders the form</span>
+<span class="keyword">import</span> { NoteForm } <span class="keyword">from</span> <span class="string">"@/components/NoteForm"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">export default async function</span> NotesPage() {
+  <span class="keyword">const</span> notes = <span class="keyword">await</span> db.note.findMany({
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+  });
+
+  <span class="keyword">return</span> (
+    &lt;main className=<span class="string">"p-8 max-w-2xl"</span>&gt;
+      &lt;h1 className=<span class="string">"text-2xl font-bold"</span>&gt;Notes&lt;/h1&gt;
+      &lt;NoteForm /&gt;
+      &lt;ul className=<span class="string">"mt-6 space-y-2"</span>&gt;
+        {notes.map((n) =&gt; (
+          &lt;li key={n.id}&gt;{n.title}&lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+    &lt;/main&gt;
+  );
+}</pre>
+
+    <h2>What you don't write</h2>
+    <ul>
+      <li>No <code>fetch()</code> call.</li>
+      <li>No <code>useState</code> for the pending or error state.</li>
+      <li>No JSON serialization or parsing.</li>
+      <li>No API endpoint or <code>route.ts</code>.</li>
+      <li>No <code>onSubmit</code> handler with manual <code>preventDefault</code>.</li>
+      <li>No "refresh the list after success" logic — <code>revalidatePath</code> handles it.</li>
+    </ul>
+    <p>The mutation, the validation, the pending state, the error display, the cache invalidation — all wired up by being where the framework expects them. The shape is what makes it work.</p>
+  </body>
+</html>
