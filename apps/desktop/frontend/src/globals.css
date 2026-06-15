@@ -7,7 +7,8 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Light mode — rarely used on desktop but supported */
+  /* Light mode — daylight reading. Brand still wants the lime accent,
+     darkened just enough to remain readable on white. */
   --bg-primary: #FAFAFA;
   --bg-secondary: #FFFFFF;
   --bg-tertiary: #F4F4F5;
@@ -20,28 +21,37 @@
 
   --border: #E4E4E7;
   --border-subtle: #F4F4F5;
+  --border-strong: #D4D4D8;
 
-  --accent: #6C5CE7;
-  --accent-hover: #5B4BD6;
+  --accent: #15803D;
+  --accent-hover: #166534;
+  --accent-glow: rgba(21, 128, 61, 0.25);
+  --accent-soft: rgba(21, 128, 61, 0.08);
 }
 
 .dark {
-  /* Dark mode — default on desktop */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #111118;
-  --bg-tertiary: #1a1a24;
-  --bg-elevated: #22222e;
-  --bg-hover: #2a2a38;
+  /* Dark mode — default on desktop. Engineering-console aesthetic:
+     near-black surfaces, sharp 1px borders, neon-lime accent
+     (#7fff5b — the SpacetimeDB / terminal-prompt green) for state
+     that's "live" and "computed." Cyan as the secondary accent. */
+  --bg-primary: #0a0a0d;
+  --bg-secondary: #111114;
+  --bg-tertiary: #15151a;
+  --bg-elevated: #1a1a20;
+  --bg-hover: #22222a;
 
-  --text-foreground: #e8e8f0;
-  --text-secondary: #9090a8;
-  --text-muted: #606078;
+  --text-foreground: #ededee;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 
-  --border: #2a2a3a;
-  --border-subtle: #1a1a24;
+  --border: #1f1f25;
+  --border-subtle: #15151a;
+  --border-strong: #2a2a32;
 
-  --accent: #6c5ce7;
-  --accent-hover: #7c6cf7;
+  --accent: #7fff5b;
+  --accent-hover: #6aea48;
+  --accent-glow: rgba(127, 255, 91, 0.35);
+  --accent-soft: rgba(127, 255, 91, 0.12);
 }
 
 html, body, #app {

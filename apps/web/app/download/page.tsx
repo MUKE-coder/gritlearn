@@ -30,41 +30,40 @@ export default async function DownloadPage() {
 
   return (
     <div className="relative flex flex-col">
-      {/* Subtle gradient backdrop matching the landing hero */}
+      {/* Tech grid + accent halo behind the header */}
       <div aria-hidden className="absolute inset-x-0 top-0 -z-10 h-[480px]">
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 bg-tech-grid opacity-[0.45]"
           style={{
-            backgroundImage:
-              "radial-gradient(circle at 30% 20%, rgba(59,130,246,0.16) 0%, transparent 45%), radial-gradient(circle at 70% 30%, rgba(168,85,247,0.12) 0%, transparent 45%)",
+            maskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 30%, black 30%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 30%, black 30%, transparent 80%)",
           }}
         />
         <div
-          className="absolute inset-0 opacity-[0.06]"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-            maskImage:
-              "radial-gradient(ellipse at top, black 50%, transparent 85%)",
+            background:
+              "radial-gradient(ellipse 60% 50% at 50% 0%, var(--accent-soft), transparent 70%)",
           }}
         />
       </div>
 
       {/* ─── Header ──────────────────────────────────────────────── */}
-      <section className="border-b border-border/40">
+      <section className="border-b border-border/50">
         <div className="mx-auto max-w-4xl px-6 pt-24 pb-14 text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-bg-secondary/80 px-3.5 py-1 text-[12px] text-text-secondary backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+          <div className="mb-6 inline-flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent backdrop-blur">
+            <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
             <span>
               v{release.version}
-              {released && <> — released {released}</>}
+              {released && <> · released {released}</>}
             </span>
           </div>
 
           <h1 className="text-balance text-[42px] font-bold leading-[1.04] tracking-tight sm:text-[56px]">
             Download{" "}
-            <span className="bg-gradient-to-r from-accent via-accent-hover to-info bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-accent to-info bg-clip-text text-transparent">
               JEditor
             </span>
           </h1>
@@ -149,14 +148,14 @@ export default async function DownloadPage() {
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/register"
-              className="group inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all hover:-translate-y-0.5"
+              className="group inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent px-6 py-3 text-sm font-semibold text-background shadow-[0_0_24px_var(--accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_36px_var(--accent-glow)] transition-all"
             >
               Create your account
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:bg-bg-hover transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent transition-all"
             >
               Back to home
             </Link>

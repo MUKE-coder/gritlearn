@@ -23,14 +23,29 @@ export const metadata: Metadata = {
     "JBEditor (JEditor for short) — the IDE that teaches you to code by analogy while you build real projects. A native desktop editor with an analogy-first curriculum that works offline.",
 };
 
+// noFlashScript: applies the saved theme to <html> before paint so the
+// page doesn't flash dark when the user picked light (or vice versa).
+// Runs synchronously in the <head>; tiny inline IIFE, no React boot needed.
+const noFlashScript = `
+(function() {
+  try {
+    var t = localStorage.getItem('jeditor-theme');
+    if (t === 'light') document.documentElement.classList.add('light');
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${onest.variable} ${jetbrainsMono.variable} font-sans dark antialiased`}>
+    <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
+      </head>
+      <body className={`${onest.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <Providers>
           <Navbar />
           <main className="min-h-screen">{children}</main>

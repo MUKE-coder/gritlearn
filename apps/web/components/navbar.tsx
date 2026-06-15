@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navLinks = [
   { href: "/#how-it-works", label: "How it works" },
@@ -35,10 +36,11 @@ export function Navbar() {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="group flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-accent/25 to-info/15 border border-accent/30 transition-transform group-hover:scale-105">
-            <span className="text-accent font-mono font-bold text-sm">J</span>
+          <div className="flex h-7 w-7 items-center justify-center rounded-sm border border-accent/40 bg-accent/10 transition-all group-hover:bg-accent/20 group-hover:shadow-[0_0_16px_var(--accent-glow)]">
+            <span className="text-accent font-mono font-bold text-[13px]">J</span>
           </div>
-          <span className="text-lg font-bold tracking-tight">JEditor</span>
+          <span className="text-[15px] font-semibold tracking-tight">JEditor</span>
+          <span className="hidden sm:inline font-mono text-[10px] text-text-muted tracking-wider">v0.1</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
@@ -73,10 +75,11 @@ export function Navbar() {
           </Link>
           <Link
             href="/register"
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-md shadow-accent/15 hover:bg-accent-hover hover:shadow-accent/30 transition-all hover:-translate-y-0.5"
+            className="rounded-md border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-background shadow-[0_0_24px_var(--accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_32px_var(--accent-glow)] transition-all"
           >
             Sign up free
           </Link>
+          <ThemeToggle />
         </div>
 
         <button
@@ -117,10 +120,14 @@ export function Navbar() {
               <Link
                 href="/register"
                 onClick={() => setMobileOpen(false)}
-                className="mt-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white text-center hover:bg-accent-hover transition-colors"
+                className="mt-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-background text-center hover:bg-accent-hover transition-colors"
               >
                 Sign up free
               </Link>
+              <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-3">
+                <span className="text-xs text-text-muted">Theme</span>
+                <ThemeToggle />
+              </div>
             </div>
           </motion.div>
         )}

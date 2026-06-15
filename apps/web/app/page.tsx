@@ -13,8 +13,8 @@ import {
   Layers,
   Lightbulb,
   Monitor,
-  ShieldCheck,
   Sparkles,
+  Terminal,
   WifiOff,
 } from "lucide-react";
 
@@ -51,27 +51,36 @@ export default function HomePage() {
   );
 }
 
+// ─── Section heading utility ──────────────────────────────────────────
+function Kicker({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
+      <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)]" />
+      {children}
+    </div>
+  );
+}
+
 // ─── Hero ─────────────────────────────────────────────────────────────
 function Hero({ primaryLabel }: { primaryLabel: string }) {
   return (
-    <section className="relative overflow-hidden border-b border-border/40">
-      {/* Background: gridded gradient. Subtle, sits behind everything. */}
+    <section className="relative overflow-hidden border-b border-border/50">
+      {/* Tech grid background with radial fade-out at edges */}
       <div aria-hidden className="absolute inset-0 -z-10">
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 bg-tech-grid opacity-[0.55]"
           style={{
-            backgroundImage:
-              "radial-gradient(circle at 20% 20%, rgba(59,130,246,0.15) 0%, transparent 40%), radial-gradient(circle at 80% 30%, rgba(168,85,247,0.12) 0%, transparent 45%)",
+            maskImage:
+              "radial-gradient(ellipse 75% 60% at 50% 35%, black 30%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 75% 60% at 50% 35%, black 30%, transparent 80%)",
           }}
         />
         <div
-          className="absolute inset-0 opacity-[0.08]"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-            maskImage:
-              "radial-gradient(ellipse at center, black 55%, transparent 90%)",
+            background:
+              "radial-gradient(ellipse 60% 50% at 50% 0%, var(--accent-soft), transparent 70%)",
           }}
         />
       </div>
@@ -81,10 +90,10 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-bg-secondary/80 px-3.5 py-1 text-[12px] text-text-secondary backdrop-blur"
+          className="mb-6 inline-flex items-center gap-2 rounded-sm border border-border bg-bg-secondary/80 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-text-secondary backdrop-blur"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-          <span>v0.1 — free during preview</span>
+          <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
+          <span>preview · v0.1 · free during beta</span>
         </motion.div>
 
         <motion.h1
@@ -94,7 +103,7 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
           className="text-balance text-[44px] font-bold leading-[1.04] tracking-tight sm:text-[64px]"
         >
           The code editor that{" "}
-          <span className="bg-gradient-to-r from-accent via-accent-hover to-info bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-accent to-info bg-clip-text text-transparent">
             teaches as you ship
           </span>
         </motion.h1>
@@ -119,14 +128,14 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
         >
           <Link
             href="/register"
-            className="group inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all hover:shadow-accent/40 hover:-translate-y-0.5"
+            className="group inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent px-6 py-3 text-sm font-semibold text-background shadow-[0_0_24px_var(--accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_36px_var(--accent-glow)] transition-all"
           >
             Sign up free
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
           <Link
             href="/download"
-            className="group inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary/80 px-6 py-3 text-sm font-semibold text-foreground backdrop-blur hover:border-accent/40 hover:bg-bg-hover transition-all hover:-translate-y-0.5"
+            className="group inline-flex items-center gap-2 rounded-md border border-border bg-bg-secondary/80 px-6 py-3 text-sm font-semibold text-foreground backdrop-blur hover:border-accent/40 hover:text-accent transition-all"
           >
             <Download className="h-4 w-4" />
             Download for {primaryLabel}
@@ -137,10 +146,9 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.55 }}
-          className="mt-3 text-[12px] text-text-muted"
+          className="mt-3 font-mono text-[11px] text-text-muted"
         >
-          One signup. Works offline after that. No credit card. No AI-generated
-          content.
+          $ one signup · works offline forever · no credit card · no AI generated content
         </motion.p>
 
         <motion.div
@@ -156,7 +164,7 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
   );
 }
 
-// ─── Feature row: 4 quick cards just below the fold ─────────────────
+// ─── Feature row ─────────────────────────────────────────────────────
 function FeatureRow() {
   const items = [
     {
@@ -181,18 +189,21 @@ function FeatureRow() {
     },
   ];
   return (
-    <section className="border-b border-border/40">
+    <section className="border-b border-border/50 bg-bg-secondary/30">
       <div className="mx-auto max-w-6xl px-6 py-20">
-        <StaggerChildren className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {items.map((f) => (
+        <StaggerChildren className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+          {items.map((f, i) => (
             <ScrollRevealItem
               key={f.title}
-              className="group rounded-xl border border-border bg-bg-secondary p-5 transition-all hover:-translate-y-1 hover:border-accent/30 hover:bg-bg-elevated"
+              className="group relative bg-background p-6 transition-colors hover:bg-bg-secondary"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/15 text-accent transition-colors group-hover:bg-accent/25">
+              <span className="absolute left-3 top-3 font-mono text-[10px] text-text-muted">
+                #{String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="flex h-9 w-9 items-center justify-center rounded-sm border border-accent/20 bg-accent/5 text-accent transition-all group-hover:border-accent/40 group-hover:shadow-[0_0_16px_var(--accent-glow)]">
                 <f.icon className="h-4 w-4" />
               </div>
-              <h3 className="mt-4 text-[15px] font-semibold text-foreground">
+              <h3 className="mt-5 text-[15px] font-semibold text-foreground">
                 {f.title}
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">
@@ -206,17 +217,18 @@ function FeatureRow() {
   );
 }
 
-// ─── The analogy method (two-col) ────────────────────────────────────
+// ─── The analogy method ─────────────────────────────────────────────
 function AnalogySection() {
   return (
-    <section className="border-b border-border/40 bg-bg-secondary/30">
+    <section className="relative overflow-hidden border-b border-border/50">
+      <div aria-hidden className="absolute inset-0 -z-10 bg-tech-dots opacity-[0.4]" />
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid items-center gap-16 lg:grid-cols-2">
           <ScrollReveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
+            <Kicker>
               <Sparkles className="h-3 w-3" />
-              The method
-            </div>
+              the method
+            </Kicker>
             <h2 className="mt-5 text-balance text-[34px] font-bold leading-[1.1] tracking-tight sm:text-[42px]">
               Most courses{" "}
               <span className="text-text-muted line-through decoration-2">tell</span>
@@ -251,7 +263,7 @@ function AnalogySection() {
 function Bullet({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+      <span className="mt-2 font-mono text-[10px] text-accent">[+]</span>
       <span className="text-text-secondary">{children}</span>
     </li>
   );
@@ -262,18 +274,23 @@ function LessonPreview() {
     <div className="relative">
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-6 -z-10 rounded-[28px] bg-gradient-to-br from-info/15 via-accent/10 to-transparent blur-2xl"
+        className="pointer-events-none absolute -inset-6 -z-10 rounded-[28px]"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, var(--accent-soft), transparent 70%)",
+        }}
       />
-      <div className="rounded-xl border border-border bg-bg-secondary shadow-2xl overflow-hidden">
-        <div className="border-b border-border px-4 py-2.5">
+      <div className="rounded-md border border-border bg-bg-secondary shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <span className="font-mono text-[11px] text-text-muted">
             closures.mdx
           </span>
+          <span className="font-mono text-[10px] text-accent">LIVE</span>
         </div>
         <div className="px-5 py-5 text-[14px] leading-relaxed space-y-3.5">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
-              Analogy
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-accent">
+              [analogy]
             </span>
             <p className="mt-1.5 text-foreground">
               A <strong>closure</strong> is a backpack a function carries with it.
@@ -281,7 +298,7 @@ function LessonPreview() {
               forget what you packed.
             </p>
           </div>
-          <div className="rounded-lg border border-border/60 bg-bg-elevated p-3 font-mono text-[12px] text-text-secondary">
+          <div className="rounded-sm border border-border/60 bg-bg-elevated p-3 font-mono text-[12px] text-text-secondary">
             <span className="text-info">function</span> makeCounter() {"{"}
             <br />
             &nbsp;&nbsp;<span className="text-info">let</span> count = 0{" "}
@@ -292,8 +309,8 @@ function LessonPreview() {
             {"}"}
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-success">
-              Try it
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-info">
+              [try it]
             </span>
             <p className="mt-1.5 text-text-secondary">
               Open the example. Add a second counter. Notice they don&apos;t share
@@ -309,23 +326,20 @@ function LessonPreview() {
 // ─── Offline section ─────────────────────────────────────────────────
 function OfflineSection() {
   return (
-    <section className="border-b border-border/40">
+    <section className="border-b border-border/50">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid items-center gap-16 lg:grid-cols-2">
           <ScrollReveal>
             <OfflineCard />
           </ScrollReveal>
           <ScrollReveal delay={0.1}>
-            <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-success">
+            <Kicker>
               <WifiOff className="h-3 w-3" />
-              Offline by design
-            </div>
+              offline by design
+            </Kicker>
             <h2 className="mt-5 text-balance text-[34px] font-bold leading-[1.1] tracking-tight sm:text-[42px]">
               Built for{" "}
-              <span className="bg-gradient-to-r from-success to-info bg-clip-text text-transparent">
-                spotty internet
-              </span>
-              . On purpose.
+              <span className="text-accent">spotty internet</span>. On purpose.
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-secondary">
               Browser-based platforms break the moment you lose connection.
@@ -338,7 +352,7 @@ function OfflineSection() {
               <Pill icon={Download} title="One install" body="≈80 MB native binary" />
               <Pill icon={GitBranch} title="Local SQLite" body="Progress lives next to the lessons" />
               <Pill icon={Cloud} title="Background sync" body="Reconciles when wifi reappears" />
-              <Pill icon={ShieldCheck} title="Signed builds" body="Apple notarized, Windows signed" />
+              <Pill icon={Terminal} title="Signed builds" body="Apple notarized, Windows signed" />
             </div>
           </ScrollReveal>
         </div>
@@ -357,7 +371,7 @@ function Pill({
   body: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-secondary px-4 py-3">
+    <div className="rounded-sm border border-border bg-bg-secondary px-4 py-3 transition-colors hover:border-accent/30">
       <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
         <Icon className="h-3.5 w-3.5 text-accent" />
         {title}
@@ -372,30 +386,30 @@ function OfflineCard() {
     <div className="relative">
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-6 -z-10 rounded-[28px] bg-gradient-to-br from-success/15 via-info/10 to-transparent blur-2xl"
+        className="pointer-events-none absolute -inset-6 -z-10 rounded-[28px]"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, var(--accent-soft), transparent 70%)",
+        }}
       />
-      <div className="rounded-xl border border-border bg-bg-secondary p-6 shadow-2xl">
+      <div className="rounded-md border border-border bg-bg-secondary p-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2 text-[12px] text-text-secondary">
+          <div className="flex items-center gap-2 font-mono text-[11px] text-text-secondary">
             <WifiOff className="h-3.5 w-3.5 text-text-muted" />
-            <span>No connection</span>
+            <span>offline</span>
           </div>
-          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-success">
-            Still learning
+          <span className="rounded-sm border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
+            still learning
           </span>
         </div>
-        <div className="mt-4 grid gap-2.5">
-          <ProgressRow phase="Phase 1 — Web foundations" pct={94} />
-          <ProgressRow phase="Phase 2 — TypeScript" pct={42} />
-          <ProgressRow phase="Phase 3 — Go services" pct={0} muted />
+        <div className="mt-4 grid gap-3">
+          <ProgressRow phase="phase-01 — web foundations" pct={100} />
+          <ProgressRow phase="phase-02 — programming foundations" pct={12} />
+          <ProgressRow phase="phase-03 — go services" pct={0} muted />
         </div>
-        <div className="mt-5 flex items-center justify-between rounded-lg border border-border/60 bg-bg-elevated px-4 py-3 text-[12px]">
-          <span className="text-text-secondary">
-            42 concepts completed locally
-          </span>
-          <span className="font-mono text-[11px] text-text-muted">
-            sync queued
-          </span>
+        <div className="mt-5 flex items-center justify-between rounded-sm border border-border/60 bg-bg-elevated px-4 py-3 font-mono text-[11px]">
+          <span className="text-text-secondary">47 concepts completed locally</span>
+          <span className="text-accent">sync queued</span>
         </div>
       </div>
     </div>
@@ -413,14 +427,16 @@ function ProgressRow({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between text-[12px]">
+      <div className="flex items-center justify-between font-mono text-[11px]">
         <span className={muted ? "text-text-muted" : "text-foreground"}>{phase}</span>
-        <span className="font-mono text-[11px] text-text-secondary">{pct}%</span>
+        <span className="text-text-secondary">{pct}%</span>
       </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-elevated">
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-bg-elevated">
         <div
           className={`h-full rounded-full ${
-            muted ? "bg-text-muted/30" : "bg-gradient-to-r from-accent to-info"
+            muted
+              ? "bg-text-muted/30"
+              : "bg-accent shadow-[0_0_12px_var(--accent-glow)]"
           }`}
           style={{ width: `${pct}%` }}
         />
@@ -432,22 +448,25 @@ function ProgressRow({
 // ─── Curriculum path ────────────────────────────────────────────────
 function CurriculumPath() {
   const phases = [
-    { n: 1, name: "Web foundations", desc: "HTML, CSS, JavaScript, React", state: "current" as const, count: "47 concepts" },
-    { n: 2, name: "TypeScript & types", desc: "Static types in a dynamic language", state: "next" as const, count: "12 concepts" },
+    { n: 1, name: "Web foundations", desc: "HTML, CSS, JavaScript, React, TypeScript", state: "live" as const, count: "47 concepts" },
+    { n: 2, name: "Programming foundations", desc: "Scope, closures, modules, Git, debugging", state: "next" as const, count: "20 concepts" },
     { n: 3, name: "Backend with Go", desc: "Gin, GORM, REST, real DB", state: "queued" as const, count: "28 concepts" },
     { n: 4, name: "Mobile with Expo", desc: "Ship to iOS + Android", state: "queued" as const, count: "22 concepts" },
     { n: 5, name: "Desktop with Wails", desc: "Native apps from the same JS", state: "queued" as const, count: "15 concepts" },
     { n: 6, name: "CS foundations", desc: "Data structures, algorithms, interviews", state: "queued" as const, count: "30 concepts" },
   ];
   return (
-    <section className="border-b border-border/40 bg-bg-secondary/30">
+    <section className="relative overflow-hidden border-b border-border/50 bg-bg-secondary/30">
+      <div aria-hidden className="absolute inset-0 -z-10 bg-tech-grid opacity-[0.3]" style={{
+        maskImage: "radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 90%)",
+      }} />
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="text-center">
           <ScrollReveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-info">
+            <Kicker>
               <Layers className="h-3 w-3" />
-              The path
-            </div>
+              the path
+            </Kicker>
             <h2 className="mt-5 text-balance text-[34px] font-bold leading-[1.1] tracking-tight sm:text-[42px]">
               One sequenced path.
               <br />
@@ -464,28 +483,28 @@ function CurriculumPath() {
           {phases.map((p) => (
             <ScrollRevealItem
               key={p.n}
-              className={`relative rounded-xl border bg-bg-secondary p-5 transition-all hover:-translate-y-1 ${
-                p.state === "current"
-                  ? "border-accent/50 ring-1 ring-accent/30"
+              className={`relative rounded-md border bg-bg-secondary p-5 transition-all hover:-translate-y-1 ${
+                p.state === "live"
+                  ? "border-accent/50 shadow-[0_0_24px_var(--accent-glow)]"
                   : "border-border hover:border-accent/30"
               }`}
             >
               <div className="flex items-center justify-between">
                 <span
-                  className={`font-mono text-[12px] ${
-                    p.state === "current" ? "text-accent" : "text-text-muted"
+                  className={`font-mono text-[11px] ${
+                    p.state === "live" ? "text-accent" : "text-text-muted"
                   }`}
                 >
-                  Phase {p.n}
+                  phase-{String(p.n).padStart(2, "0")}
                 </span>
-                {p.state === "current" && (
-                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-success">
-                    Live
+                {p.state === "live" && (
+                  <span className="rounded-sm border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
+                    LIVE
                   </span>
                 )}
                 {p.state === "next" && (
-                  <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                    Next
+                  <span className="rounded-sm border border-warning/40 bg-warning/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-warning">
+                    NEXT
                   </span>
                 )}
               </div>
@@ -504,7 +523,7 @@ function CurriculumPath() {
   );
 }
 
-// ─── Language cloud ──────────────────────────────────────────────────
+// ─── Language cloud ─────────────────────────────────────────────────
 function LanguageCloud() {
   const langs = [
     "HTML", "CSS", "JavaScript", "TypeScript", "React", "Next.js",
@@ -512,14 +531,14 @@ function LanguageCloud() {
     "Bash", "Docker", "Expo", "React Native", "Wails", "REST",
   ];
   return (
-    <section className="border-b border-border/40">
+    <section className="border-b border-border/50">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid items-center gap-16 lg:grid-cols-[1fr_1.2fr]">
           <ScrollReveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+            <Kicker>
               <Monitor className="h-3 w-3" />
-              The stack
-            </div>
+              the stack
+            </Kicker>
             <h2 className="mt-5 text-balance text-[34px] font-bold leading-[1.1] tracking-tight sm:text-[42px]">
               Every language you&apos;ll need to ship.
             </h2>
@@ -530,11 +549,11 @@ function LanguageCloud() {
             </p>
           </ScrollReveal>
           <ScrollReveal delay={0.1}>
-            <StaggerChildren stagger={0.04} className="flex flex-wrap gap-2.5">
+            <StaggerChildren stagger={0.04} className="flex flex-wrap gap-2">
               {langs.map((l) => (
                 <ScrollRevealItem
                   key={l}
-                  className="rounded-lg border border-border bg-bg-secondary px-3.5 py-2 text-[13px] font-medium text-text-secondary transition-all hover:border-accent/40 hover:bg-bg-elevated hover:text-foreground hover:-translate-y-0.5"
+                  className="rounded-sm border border-border bg-bg-secondary px-3 py-1.5 font-mono text-[12px] text-text-secondary transition-all hover:border-accent/50 hover:text-accent hover:shadow-[0_0_12px_var(--accent-glow)]"
                 >
                   {l}
                 </ScrollRevealItem>
@@ -550,13 +569,14 @@ function LanguageCloud() {
 // ─── Downloads teaser ────────────────────────────────────────────────
 function DownloadsTeaser() {
   return (
-    <section className="border-b border-border/40 bg-bg-secondary/30">
+    <section className="relative overflow-hidden border-b border-border/50 bg-bg-secondary/30">
+      <div aria-hidden className="absolute inset-0 -z-10 bg-tech-dots opacity-[0.3]" />
       <div className="mx-auto max-w-4xl px-6 py-24 text-center">
         <ScrollReveal>
-          <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
+          <Kicker>
             <Download className="h-3 w-3" />
-            Get it
-          </div>
+            get it
+          </Kicker>
           <h2 className="mt-5 text-balance text-[34px] font-bold leading-[1.1] tracking-tight sm:text-[42px]">
             Native builds for Mac, Windows, and Linux.
           </h2>
@@ -566,14 +586,14 @@ function DownloadsTeaser() {
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/download"
-              className="group inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all hover:-translate-y-0.5"
+              className="group inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent px-6 py-3 text-sm font-semibold text-background shadow-[0_0_24px_var(--accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_36px_var(--accent-glow)] transition-all"
             >
               See all downloads
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:bg-bg-hover transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent transition-all"
             >
               Or start with the account
             </Link>
@@ -590,10 +610,10 @@ function FinalCTA() {
     <section className="relative overflow-hidden">
       <div aria-hidden className="absolute inset-0 -z-10">
         <div
-          className="absolute inset-0 opacity-30"
+          className="absolute inset-0 opacity-60"
           style={{
-            backgroundImage:
-              "radial-gradient(circle at 50% 50%, rgba(59,130,246,0.18) 0%, transparent 55%)",
+            background:
+              "radial-gradient(ellipse 70% 50% at 50% 50%, var(--accent-soft), transparent 60%)",
           }}
         />
       </div>
@@ -610,14 +630,14 @@ function FinalCTA() {
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/register"
-              className="group inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all hover:-translate-y-0.5"
+              className="group inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent px-6 py-3 text-sm font-semibold text-background shadow-[0_0_24px_var(--accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_36px_var(--accent-glow)] transition-all"
             >
               Sign up free
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/download"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:bg-bg-hover transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-bg-secondary px-6 py-3 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent transition-all"
             >
               <Download className="h-4 w-4" /> Download
             </Link>

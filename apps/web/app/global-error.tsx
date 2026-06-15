@@ -26,7 +26,7 @@ export default function GlobalError({
             )}
             <button
               onClick={reset}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", borderRadius: "0.5rem", backgroundColor: "#6c5ce7", padding: "0.625rem 1.25rem", fontSize: "0.875rem", fontWeight: 500, color: "white", border: "none", cursor: "pointer" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", borderRadius: "0.375rem", backgroundColor: "#7fff5b", padding: "0.625rem 1.25rem", fontSize: "0.875rem", fontWeight: 600, color: "#0a0a0d", border: "1px solid rgba(127,255,91,0.4)", cursor: "pointer", boxShadow: "0 0 24px rgba(127,255,91,0.35)" }}
             >
               Try Again
             </button>

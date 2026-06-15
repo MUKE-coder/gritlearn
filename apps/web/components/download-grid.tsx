@@ -33,19 +33,19 @@ export function DownloadGrid({ release }: { release: ReleaseInfo }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * i, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             whileHover={d.available ? { y: -3 } : undefined}
-            className={`group relative flex items-start gap-4 rounded-xl border bg-bg-secondary p-5 transition-all ${
+            className={`group relative flex items-start gap-4 rounded-md border bg-bg-secondary p-5 transition-all ${
               recommended
-                ? "border-accent/60 ring-1 ring-accent/30 shadow-lg shadow-accent/10"
+                ? "border-accent/50 shadow-[0_0_28px_var(--accent-glow)]"
                 : d.available
-                ? "border-border hover:border-accent/40 hover:bg-bg-elevated"
+                ? "border-border hover:border-accent/40 hover:shadow-[0_0_20px_var(--accent-glow)]"
                 : "border-border/60 opacity-75"
             }`}
           >
             <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border transition-all ${
                 recommended
-                  ? "bg-accent/20 text-accent"
-                  : "bg-accent/10 text-accent group-hover:bg-accent/20"
+                  ? "border-accent/40 bg-accent/15 text-accent"
+                  : "border-accent/20 bg-accent/5 text-accent group-hover:border-accent/40 group-hover:bg-accent/10"
               }`}
             >
               {d.available ? (
@@ -58,19 +58,19 @@ export function DownloadGrid({ release }: { release: ReleaseInfo }) {
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold text-foreground">{d.label}</h3>
                 {recommended && (
-                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
-                    Recommended
+                  <span className="rounded-sm border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-accent">
+                    RECOMMENDED
                   </span>
                 )}
                 {!d.available && (
-                  <span className="rounded-full bg-text-muted/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                    Coming soon
+                  <span className="rounded-sm border border-text-muted/30 bg-text-muted/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-text-muted">
+                    COMING SOON
                   </span>
                 )}
               </div>
               <p className="mt-1 text-sm text-text-secondary">{d.detail}</p>
               <p className="mt-2 flex items-center gap-2 font-mono text-[11px] text-text-muted">
-                <span>{d.filename}</span>
+                <span>$ {d.filename}</span>
                 {d.size > 0 && (
                   <>
                     <span>·</span>
