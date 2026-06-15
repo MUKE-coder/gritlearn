@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "phases": [
     {
       "id": "phase-01",
@@ -60,11 +60,11 @@
       "title": "Programming Foundations",
       "subtitle": "Now That You're Hooked",
       "concepts": [
-        { "slug": "phase-02/js-scope", "title": "JS scope and the scope chain", "available": false },
-        { "slug": "phase-02/closures", "title": "Closures", "available": false },
-        { "slug": "phase-02/hoisting", "title": "Hoisting", "available": false },
-        { "slug": "phase-02/this-keyword", "title": "`this` keyword and context", "available": false },
-        { "slug": "phase-02/js-modules", "title": "JS modules", "available": false },
+        { "slug": "phase-02/js-scope", "title": "JS scope and the scope chain", "available": true },
+        { "slug": "phase-02/closures", "title": "Closures", "available": true },
+        { "slug": "phase-02/hoisting", "title": "Hoisting", "available": true },
+        { "slug": "phase-02/this-keyword", "title": "`this` keyword and context", "available": true },
+        { "slug": "phase-02/js-modules", "title": "JS modules", "available": true },
         { "slug": "phase-02/higher-order-functions", "title": "Higher-order functions", "available": false },
         { "slug": "phase-02/immutability", "title": "Immutability and pure functions", "available": false },
         { "slug": "phase-02/error-handling", "title": "Error handling (try/catch)", "available": false },

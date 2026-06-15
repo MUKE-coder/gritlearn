@@ -1,0 +1,406 @@
+## JS modules
+
+A module is a file that exports some things and imports others. That sentence sounds trivial; the implications are not. Before modules, every JavaScript file shared one global scope — a tag soup of names colliding by accident, scripts depending on each other in invisible orders. Modules fix this with two rules: each file is its own scope, and the only way values cross file boundaries is through explicit `export` and `import`. The fix changed how every modern app is organized.
+
+<Analogy>
+A JavaScript module is **a sealed laboratory room with a labeled service hatch**.
+
+Picture a research facility. Each room is sealed — the equipment, the experiments, the air pressure, all isolated from the rooms next to it. Stuff doesn't leak between rooms by accident. But each room has a labeled service hatch in the wall, and what gets passed through that hatch is *explicit*: a clipboard with the project name, a tray with the relevant samples, signed for at both ends.
+
+A `.js` (or `.ts`) module is exactly that:
+
+- **The room is sealed.** Variables declared inside the file are private to the file. No accidental collisions with names in other files.
+- **The service hatch is `export`.** Whatever you mark with `export` is offered to other modules. Everything else stays in the room.
+- **The receiving hatch is `import`.** Other files state — explicitly — which names they want and from where. Nothing arrives that wasn't asked for.
+
+Three knock-on effects that changed how teams ship code:
+
+1. **No more global pollution.** Pre-modules, every script's variables landed on `window`. Two libraries that happened to use `$` as a variable name conflicted; load order mattered; bugs lived for years. Modules give every file its own scope by default. The global namespace is for the platform (`window`, `document`), not your app.
+
+2. **Dependencies become readable.** The import statements at the top of a file are a literal list of what this file depends on. Want to know "what else does `Button.tsx` use?" — read the imports. Bundlers, IDEs, and your future self can all answer the question without speculation.
+
+3. **Bundlers can tree-shake.** A modern bundler reads the imports across your whole app and *drops* the exports nobody imported. If you import only `Button` from a 50-component library, only `Button` ends up in your bundle. The result: smaller downloads, faster loads.
+
+The cost is purely typographical: one line per dependency at the top of each file, one keyword per exported value. For that, you get scoped privacy, readable graphs, and a tree-shaken bundle. Modern code lives in modules without exception; if you write a `.js` file in 2026 that isn't a module, you're recreating problems the language already solved.
+</Analogy>
+
+<Illustration
+  alt="Diagram of two modules with their exports/imports labeled"
+  caption="Each module is its own scope. The named imports and exports are the only way values cross."
+>
+
+```
+   utils.js                                     main.js
+   ──────────────────────────────────           ──────────────────────────────
+   const SECRET = "private";    │ scoped to     import { greet, MAX } from "./utils.js";
+   export const MAX = 10;       │ utils.js      import lib from "./lib.js";
+   export function greet(n) {                   ◀────────── default import
+     return "hi " + n;
+   }                                            console.log(greet("Ada"));  // hi Ada
+                                                 console.log(MAX);           // 10
+   ──────────────────────────────────           console.log(SECRET);         // ✗ ReferenceError
+                                                 // never exported. unreachable.
+
+   lib.js
+   ──────────────────────────────────
+   export default function lib() {...} ◀──── one "default" export per file
+```
+
+</Illustration>
+
+### Two flavors: named and default
+
+Every module can export values two ways. Named exports are the common case:
+
+```js
+// utils.js
+export const PI = 3.14;
+export function area(r) { return PI * r * r; }
+```
+
+Imported by name, in braces:
+
+```js
+import { PI, area } from "./utils.js";
+console.log(area(2));   // 12.56
+```
+
+Default exports are one per file, used when the file's "main thing" is one value:
+
+```js
+// Button.tsx
+export default function Button({ label }) { ... }
+```
+
+Imported without braces, and you pick whatever name you like:
+
+```js
+import Button from "./Button.tsx";          // same export, any name on the import side
+import MyButton from "./Button.tsx";        // also legal — default has no required name
+```
+
+Some files use both:
+
+```js
+// http.js
+export default function fetch(url) { ... }     // the main function
+export const HEADERS = { ... };                 // helpers
+```
+
+```js
+import fetch, { HEADERS } from "./http.js";
+```
+
+Modern style guides (React, Node) lean toward **named exports for everything**. Reasons: better autocomplete, easier rename refactors, no naming ambiguity at the import site. Default exports remain common for React components because of historical convention and because tooling sometimes prefers them (Next.js page files require default exports).
+
+### Re-exports — flat surface for a package
+
+When a package has many internal files but wants to present a flat API, it re-exports through an `index.js`:
+
+```js
+// lib/index.js — the package's "barrel" file
+export { Button } from "./Button.js";
+export { Input } from "./Input.js";
+export { Card } from "./Card.js";
+export * from "./icons.js";   // re-export everything from icons
+```
+
+Consumers import everything from `lib`:
+
+```js
+import { Button, Input, Card } from "lib";
+```
+
+This is how React, MUI, shadcn/ui, and basically every component library is organized. Each component lives in its own file; the barrel exposes them all in one place. Tree-shaking still works — bundlers see exactly which named exports you actually use.
+
+### Imports run once and cache
+
+A module is evaluated *the first time it's imported* and cached. Subsequent imports give you the same module instance:
+
+```js
+// counter.js
+let count = 0;
+export function inc() { return ++count; }
+export function get() { return count; }
+```
+
+```js
+import { inc, get } from "./counter.js";
+import { inc as inc2 } from "./counter.js";
+
+inc();   // 1
+inc2();  // 2 — same `count`, same module instance
+get();   // 2
+```
+
+Both `inc` and `inc2` reference the same `count` because the module was loaded once. Useful for shared services (a single config object, a single event bus); occasionally a footgun if you wanted per-consumer state (factory function returning new instances per call is the answer there).
+
+### Imports are static — hoisted to the top
+
+```js
+console.log("before import");
+import { greet } from "./utils.js";   // ← actually runs first
+console.log(greet("Ada"));
+```
+
+Imports are **hoisted to the top of the module** regardless of where you wrote them. The "before import" log runs *after* the import has been resolved and `utils.js` has been evaluated. This is why imports always live at the top of files — anywhere else, the code reads top-down but executes out of order.
+
+For truly conditional or lazy loading, use the **dynamic `import()`** function, which returns a Promise:
+
+```js
+async function maybeLoad() {
+  if (shouldLoad) {
+    const { greet } = await import("./utils.js");
+    greet("Ada");
+  }
+}
+```
+
+Used by route-based code splitting in React/Next.js — each route's bundle is fetched on demand.
+
+### The file extension matters in the browser
+
+In a `<script type="module">` directly in the browser, you write the full path **including the file extension**:
+
+```html
+<script type="module">
+  import { greet } from "./utils.js";   // ✓ note the .js
+</script>
+```
+
+In a bundled project (Vite, Next.js, esbuild), the bundler handles extension resolution — you can write `from "./utils"` and the bundler figures out the rest. When in doubt: TypeScript projects increasingly want the explicit extension too, because some tooling (Node's native ESM, Deno, Bun) requires it.
+
+### Circular imports — the trap
+
+If `a.js` imports from `b.js` and `b.js` imports from `a.js`, you have a **circular dependency**. The module system handles it (each file is loaded once), but the imported values might be `undefined` at the moment they're accessed because one side finished loading before the other:
+
+```js
+// a.js
+import { fromB } from "./b.js";
+export const fromA = "A";
+console.log("a.js:", fromB);   // might be undefined!
+
+// b.js
+import { fromA } from "./a.js";
+export const fromB = "B";
+console.log("b.js:", fromA);   // might be undefined!
+```
+
+The pragmatic answer: avoid cycles. If `a` and `b` need each other, extract the shared bit to a third file `shared.js` that both import from. Linters (`import/no-cycle`) catch them.
+
+### ESM vs. CommonJS — what you'll meet
+
+Two module formats exist in JavaScript:
+
+- **ESM (ES Modules)** — `import` / `export`. The standard. Used in the browser, in modern Node, in every modern bundler.
+- **CommonJS** — `require()` / `module.exports`. Legacy. Used by old Node and packages that haven't migrated.
+
+A file is ESM if it uses `import`/`export`, OR if its package.json has `"type": "module"`, OR if its extension is `.mjs`. Otherwise Node treats it as CommonJS.
+
+Modern frontend code is ESM. Some Node packages still ship CommonJS; bundlers paper over the difference for you. You'll occasionally have to deal with interop ("dual package hazards" is the search term) when a package ships both formats — rare on the frontend, common in Node.
+
+### Use modules, period
+
+In modern JavaScript every file should be a module. The pattern is so universal that:
+
+- `<script type="module">` is the default in any `<script>` tag in Vite/Next/Remix.
+- Every `.ts` / `.tsx` file is treated as a module.
+- Linters warn if a file has top-level variables but no imports/exports — "is this even a module?"
+
+If you're writing JavaScript in 2026, you're writing modules. The pre-module world is interesting history, not a path to choose.
+
+<ExampleProject
+  src="named-vs-default"
+  title="Named exports vs. default export — read both forms"
+  description="A small multi-file mini-app with one file using named exports and one using a default. The main file imports from both, demonstrating the syntax for each. Open the source for math.js, theme.js, and main.js to see the pattern at a glance."
+/>
+
+<ExampleProject
+  src="circular-imports"
+  title="A circular dependency that produces undefined"
+  description="Two files import from each other. The console log shows undefined where one expected the other's value because of the load order. Then a third file `shared.js` is introduced that breaks the cycle and the references resolve correctly."
+/>
+
+<Exercise
+  title="Refactor a script into a 3-file module"
+  starter={`Start with this single-file script (put it in main.js):
+
+  const TAX_RATE = 0.18;
+  function priceWithTax(p) { return p * (1 + TAX_RATE); }
+  function formatUgx(n) { return "UGX " + n.toLocaleString(); }
+  const cart = [
+    { name: "Mug", price: 12000 },
+    { name: "Notebook", price: 25000 },
+  ];
+  const total = cart.reduce((s, i) => s + priceWithTax(i.price), 0);
+  console.log("Total:", formatUgx(total));
+
+Refactor it into three files:
+
+  1. money.js — exports TAX_RATE, priceWithTax (named), and a default
+     export formatUgx (use whichever style you like for each).
+  2. cart.js — exports a const cart (the items).
+  3. main.js — imports what it needs from money.js and cart.js,
+     computes total, prints it.
+
+Constraints:
+  - Each file should declare only what it needs to.
+  - TAX_RATE should be re-usable from another file by importing.
+  - Run the result with a modern toolchain (Node 22+ with
+    "type":"module" in package.json, or open in browser with
+    a <script type="module">).
+  - The output of main.js must match what the single-file script
+    printed.`}
+>
+
+- Three files: `money.js`, `cart.js`, `main.js`.
+- `money.js` exports `TAX_RATE` and `priceWithTax` (named), and `formatUgx` (named or default — student's choice).
+- `cart.js` exports `cart` (named).
+- `main.js` imports the four values from the two modules and uses them.
+- The output `"Total: UGX ..."` matches the original script's output.
+- No values leak via globals (`window.X` or undeclared assignments).
+- The file with a default export uses the appropriate import syntax (`import x from "..."`); the file with named exports uses braces.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a named export and a default export?
+
+**A:** **Each file can have any number of *named* exports and at most one *default* export. The import syntax differs.**
+
+```js
+// utils.js
+export const PI = 3.14;                    // named
+export function area(r) { return PI*r*r; } // named
+export default function main() {}           // default — one per file
+```
+
+```js
+import main, { PI, area } from "./utils.js";
+```
+
+Differences:
+
+1. **Quantity.** Many named exports per file; exactly one default.
+2. **Import syntax.** Named imports use braces and **must match the export name** (or use `as` to rename: `import { area as compute } from ...`). Default imports use no braces and you pick any local name.
+3. **Refactor safety.** Renaming a named export breaks every importer until you update them — IDEs handle this automatically. Renaming a default export doesn't break anything because importers pick the name locally — which sounds nice but means a typo on the import side gives you the wrong name silently.
+4. **Tree-shaking.** Both kinds tree-shake equally well in modern bundlers.
+
+Style guides increasingly prefer **named exports everywhere** for the autocomplete + rename benefits. Defaults remain common for React components because:
+- A component file usually has one "main thing."
+- Next.js routes (page.tsx, layout.tsx) require a default export.
+- Convention from 2015-2018 React code is hard to shake.
+
+When you have the choice: named.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do JavaScript modules have their own scope?
+
+**A:** **To stop files from accidentally clobbering each other through the global namespace.**
+
+Pre-modules (say, 2010), every `<script>` shared one global scope. Two files declaring `function format()` produced one function — whichever loaded last wins. Two libraries using `$` as their variable name conflicted; you had to load them in a specific order; bugs hid in the order. The "global pollution problem" was so painful that the entire JS ecosystem invented workarounds: IIFEs, AMD, CommonJS, RequireJS, every project a Frankenstein.
+
+ES modules made it a language feature. Each `.js` file used as a module:
+
+1. **Has its own top-level scope.** A `const x` at module top is **not** on `window`. It's only visible within that file (and to other files that import it explicitly).
+2. **Runs in strict mode automatically.** No accidental assignments to undeclared variables — those throw.
+3. **Has explicit `this` of `undefined` at the top level.** Old loose-mode tricks don't work.
+
+The result:
+
+- You can name local variables freely without fearing collisions with another file's.
+- You can read a file top-to-bottom and know its dependencies (the import block at the top).
+- Bundlers can analyze the dependency graph and drop unused exports.
+
+The cost is one line per dependency. The win is the whole shape of modern JavaScript.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's tree-shaking, and why do modules enable it?
+
+**A:** **Tree-shaking is a bundler optimization that drops exported values nobody imports.** If your app imports `{ Button }` from a 50-component library, only `Button` (and its dependencies) end up in the final bundle.
+
+The mechanism depends on two properties of ES modules:
+
+1. **Static imports.** `import { Button } from "lib"` is analyzable at build time — the bundler can list every exported name from `lib` and every name that's actually imported across the whole app.
+2. **No side effects (usually).** Most modules just declare exports; they don't mutate the page on import. Bundlers can drop an unimported export safely because dropping it can't change observable behavior.
+
+This wasn't possible before ES modules because CommonJS uses `require()`:
+
+```js
+const lib = require("lib");
+lib.Button(...);
+```
+
+`require` is a runtime function call. The bundler doesn't know at build time which properties of `lib` your code will read — you could compute the property name dynamically (`lib[name]`). So it has to include the whole thing.
+
+When tree-shaking goes wrong, the usual cause is a library doing side-effectful work at import time:
+
+```js
+// myLib.js — bad shape for tree-shaking
+window.GLOBAL_THING = compute();
+```
+
+The bundler sees the side effect and must include the file even if you don't reference its named exports. The fix is on the library side — annotate `"sideEffects": false` in `package.json` and avoid top-level side effects.
+
+For app code, you get tree-shaking "for free" by:
+- Using named imports (not `import * as everything`).
+- Avoiding default `re-exports of entire modules` for big libraries.
+- Choosing libraries that ship as proper ES modules.
+
+The result is the lighter, faster-loading bundle that makes modern web apps possible.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a circular import and why is it a problem?
+
+**A:** **A circular import is when two (or more) modules import from each other. The module system handles the cycle without crashing, but the imported values can be `undefined` at the moment they're accessed because one side finished loading before the other.**
+
+```js
+// a.js
+import { fromB } from "./b.js";
+export const fromA = "A";
+console.log("a.js loaded with fromB =", fromB);
+
+// b.js
+import { fromA } from "./a.js";
+export const fromB = "B";
+console.log("b.js loaded with fromA =", fromA);
+
+// main.js
+import "./a.js";
+```
+
+Run order:
+
+1. `main.js` imports `a.js`. Engine starts loading `a.js`.
+2. `a.js` line 1 imports from `b.js`. Engine starts loading `b.js`.
+3. `b.js` line 1 imports from `a.js` — but `a.js` is mid-evaluation. The engine gives `b.js` a **partial** export object from `a.js` (only what's been declared so far — which is *nothing*).
+4. `b.js` finishes, logging `fromA = undefined`.
+5. `a.js` finishes loading.
+
+You don't get a crash; you get silently-wrong values. The bug shows up later when `b.js` tries to use `fromA` and finds it's `undefined`.
+
+Why it's worth avoiding:
+
+- **Hard to debug.** The error usually shows up far from the cycle, in a function that runs at use-time.
+- **Tooling pessimizes.** Bundlers' tree-shaking is conservative around cycles.
+- **Refactor-blocker.** Once a cycle exists, both files are pinned to each other; you can't easily move one without touching the other.
+
+How to fix:
+
+1. **Extract the shared bit.** If `a` and `b` both need value `X`, move `X` to a `shared.js` that both import from. The cycle disappears.
+2. **Move imports inside functions.** Sometimes `b.js` only needs the imported value *inside* a function body, not at top level. Moving the import inside the function delays it past the load-time issue — but you lose static analysis.
+3. **Use linter rules.** `eslint-plugin-import`'s `no-cycle` rule catches them at PR time.
+
+The right default: keep your dependency graph a tree. When you find yourself drawing the imports as a graph and seeing a loop, that's the signal to extract.
+
+</InterviewQuestion>

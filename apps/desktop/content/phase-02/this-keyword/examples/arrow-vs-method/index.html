@@ -1,0 +1,74 @@
+<!--
+  Same object, two methods reading this.name.
+  One is a regular function; one is an arrow.
+
+  user.greet()      → "Hi, Ada"             (regular: this is user)
+  user.greetArrow() → "Hi, undefined"        (arrow: this is outer/module)
+
+  Renders both side by side so the difference between the call patterns
+  and the arrow rule is visible.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arrow vs. method — `this` behavior</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 660px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0; }
+      .out { margin-top: 0.6rem; padding: 0.6rem 0.8rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .out.ok  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+      .out.bad { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      p.note { color: #555; font-size: 0.9rem; margin-top: 1.25rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Same dot, two outcomes</h1>
+    <p>Both methods read <code>this.name</code>. The regular function sees <code>user</code>; the arrow always sees the outer scope.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Regular method — <code>function () { ... }</code></h2>
+<pre>const user = {
+  name: "Ada",
+  greet: function () {
+    return "Hi, " + this.name;
+  }
+};
+user.greet();</pre>
+        <div class="out ok" id="r1">…</div>
+      </div>
+
+      <div class="col">
+        <h2>Arrow method — ignores the dot</h2>
+<pre>const user = {
+  name: "Ada",
+  greetArrow: () =&gt; {
+    return "Hi, " + this.name;
+  }
+};
+user.greetArrow();</pre>
+        <div class="out bad" id="r2">…</div>
+      </div>
+    </div>
+
+    <p class="note">
+      Arrows inherit <code>this</code> from where they were <em>defined</em>, not from where they're called. At the module top level here, the outer <code>this</code> is the global object — which has no <code>name</code> field, so the read is <code>undefined</code>.
+    </p>
+
+    <script>
+      const user = {
+        name: "Ada",
+        greet: function () { return "Hi, " + this.name; },
+        greetArrow: () => "Hi, " + (this && this.name) /* avoids throw on strict */,
+      };
+
+      document.getElementById("r1").textContent = user.greet();
+      document.getElementById("r2").textContent = user.greetArrow();
+    </script>
+  </body>
+</html>

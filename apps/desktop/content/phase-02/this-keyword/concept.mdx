@@ -1,0 +1,428 @@
+## `this` keyword and context
+
+`this` is the most-misunderstood word in JavaScript. The mistake everyone makes: assuming it points at "the thing the function is *inside* of." It doesn't. `this` points at **whatever you called the function on**, and the rules for "called it on" are mechanical and predictable once you know them. The same function can have a different `this` every time it runs.
+
+<Analogy>
+`this` is **the pronoun "you" at a dinner table**.
+
+You're at a long table. A waiter walks past with a tray and says, "Would *you* like dessert?" The word *you* doesn't pick a specific person — it picks whoever the waiter happened to be looking at when they said it. Same word, different referent every time, depending on who's being addressed.
+
+JavaScript's `this` works the same way. It's not baked into the function at definition time. It's resolved at **call time**, based on *how* the function was called:
+
+- **`obj.method()`** — `this` is `obj`. The waiter addressed the person they walked up to.
+- **`fn()`** with no object — `this` is `undefined` (in strict mode, which is every modern file) or the global object (in old loose mode). Nobody specifically; the waiter said "you" to the room.
+- **`new Constructor()`** — `this` is the freshly-created object. A new chair was added to the table; the waiter is addressing them.
+- **`fn.call(obj, ...)` / `fn.apply(obj, ...)` / `fn.bind(obj)`** — `this` is whatever you say. The waiter was given a list of who to address.
+
+There's one more rule that breaks the symmetry — and it's the one you actually use every day:
+
+- **Arrow functions don't have their own `this`**. They inherit `this` from the enclosing scope, like a closure. The arrow function isn't addressed by the waiter at all; it uses whatever pronoun the surrounding code already has.
+
+That arrow rule is why modern React code rarely uses `this` outside of class components — every callback you'd write is an arrow function that captures the right `this` automatically, without any of the bind dances that haunted 2015-era React.
+
+The everyday rhythm:
+1. **For methods on objects**, regular `function () { ... }` gives you `obj` as `this`. Useful when you want that.
+2. **For callbacks (event handlers, array methods, setTimeout)**, arrow functions inherit the surrounding `this`. Useful when you DON'T want the call-site to decide.
+3. **For anything else**, prefer arrow functions and accept that `this` is rarely needed in modern code. Modules + closures cover most "remembered state" patterns without it.
+</Analogy>
+
+<Illustration
+  alt="Diagram of the four call patterns and what this resolves to in each"
+  caption="this is decided at the call site, by the call pattern — not at the function definition."
+>
+
+```
+   CALL PATTERN              this RESOLVES TO
+
+   obj.method()              ➝  obj             (method invocation)
+   fn()                      ➝  undefined       (free call, strict mode)
+   new Constructor()         ➝  the new obj     (constructor)
+   fn.call(target, ...)      ➝  target          (explicit)
+   fn.apply(target, [...])   ➝  target          (explicit)
+   fn.bind(target)()         ➝  target          (pre-bound)
+
+   ARROW FUNCTION            ➝  inherited from outer scope (lexical)
+                                 — call pattern doesn't matter
+
+                                        ▲
+                                        │
+   The single rule that breaks the pattern: arrows skip the whole
+   game and just close over the surrounding this. Use them in
+   callbacks. Use them everywhere modern.
+```
+
+</Illustration>
+
+### Rule 1 — method call: `obj.method()`
+
+When you call a function as a method of an object, `this` is the object before the dot:
+
+```js
+const user = {
+  name: "Ada",
+  greet: function () {
+    return "Hi, " + this.name;
+  },
+};
+
+user.greet();   // "Hi, Ada"
+```
+
+Mechanically: the engine looks at the call expression `user.greet()`, sees the dot, and binds `this` to whatever's left of the dot — `user`.
+
+Two ways this breaks:
+
+```js
+const greet = user.greet;       // pull the function out
+greet();                          // ✗ "Hi, " + undefined.name → TypeError
+
+setTimeout(user.greet, 1000);    // ✗ same problem — passed as a free function
+```
+
+Both calls pass `greet` without the dot. There's no object to bind `this` to. In strict mode you get `undefined`; reading `.name` on `undefined` throws.
+
+The fix everyone reaches for: arrow functions in the callback.
+
+```js
+setTimeout(() => user.greet(), 1000);   // ✓ — calling .greet() with the dot
+```
+
+### Rule 2 — free call: `fn()`
+
+A function called with no object reference has `this === undefined` in modern code:
+
+```js
+function whoAmI() { return this; }
+whoAmI();   // undefined  (strict mode, which is every ES module)
+```
+
+In old loose-mode code, `this` defaulted to the global object (`window` in browsers). That was a footgun — typos like `this.name = "x"` accidentally polluted globals. ES modules are strict by default, and so is every Vite/Next/React project, so you'll rarely see loose mode.
+
+### Rule 3 — constructor: `new Fn()`
+
+`new` does four things:
+
+1. Creates a new empty object.
+2. Sets that object as `this` for the call.
+3. Runs the constructor function, mutating `this`.
+4. Returns `this` (unless the constructor returns its own object).
+
+```js
+function User(name) {
+  this.name = name;
+}
+
+const ada = new User("Ada");
+ada.name;   // "Ada"
+```
+
+Modern code uses `class User { constructor(name) { this.name = name } }` instead of plain functions for this — same mechanism, cleaner syntax.
+
+### Rule 4 — explicit binding: `call`, `apply`, `bind`
+
+Three methods on every function let you set `this` explicitly:
+
+```js
+function greet(greeting) {
+  return greeting + ", " + this.name;
+}
+
+const user = { name: "Ada" };
+
+greet.call(user, "Hi");      // "Hi, Ada"   — call: args spread out
+greet.apply(user, ["Hi"]);   // "Hi, Ada"   — apply: args in array
+const greetUser = greet.bind(user);
+greetUser("Hi");              // "Hi, Ada"   — bind: returns a new function
+
+const greetUserHi = greet.bind(user, "Hi");
+greetUserHi();                // "Hi, Ada"   — bind also takes pre-filled args
+```
+
+Modern use: rare. `bind` shows up occasionally for "I want this method permanently attached to this object" — but arrow functions handle most of the use cases more cleanly. `call`/`apply` show up mostly in framework internals.
+
+### The rule that breaks the pattern — arrow functions
+
+Arrow functions **don't have their own `this`**. They look up `this` in the enclosing scope, like closures look up variables:
+
+```js
+const user = {
+  name: "Ada",
+  greet: function () {
+    return "Hi, " + this.name;
+  },
+  greetArrow: () => {
+    return "Hi, " + this.name;   // this = outer scope's this (usually undefined at module top)
+  },
+};
+
+user.greet();         // "Hi, Ada"
+user.greetArrow();    // "Hi, undefined"  — arrow ignored the dot
+```
+
+That sounds like a downside, but it's the *point*. In callbacks, you almost always want `this` to mean "the thing my outer function was running on," not "whoever happened to call me later":
+
+```js
+class Counter {
+  count = 0;
+  start() {
+    setInterval(() => {
+      this.count++;        // ✓ this = the Counter instance, inherited
+      console.log(this.count);
+    }, 1000);
+  }
+}
+```
+
+If you'd used `setInterval(function () { this.count++ })`, the interval's free call would give you `undefined` and the code would throw. The arrow inherits `this` from `start()`, where `this` is the Counter instance. Problem disappears.
+
+### React's reason for liking arrows
+
+Pre-2018 React class components had to bind every method in the constructor:
+
+```jsx
+class Button extends React.Component {
+  constructor(props) {
+    super(props);
+    this.handleClick = this.handleClick.bind(this);  // ceremony
+  }
+  handleClick() { ... }
+  render() {
+    return <button onClick={this.handleClick}>...</button>;
+  }
+}
+```
+
+Without that bind, clicking the button called `handleClick` as a free function — `this` was undefined, and reading `this.props` threw. Modern React with hooks avoids this entirely: every callback is an arrow, every value lives in closure, `this` doesn't enter the picture.
+
+### Class methods and `this`
+
+Classes use `this` to refer to the instance. The same "called with the dot" rule applies:
+
+```js
+class User {
+  constructor(name) { this.name = name; }
+  greet() { return "Hi, " + this.name; }
+}
+
+const u = new User("Ada");
+u.greet();             // ✓ "Hi, Ada"
+const greet = u.greet;
+greet();                // ✗ TypeError — this is undefined
+```
+
+The fix in classes is **class field arrow functions** (modern syntax):
+
+```js
+class User {
+  constructor(name) { this.name = name; }
+  greet = () => "Hi, " + this.name;   // arrow inside class body
+}
+
+const u = new User("Ada");
+const greet = u.greet;
+greet();                // ✓ "Hi, Ada"  — arrow captured `this` at construction
+```
+
+The `greet =` arrow form was added in 2022 (ES2022 class fields). It makes pulling methods out safe.
+
+### Quick decision table
+
+| You're writing...                       | Use                          |
+| ---------------------------------------- | ---------------------------- |
+| A method on an object literal            | `function () {}`             |
+| A callback inside another function       | Arrow function               |
+| A class method                            | regular `method() {}`         |
+| A class method you'll pass as callback   | Class field arrow: `m = () => {}` |
+| Anything in modern React                  | Arrow function (you basically never type `this`) |
+
+If you're typing `this` outside of a class, take it as a smell — there's almost certainly a closure that reads cleaner.
+
+<ExampleProject
+  src="this-rules"
+  title="The four call patterns — same function, four different `this`"
+  description="One function, called four ways: as method, as free function, with new, with .call. The page shows what `this` resolved to in each case. The same function body — different outcomes."
+/>
+
+<ExampleProject
+  src="arrow-vs-method"
+  title="An object with two methods — one regular function, one arrow"
+  description="Both methods read this.name. The regular function works when called with the dot; the arrow always reads the outer scope's this (which is the global). Demonstrates the single rule that breaks the pattern."
+/>
+
+<Exercise
+  title="Build a class with safe method extraction"
+  starter={`Write a class StopWatch with:
+
+  1. A private field #ms (or just this._ms) that holds elapsed milliseconds.
+  2. A start() method that begins an interval ticking once per 100ms,
+     adding 100 to the elapsed time.
+  3. A stop() method that clears the interval.
+  4. A reset() method that sets elapsed to 0 (and stops if running).
+  5. A read getter or method that returns elapsed in seconds, two decimals.
+
+Make sure the methods work BOTH when called as sw.start() AND when
+passed as bare callbacks: for instance, button.addEventListener("click",
+sw.start) should still work. (Hint: class field arrow form.)
+
+Test the pass-as-callback case explicitly — set up two buttons in HTML,
+attach sw.start and sw.stop as the handlers without binding, and confirm
+the stopwatch works.`}
+>
+
+- A class `StopWatch` exists with a state field (`#ms` or `this._ms`) initialized to 0.
+- `start`, `stop`, `reset`, and `read` (getter or method) are defined.
+- The methods are written using **class field arrow syntax** (`start = () => { ... }`) so they're pre-bound to the instance.
+- Attaching `sw.start` directly as a button click handler (no `.bind(sw)`) works without throwing.
+- `start` schedules a setInterval that increments the elapsed time by 100ms each tick. `stop` clears it. `reset` zeros the time.
+- `read` returns the elapsed time formatted as `"X.XX"` seconds.
+- Bonus: `start` is idempotent — calling it twice doesn't create two intervals.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does `this` refer to inside a function?
+
+**A:** **Whatever the function was called *on* — and that's decided at call time, not definition time.** The same function can have different values of `this` on each call.
+
+Four patterns, in roughly decreasing order of frequency:
+
+1. **`obj.method()`** — `this` is `obj`. The dot before the function name binds it.
+2. **`fn()`** with no object — `this` is `undefined` in modern (strict) code, or the global object in old loose code.
+3. **`new Fn()`** — `this` is a freshly-created empty object that the constructor fills in.
+4. **`fn.call(target, ...)`, `fn.apply(target, [...])`, `fn.bind(target)`** — `this` is whatever you explicitly passed.
+
+Plus one rule that breaks the pattern: **arrow functions don't have their own `this`** — they inherit it from the enclosing scope, like a closure. The arrow ignores the call site.
+
+The mental check: when you see `this.foo` in code, find the call that runs this function. The expression on the left of the dot (or `new`, or `.call`'s first arg) is `this`. If there's no dot — `this` is undefined (or, for arrows, whatever the outer scope's `this` is).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does this code fail?
+
+```js
+const user = {
+  name: "Ada",
+  greet: function () { return "Hi, " + this.name; }
+};
+
+const greet = user.greet;
+greet();   // ?
+```
+
+**A:** **Because pulling the function out of the object strips the implicit `this` binding. `greet()` becomes a free call — `this` is `undefined` (strict mode) — and reading `.name` on `undefined` throws.**
+
+Step through what happens:
+
+```js
+const greet = user.greet;   // greet is now a reference to the function
+greet();                      // called WITHOUT a dot, no object before it
+// inside: this.name           // this === undefined; throws TypeError
+```
+
+The `this` binding is set by the **call pattern**, not by the function's "location." When you call `user.greet()`, the engine sees the dot and binds `this` to `user`. When you call `greet()`, there's no dot — nothing to bind to.
+
+Three fixes, in order of how often you'd reach for each:
+
+1. **Keep the call together with the dot:**
+   ```js
+   setTimeout(() => user.greet(), 1000);   // arrow doesn't disturb this
+   ```
+2. **Pre-bind:**
+   ```js
+   const greet = user.greet.bind(user);
+   greet();   // ✓
+   ```
+3. **Avoid `this` entirely:** rewrite the method to take `name` as a closure variable or pure argument. Modern code does this most often — `this` enters the picture only inside classes.
+
+The bug is the most common `this` confusion. It's why pre-hooks React was full of `.bind(this)` in constructors and why modern React almost never types the word `this`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do React developers prefer arrow functions for event handlers?
+
+**A:** **Because arrows inherit `this` from their definition site, eliminating the bind-in-constructor dance class components used to need.**
+
+Old-style class component (pre-hooks):
+
+```jsx
+class Button extends React.Component {
+  constructor(props) {
+    super(props);
+    this.handleClick = this.handleClick.bind(this);   // ceremony
+  }
+  handleClick() {
+    console.log(this.props);
+  }
+  render() { return <button onClick={this.handleClick}>...</button>; }
+}
+```
+
+Without the constructor bind, clicking the button called `handleClick` as a free function — `this` was undefined, `this.props` threw. Every method needed the same bind line.
+
+Arrow class fields fixed it:
+
+```jsx
+class Button extends React.Component {
+  handleClick = () => {
+    console.log(this.props);     // ✓ arrow captures `this` at definition
+  };
+  render() { return <button onClick={this.handleClick}>...</button>; }
+}
+```
+
+The arrow inherits `this` from where it was defined (inside the class field initializer, where `this` is the instance). Pulling `this.handleClick` out and passing it as a callback no longer loses the binding.
+
+Modern React with hooks side-stepped the issue entirely:
+
+```jsx
+function Button({ onClick }) {
+  const handleClick = () => { console.log("clicked"); };
+  return <button onClick={handleClick}>...</button>;
+}
+```
+
+No classes, no `this`, no binding. The closure captures `props` and any local values; the callback is just a regular function. The lesson: arrow functions don't *fix* `this` — they let you ignore it. Most modern React code doesn't type the word "this" at all.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `bind` do, and when would you reach for it?
+
+**A:** **`bind` returns a new function with `this` (and optionally some arguments) permanently pre-set.** The original function is unchanged; the returned function ignores future call patterns and always uses the bound `this`.
+
+```js
+function greet(greeting) {
+  return greeting + ", " + this.name;
+}
+
+const user = { name: "Ada" };
+
+const greetAda = greet.bind(user);
+greetAda("Hi");              // "Hi, Ada"  — this is locked to user
+
+const greetAdaHi = greet.bind(user, "Hi");
+greetAdaHi();                 // "Hi, Ada"  — both this AND first arg pre-filled
+```
+
+When to reach for it (in roughly decreasing frequency in modern code):
+
+1. **Storing a class method as a callback.** Pre-class-field-arrows, the constructor often had `this.handler = this.handler.bind(this)` to make method extraction safe. Modern alternative: declare `handler = () => {...}` as a class field arrow — `bind` not needed.
+
+2. **Currying — partial application.** `bind(null, firstArg)` returns a function where `firstArg` is already supplied. Lightweight; works without a closure helper:
+   ```js
+   const add = (a, b) => a + b;
+   const add5 = add.bind(null, 5);
+   add5(3);   // 8
+   ```
+
+3. **Stable references for React deps arrays.** Sometimes you need a function reference that doesn't change between renders so a child component doesn't re-render. `bind` produces a new function each call, so it doesn't help here — `useCallback` is the right tool. (This is a common interview trap: candidates suggest `bind`; it doesn't solve the problem.)
+
+In hooks-era React code, you'll write `bind` maybe once a month. It's still worth recognizing because it shows up in older codebases and in some library internals (`Function.prototype.call.bind(...)` patterns).
+
+</InterviewQuestion>

@@ -1,0 +1,350 @@
+## Hoisting
+
+Hoisting is the rule that explains why `console.log(x)` followed by `var x = 5` prints `undefined` instead of throwing, and why you can call a `function foo()` declaration on line 1 even though its body is defined on line 50. JavaScript "hoists" certain declarations to the top of their scope *before* the code runs — but it doesn't hoist the values. Once you see what's hoisted and what isn't, the rest is bookkeeping.
+
+<Analogy>
+Hoisting is **the venue setting out chairs before the audience arrives**.
+
+A concert hall opens at 7pm. Doors open at 6:30. But the chairs were set up at 9 in the morning, the sound system was wired at noon, the band's name was added to the marquee at 4pm. By the time the first audience member walks through the door, *the room is already configured*. The audience moves through a venue whose shape was decided hours before any of them showed up.
+
+JavaScript runs a similar setup pass over each function before executing it line by line. During that pass, it scans for every variable declaration (`var`, `let`, `const`) and every function declaration in the scope, and *registers their names* — like writing them on a guest list at the venue. By the time execution reaches line 1 of the code, the names already exist in the scope, even if their values haven't been assigned yet.
+
+The difference between `var`, `let`, `const`, and function declarations is **what the venue does with each name on the list**:
+
+- **`function foo() { ... }`** declarations get the chair AND the band setlist. By the time the audience arrives, you can already call `foo()` from anywhere in the scope — body and all. This is "fully hoisted."
+- **`var x`** gets a chair, but the chair is empty (`undefined`). You can refer to `x` before the line that assigns it, and you get `undefined` instead of an error. Confusing because it looks like the line "took effect" even though it didn't.
+- **`let x`** and **`const x`** get a chair, but the chair is *behind a velvet rope* (the "temporal dead zone"). You can't sit in it — touching `x` before its declaration line is a `ReferenceError`. The chair exists; the rope is up.
+- **`const obj = {}`** is the same as `let` for hoisting purposes, plus the rule "you can't reassign the chair to a different person." (Mutating the object is fine; reassigning `obj` is not.)
+
+Why the rope exists for `let`/`const`: the language designers in 2015 wanted hoisting bugs from `var` to be **loud** instead of silent. With `var`, reading too early gave you `undefined` and the bug propagated. With `let`, reading too early throws — you find out at the source.
+
+The everyday rule that flows from this: **declare close to use**. Put `const totalCents` on the line above the loop that uses it, not 30 lines higher. You'll never need to think about hoisting; the bug it causes can't reach you.
+</Analogy>
+
+<Illustration
+  alt="Diagram of var vs. let hoisting and the temporal dead zone"
+  caption="var is hoisted as undefined; let is hoisted into a dead zone that throws if touched."
+>
+
+```
+   var x = 5;                          let y = 7;
+   ───────────────                     ───────────────
+
+   Top of scope:                       Top of scope:
+   ╔════════╗                          ╔════════╗
+   ║ x = undefined          ║          ║ y in TDZ — touching throws  ║
+   ╚════════╝                          ╚════════╝
+
+   ↓ execution runs the body...        ↓ execution runs the body...
+
+   console.log(x);  // undefined        console.log(y);  // ✗ ReferenceError
+                                                          //   "Cannot access 'y'
+                                                          //    before initialization"
+
+   var x = 5;                          let y = 7;
+
+   console.log(x);  // 5                console.log(y);  // 7  (out of TDZ)
+```
+
+</Illustration>
+
+### Function declarations — fully hoisted
+
+```js
+greet();   // ✓ "Hi" — works even though greet is declared below
+
+function greet() {
+  console.log("Hi");
+}
+```
+
+The entire `greet` function (name AND body) is registered at the top of the scope. You can call it before the line that "declares" it. This is the one case where hoisting works in your favor — it's why utility functions can be defined at the bottom of a file.
+
+### Function *expressions* — NOT hoisted
+
+```js
+greet();          // ✗ TypeError: greet is not a function
+
+var greet = function () {
+  console.log("Hi");
+};
+```
+
+Because `greet` is assigned to a variable, the variable name gets hoisted (`var greet = undefined` at the top), but the function value is only assigned on the line shown. Calling `undefined()` is a TypeError.
+
+The rule:
+- **Function declaration** — `function name() { ... }` — fully hoisted.
+- **Function expression** — `const name = function() { ... }` or `const name = () => ...` — only the variable name is hoisted (and for `const`/`let`, into the dead zone).
+
+Modern code mostly uses arrow function expressions because they read cleaner and have predictable `this` behavior. The trade-off: you have to declare them before use.
+
+### `var` — name hoisted, value not
+
+```js
+console.log(price);   // undefined  (NOT a ReferenceError)
+var price = 99;
+console.log(price);   // 99
+```
+
+What actually runs:
+
+```js
+var price;             // hoisted: name registered as undefined
+console.log(price);   // undefined
+price = 99;            // assignment happens here
+console.log(price);   // 99
+```
+
+This is the source of half the "why is this undefined?" bugs in pre-ES6 code. The variable *exists* before its declaration line; only the *assignment* runs in order.
+
+### `let` and `const` — temporal dead zone
+
+```js
+console.log(price);   // ✗ ReferenceError: Cannot access 'price' before initialization
+let price = 99;
+```
+
+The variable is hoisted (the name is registered at the top of the scope) but is in the **temporal dead zone** (TDZ) until the line that declares it. Any attempt to read or assign it before that line throws.
+
+The TDZ is a feature, not a quirk. It catches what would have been silent `var` bugs and makes them loud:
+
+```js
+function process(n) {
+  // typo or genuine bug?
+  console.log(value);   // var: undefined (silent), let: ReferenceError (loud)
+  let value = n * 2;
+}
+```
+
+Modern code uses `let`/`const` exclusively. The TDZ is your safety net.
+
+### `let` and `const` differ in *one* way
+
+Both are block-scoped, both hoist into the TDZ. The difference is mutability:
+
+```js
+let a = 1;
+a = 2;          // ✓
+
+const b = 1;
+b = 2;          // ✗ TypeError: Assignment to constant variable
+```
+
+`const` is NOT "the value cannot change" — it's "the binding cannot be reassigned." A `const` object can still have its properties mutated:
+
+```js
+const user = { name: "Ada" };
+user.name = "Lin";       // ✓ mutating a property
+user = {};                // ✗ reassigning the binding
+```
+
+For real immutability, you'd freeze the object (`Object.freeze`) or use a library like Immer. `const` only protects the variable name, not the value it points at.
+
+### Class declarations — like `let`
+
+```js
+new Foo();             // ✗ ReferenceError
+class Foo {}
+```
+
+ES6 classes follow `let`/`const` rules for hoisting, not function-declaration rules. The class name is in the TDZ until its declaration line. This is intentional — class bodies often reference the class itself (e.g. static factory methods), so hoisting them like functions would be confusing.
+
+### The variable lookup order
+
+When JavaScript starts executing a function, the engine has already done a setup pass that registered:
+
+1. **Function declarations** — `function foo() { ... }` — name AND body.
+2. **`var` declarations** — name as `undefined`.
+3. **`let`/`const`/`class` declarations** — name in TDZ.
+4. **Function parameters** — bound to the call's arguments.
+
+So by the time the *first line* runs, all of these names exist in the scope. The order they were *written* doesn't matter for lookup; what matters is the order they were *assigned*.
+
+### Practical rule — never reach for the rope
+
+Three habits that make hoisting a non-issue:
+
+1. **Use `const` by default, `let` when reassigning, `var` never.** TDZ catches every reach-before-assign bug.
+2. **Declare variables close to use.** A `const` on line 30 should be assigned by line 31 at the latest. If you're declaring on line 30 and using on line 75, refactor.
+3. **Top-of-file imports + bottom-of-file utility functions.** Imports are hoisted; function declarations are hoisted. The middle of the file can read top-down without hoisting tricks.
+
+Most modern codebases never use hoisting deliberately. The TDZ in `let`/`const` exists precisely so you don't *have* to think about it — you just declare-then-use, and the engine enforces it.
+
+<ExampleProject
+  src="var-vs-let-hoist"
+  title="The hoist behavior of var vs. let, side by side"
+  description="Two functions: one reads a var before its line (gets undefined), the other reads a let before its line (throws ReferenceError). Both errors are caught and printed so you can see the difference without crashing the page."
+/>
+
+<ExampleProject
+  src="function-vs-expr"
+  title="Function declaration is hoisted; function expression isn't"
+  description="Two attempts to call a function before its line: one uses a function declaration (works), one uses a const = () => ... expression (TypeError). Output makes the contrast obvious."
+/>
+
+<Exercise
+  title="Predict the output of three hoisting puzzles, then explain each"
+  starter={`Below are three short scripts. For EACH:
+
+  (a) Predict what gets logged BEFORE you run it. Write it down.
+  (b) Run it. See if you were right.
+  (c) Explain the result in one or two sentences referencing hoisting.
+
+Script 1:
+  console.log(a);
+  var a = 1;
+  console.log(a);
+
+Script 2:
+  greet();
+  function greet() { console.log("Hi"); }
+
+Script 3:
+  console.log(typeof b);
+  let b = 2;
+
+Then, write a fourth script of your own that demonstrates the
+temporal dead zone for const. Comment what you expect and run it.
+
+Constraints:
+  - Modern script (top-level await is fine).
+  - Use only console.log for output.
+  - Don't refactor away the bug — the bug IS the lesson.`}
+>
+
+- Predictions are written down (in comments) **before** running.
+- Script 1 logs `undefined` then `1`, and the explanation references `var` hoisting the name but not the value.
+- Script 2 logs `Hi`, and the explanation references function-declaration full hoisting.
+- Script 3 throws `ReferenceError`, and the explanation references the TDZ — even `typeof b` is not safe inside it.
+- The fourth script demonstrates the TDZ for `const` (a `const` read before its line throws).
+- The bullet checks the explanations are written in the student's own words, not pasted from the concept page.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What does "hoisting" mean in JavaScript?
+
+**A:** **Hoisting is the engine's setup pass that registers every declaration in a scope before any line of code runs.** By the time execution starts, the names of all variables and function declarations exist in the scope — even though the assignment statements haven't run yet.
+
+The behavior differs by declaration type:
+
+- **`function foo() {}`** — name AND body hoisted. You can call `foo()` from anywhere in the scope.
+- **`var x`** — name hoisted as `undefined`. Reading `x` before its assignment gives `undefined`, not an error.
+- **`let x` / `const x`** — name hoisted into the **temporal dead zone**. Reading `x` before its declaration line throws `ReferenceError`.
+- **`class Foo`** — same as `let`. Reading before declaration throws.
+
+The practical takeaway: in modern code you mostly use `let`/`const`, and the TDZ makes "reach before assign" loud instead of silent. Reading legacy `var` code, you need to know that variables exist before their declaration line — that's where the half-mystery "why is this undefined?" bug comes from.
+
+The *misleading* mental model is "the engine literally moves my code to the top of the function." It doesn't — it just registers names. The execution order is unchanged.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the temporal dead zone?
+
+**A:** **The temporal dead zone (TDZ) is the period between when a `let` or `const` variable is hoisted (at scope entry) and when its declaration line actually runs.** Inside the TDZ, the variable exists but cannot be read or assigned — touching it throws `ReferenceError`.
+
+```js
+function demo() {
+  // TDZ for `name` starts here ↓
+  console.log(name);   // ✗ ReferenceError: Cannot access 'name' before initialization
+  let name = "Ada";
+  // TDZ ends ↑
+  console.log(name);   // "Ada"
+}
+```
+
+Why it exists: with old-style `var`, reading a variable before its assignment gave `undefined` and let buggy code keep running. The TDZ makes the same situation a hard error, surfacing the bug at the source.
+
+Notable quirks:
+- **`typeof` is not safe in the TDZ.** `typeof x` on a normal undeclared name returns `"undefined"`; on a `let` in the TDZ, it throws. This breaks the old "use typeof to check if a variable exists" idiom for `let`/`const`.
+- **The TDZ ends at the *declaration* line, not the *assignment* line.** `let x;` ends the TDZ even though `x` is undefined.
+- **`const` has the same TDZ rules as `let`** — plus the rule that reassigning the binding throws.
+
+In practice you never notice the TDZ if you follow "declare close to use." It's a safety net for the cases where you don't.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does this code throw a `TypeError` instead of working?
+
+```js
+greet();
+var greet = function () { console.log("Hi"); };
+```
+
+**A:** **Because `var` hoists the variable *name* but not the assignment.** At the top of the scope, `greet` is registered as `undefined`. When the first line runs, you're calling `undefined()` — and `undefined` is not a function, so the engine throws `TypeError: greet is not a function`.
+
+Step through what the engine sees:
+
+```js
+var greet;             // hoisted: greet exists as undefined
+greet();                // TypeError — undefined isn't callable
+greet = function () { console.log("Hi"); };
+```
+
+If you'd used a **function declaration** instead, it would work:
+
+```js
+greet();                // ✓ "Hi"
+function greet() { console.log("Hi"); }
+```
+
+Because `function greet()` fully hoists — name *and* body. The body is available before the line that "declares" it.
+
+Same script with `const` or `let`:
+
+```js
+greet();                // ✗ ReferenceError: Cannot access 'greet' before initialization
+const greet = function () { console.log("Hi"); };
+```
+
+This is louder: TDZ catches the issue before you even get to call. The modern style guide says: use `const` for function expressions, declare before use. The TDZ ensures any mistake is a hard error you find on the first run, not a silent `TypeError` you find at 2am.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Are `let` and `const` "not hoisted"?
+
+**A:** **They *are* hoisted — but into the temporal dead zone, not as `undefined`.** This is a common misconception, fed by old blog posts that say "let isn't hoisted." The accurate version:
+
+```js
+function demo() {
+  // Scope entry. The engine already registered `x` here.
+  // Touching it = ReferenceError. That's the TDZ.
+
+  // ... 10 lines of code that don't touch x ...
+
+  let x = 5;            // TDZ ends. Now x === 5.
+  console.log(x);       // 5
+}
+```
+
+The proof that `let` IS hoisted: shadowing. If `let` weren't hoisted, the following code would print "outer", because the inner `let x` would only "exist" from its declaration line down:
+
+```js
+const x = "outer";
+
+function demo() {
+  console.log(x);       // ✗ TDZ — proves the inner `let x` already shadowed
+  let x = "inner";
+}
+
+demo();
+```
+
+The error happens because the inner `let x` has *already been hoisted* into the function's scope, shadowing the outer `x`. The inner one is in its TDZ, so the `console.log` throws — instead of reading the outer `x`.
+
+Why bother distinguishing? Because:
+
+1. The TDZ explains the actual error messages you'll see (`Cannot access 'x' before initialization`, not `x is not defined`).
+2. It explains why `typeof` isn't safe (`typeof x` in the TDZ throws; `typeof undeclaredName` doesn't).
+3. It tells you the truth: hoisting is universal in modern JavaScript; the difference between declaration types is *what state the hoisted name is in* (undefined, in TDZ, fully bound, etc.).
+
+The shorter version: every declaration in a scope is hoisted. The TDZ just makes `let`/`const`/`class` mistakes loud.
+
+</InterviewQuestion>

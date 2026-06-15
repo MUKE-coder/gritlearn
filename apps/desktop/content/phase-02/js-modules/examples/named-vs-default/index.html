@@ -1,0 +1,88 @@
+<!--
+  Three "modules" in the same page, each loaded as <script type="module">.
+
+  math.js   — named exports: TAX_RATE, withTax
+  theme.js  — default export: a theme object
+  main.js   — imports from both and renders into the page
+
+  We can't write multiple files in a single HTML, but we can use
+  <script type="module"> blocks and dynamic `import` of data: URLs
+  with .js content to simulate file-by-file modules. The shapes the
+  student sees match what they'd see in a real multi-file project.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Named vs. default exports</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .module { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; margin: 1rem 0; background: #fafafa; }
+      .module h2 { margin: 0 0 0.5rem; font-size: 0.95rem; font-family: ui-monospace, monospace; color: #15803d; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0; }
+      .out {
+        margin-top: 1rem; padding: 0.8rem 1rem; border-radius: 4px;
+        background: #0a0a0d; color: #ededee; font-family: ui-monospace, monospace; font-size: 0.85rem;
+        line-height: 1.55;
+      }
+      .accent { color: #7fff5b; }
+    </style>
+  </head>
+  <body>
+    <h1>Three "files" in one demo — named + default exports</h1>
+
+    <div class="module">
+      <h2>// math.js — named exports</h2>
+<pre>export const TAX_RATE = 0.18;
+export function withTax(p) {
+  return p * (1 + TAX_RATE);
+}</pre>
+    </div>
+
+    <div class="module">
+      <h2>// theme.js — default export</h2>
+<pre>const theme = {
+  bg:   "#0a0a0d",
+  fg:   "#ededee",
+  accent: "#7fff5b",
+};
+export default theme;</pre>
+    </div>
+
+    <div class="module">
+      <h2>// main.js — consumes both</h2>
+<pre>import { TAX_RATE, withTax } from "./math.js";
+import theme from "./theme.js";
+
+const subtotal = 50000;
+const total = withTax(subtotal);
+console.log("TAX_RATE", TAX_RATE);
+console.log("total",   total);
+console.log("theme",   theme.accent);</pre>
+    </div>
+
+    <div class="out" id="out"></div>
+
+    <script type="module">
+      // math.js
+      const TAX_RATE = 0.18;
+      function withTax(p) { return p * (1 + TAX_RATE); }
+
+      // theme.js — default
+      const theme = { bg: "#0a0a0d", fg: "#ededee", accent: "#7fff5b" };
+
+      // main.js — consume
+      const out = document.getElementById("out");
+      const log = (k, v) => {
+        out.innerHTML += `<span class="accent">$</span> ${k}: ${JSON.stringify(v)}\n`;
+      };
+      const subtotal = 50000;
+      const total = withTax(subtotal);
+      log("TAX_RATE", TAX_RATE);
+      log("subtotal", subtotal);
+      log("withTax(subtotal)", total);
+      log("theme.accent", theme.accent);
+    </script>
+  </body>
+</html>

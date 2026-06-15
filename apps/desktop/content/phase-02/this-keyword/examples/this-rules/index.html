@@ -1,0 +1,76 @@
+<!--
+  Same function, four call patterns, four different `this`.
+
+  Strict mode (modern default) — the page declares "use strict" at the
+  top of the script. Each row runs one pattern and shows what `this`
+  ended up being.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The four call patterns</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 660px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+      th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid #eee; font-size: 0.92rem; vertical-align: top; }
+      th { background: #f8f8fa; font-weight: 600; }
+      code { background: #f4f4f6; padding: 1px 5px; border-radius: 4px; font-size: 0.88rem; }
+      .out { font-family: ui-monospace, monospace; color: #15803d; }
+      .out.bad { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <h1>The four call patterns — same function</h1>
+    <p>One function <code>whoAmI()</code> returns <code>this</code>. Each row calls it differently and prints what <code>this</code> turned out to be.</p>
+
+    <table>
+      <thead><tr><th>Call pattern</th><th>Code</th><th>this resolves to</th></tr></thead>
+      <tbody>
+        <tr><td>Free call</td>      <td><code>whoAmI()</code></td>                <td class="out" id="r1">…</td></tr>
+        <tr><td>Method call</td>    <td><code>obj.whoAmI()</code></td>            <td class="out" id="r2">…</td></tr>
+        <tr><td>new constructor</td><td><code>new whoAmI()</code></td>            <td class="out" id="r3">…</td></tr>
+        <tr><td>Explicit .call</td> <td><code>whoAmI.call({tag:"X"})</code></td>  <td class="out" id="r4">…</td></tr>
+      </tbody>
+    </table>
+
+    <script>
+      "use strict";
+
+      function whoAmI() { return this; }
+
+      function describe(v) {
+        if (v === undefined) return "undefined";
+        if (v === null)      return "null";
+        if (typeof v === "object") {
+          if (v.constructor && v.constructor.name && v.constructor.name !== "Object") {
+            return "<" + v.constructor.name + ">";
+          }
+          return JSON.stringify(v);
+        }
+        return String(v);
+      }
+
+      // 1. Free call
+      try {
+        const r = whoAmI();
+        document.getElementById("r1").textContent = describe(r);
+      } catch (e) {
+        const el = document.getElementById("r1");
+        el.textContent = "thrown: " + e.message;
+        el.classList.add("bad");
+      }
+
+      // 2. Method call
+      const obj = { tag: "obj", whoAmI };
+      document.getElementById("r2").textContent = describe(obj.whoAmI());
+
+      // 3. new
+      document.getElementById("r3").textContent = describe(new whoAmI());
+
+      // 4. Explicit binding via call
+      document.getElementById("r4").textContent = describe(whoAmI.call({ tag: "X" }));
+    </script>
+  </body>
+</html>

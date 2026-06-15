@@ -1,0 +1,99 @@
+<!--
+  Two counters from the same makeCounter factory.
+
+  Buttons let you increment each independently. The second column
+  proves there's no global counter to read — the value is private
+  to whoever holds the methods.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Two private counters</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1.25rem; text-align: center; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .count { font-size: 2.25rem; font-weight: 700; font-family: ui-monospace, monospace; color: #15803d; }
+      .btns { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.75rem; }
+      button {
+        padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-weight: 600;
+      }
+      button:hover { background: #f4f4f5; }
+      .note { color: #555; font-size: 0.9rem; margin-top: 2rem; }
+      code { background: #f4f4f6; padding: 0.05rem 0.4rem; border-radius: 4px; font-size: 0.88rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Two private counters</h1>
+    <p>Both counters were built by the same <code>makeCounter()</code> factory — each call returned its own backpack.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Counter A</h2>
+        <div class="count" id="a-val">0</div>
+        <div class="btns">
+          <button data-c="a" data-op="dec">−</button>
+          <button data-c="a" data-op="reset">↺</button>
+          <button data-c="a" data-op="inc">+</button>
+        </div>
+      </div>
+      <div class="col">
+        <h2>Counter B</h2>
+        <div class="count" id="b-val">0</div>
+        <div class="btns">
+          <button data-c="b" data-op="dec">−</button>
+          <button data-c="b" data-op="reset">↺</button>
+          <button data-c="b" data-op="inc">+</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      Try to read the count directly: open the browser console and type
+      <code>a.count</code> or <code>window.count</code> — both <code>undefined</code>.
+      The only path in is through the methods.
+    </p>
+
+    <script>
+      function makeCounter() {
+        let count = 0;
+        return {
+          increment: () => ++count,
+          decrement: () => --count,
+          get:        () => count,
+          reset:      () => { count = 0; return count; },
+        };
+      }
+
+      const a = makeCounter();
+      const b = makeCounter();
+      window.a = a;   // so you can poke at it in devtools
+      window.b = b;
+
+      const valA = document.getElementById("a-val");
+      const valB = document.getElementById("b-val");
+
+      function render() {
+        valA.textContent = a.get();
+        valB.textContent = b.get();
+      }
+
+      document.querySelectorAll("button[data-c]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const which = btn.dataset.c === "a" ? a : b;
+          const op = btn.dataset.op;
+          if (op === "inc") which.increment();
+          else if (op === "dec") which.decrement();
+          else which.reset();
+          render();
+        });
+      });
+
+      render();
+    </script>
+  </body>
+</html>

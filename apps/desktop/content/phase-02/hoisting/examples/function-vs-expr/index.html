@@ -1,0 +1,80 @@
+<!--
+  Function declaration: callable before its line (fully hoisted).
+  Function expression / arrow: variable hoisted, value isn't.
+
+  Two test buttons run their respective example; the output panel
+  shows whether the call succeeded or threw.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Function declaration vs. expression — hoisting</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 660px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0; }
+      .out {
+        margin-top: 0.6rem; padding: 0.6rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem;
+      }
+      .out.ok  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+      .out.bad { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    </style>
+  </head>
+  <body>
+    <h1>Declaration vs. expression — only one is callable before its line</h1>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Function <strong>declaration</strong> — fully hoisted</h2>
+<pre>greet();   // ✓
+function greet() {
+  return "Hi from declaration!";
+}</pre>
+        <div class="out ok" id="declOut">…</div>
+      </div>
+
+      <div class="col">
+        <h2>Function <strong>expression</strong> — TypeError</h2>
+<pre>shout();   // ✗
+var shout = function () {
+  return "Hi from expression!";
+};</pre>
+        <div class="out bad" id="exprOut">…</div>
+      </div>
+    </div>
+
+    <script>
+      // 1. Declaration: callable before its line because BOTH name and
+      //    body are hoisted to the top of the scope.
+      function runDecl() {
+        try {
+          const result = greet();   // called BEFORE the function keyword below
+          return "(returned) → " + result;
+        } catch (e) {
+          return "[thrown] " + e.message;
+        }
+        function greet() { return "Hi from declaration!"; }
+      }
+
+      // 2. Expression: var name is hoisted as undefined; the function
+      //    value is only assigned at the var line.
+      function runExpr() {
+        try {
+          const result = shout();   // called BEFORE the value is assigned
+          return "(returned) → " + result;
+        } catch (e) {
+          return "[thrown] " + e.message;
+        }
+        var shout = function () { return "Hi from expression!"; };
+      }
+
+      document.getElementById("declOut").textContent = runDecl();
+      document.getElementById("exprOut").textContent = runExpr();
+    </script>
+  </body>
+</html>

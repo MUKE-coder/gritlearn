@@ -1,0 +1,99 @@
+<!--
+  var vs let, hoisting demo.
+
+  Reading var before its assignment → undefined (silent).
+  Reading let before its declaration → ReferenceError (loud).
+
+  Both reads are wrapped in try/catch so the page doesn't crash;
+  the result of each is rendered so you can see "undefined" on one
+  side and the error message on the other.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>var vs let — hoisting</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 660px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0; }
+      .out {
+        margin-top: 0.6rem; padding: 0.6rem 0.8rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.5;
+      }
+      .out.ok  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+      .out.bad { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    </style>
+  </head>
+  <body>
+    <h1>Hoisting — <code>var</code> hides the bug, <code>let</code> shouts</h1>
+
+    <div class="grid">
+      <div class="col">
+        <h2><code>var</code> — silent <code>undefined</code></h2>
+<pre>function demo() {
+  console.log(price);   // ?
+  var price = 99;
+}
+demo();</pre>
+        <div class="out ok" id="varout">…</div>
+      </div>
+
+      <div class="col">
+        <h2><code>let</code> — loud <code>ReferenceError</code></h2>
+<pre>function demo() {
+  console.log(price);   // ?
+  let price = 99;
+}
+demo();</pre>
+        <div class="out bad" id="letout">…</div>
+      </div>
+    </div>
+
+    <script>
+      function varDemo() {
+        console.log(price);   // undefined (var hoisted as undefined)
+        var price = 99;
+        return price;
+      }
+
+      function letDemo() {
+        console.log(price);   // ReferenceError (TDZ)
+        let price = 99;
+        return price;
+      }
+
+      const captureConsole = () => {
+        const lines = [];
+        const orig = console.log;
+        console.log = (...args) => lines.push(args.map(String).join(" "));
+        return { lines, restore: () => { console.log = orig; } };
+      };
+
+      const v = captureConsole();
+      try {
+        const out = varDemo();
+        v.lines.push("(return) → " + out);
+      } catch (e) {
+        v.lines.push("[thrown] " + e.message);
+      } finally {
+        v.restore();
+      }
+      document.getElementById("varout").textContent = v.lines.join("\n");
+
+      const l = captureConsole();
+      try {
+        const out = letDemo();
+        l.lines.push("(return) → " + out);
+      } catch (e) {
+        l.lines.push("[thrown] " + e.message);
+      } finally {
+        l.restore();
+      }
+      document.getElementById("letout").textContent = l.lines.join("\n");
+    </script>
+  </body>
+</html>

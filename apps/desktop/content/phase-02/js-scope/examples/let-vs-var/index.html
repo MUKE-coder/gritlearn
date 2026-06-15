@@ -1,0 +1,68 @@
+<!--
+  Two for loops with setTimeout — one uses let, one uses var.
+
+  The let loop logs 0,1,2 (each iteration gets its own block-scoped i).
+  The var loop logs 3,3,3 (all three timers close over the SAME i,
+  which has reached its final value by the time the timers fire).
+
+  The two columns run at the same time so the difference is the only
+  variable. Refresh to re-run.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>let vs var — the classic loop bug</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; }
+      .col h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+      .col.bad { border-color: #dc2626; background: #fef2f2; }
+      .col.good { border-color: #15803d; background: #f0fdf4; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; margin: 0; }
+      .log {
+        background: #0a0a0d; color: #ededee; padding: 0.5rem 0.75rem; border-radius: 4px;
+        margin-top: 0.5rem; font-family: ui-monospace, monospace; font-size: 0.85rem; min-height: 5rem;
+      }
+      .accent-good { color: #7fff5b; }
+      .accent-bad { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <h1>The classic <code>var</code> bug</h1>
+    <p>Three timers, each scheduled to log <code>i</code>. The only difference between the two loops is <code>let</code> vs <code>var</code>.</p>
+
+    <div class="grid">
+      <div class="col good">
+        <h2><span class="accent-good">let</span> — block-scoped</h2>
+        <pre>for (<b>let</b> i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; log(i), 10);
+}</pre>
+        <div class="log" id="letlog"></div>
+      </div>
+      <div class="col bad">
+        <h2><span class="accent-bad">var</span> — function-scoped</h2>
+        <pre>for (<b>var</b> i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; log(i), 10);
+}</pre>
+        <div class="log" id="varlog"></div>
+      </div>
+    </div>
+
+    <script>
+      const letlog = document.getElementById("letlog");
+      const varlog = document.getElementById("varlog");
+      const append = (el, msg) => { el.textContent += msg + "\n"; };
+
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => append(letlog, "tick i = " + i), 10);
+      }
+
+      for (var i = 0; i < 3; i++) {
+        setTimeout(() => append(varlog, "tick i = " + i), 10);
+      }
+    </script>
+  </body>
+</html>

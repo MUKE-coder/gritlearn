@@ -1,0 +1,91 @@
+<!--
+  Demonstrates a circular dependency producing `undefined`, then shows
+  the fix: extract the shared bit into a third module.
+
+  We simulate file loading order with two IIFEs that read from a shared
+  registry. Each "file" logs what it sees from the other at load time —
+  the cycle leaves one side reading `undefined`. Then a "shared.js"
+  pattern is shown that breaks the cycle.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Circular imports — the trap and the fix</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1rem; margin-top: 2rem; }
+      pre { background: #fff; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; border: 1px solid #e4e4e7; }
+      .out {
+        margin-top: 0.6rem; padding: 0.75rem 1rem; border-radius: 4px;
+        background: #0a0a0d; color: #ededee; font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.55;
+      }
+      .ok    { color: #7fff5b; }
+      .bad   { color: #f87171; }
+      .muted { color: #71717a; }
+    </style>
+  </head>
+  <body>
+    <h1>Circular imports → silent <code>undefined</code></h1>
+
+    <h2>The trap</h2>
+<pre>// a.js
+import { fromB } from "./b.js";
+export const fromA = "A";
+console.log("a.js sees fromB =", fromB);
+
+// b.js
+import { fromA } from "./a.js";
+export const fromB = "B";
+console.log("b.js sees fromA =", fromA);
+
+// main.js → import "./a.js"</pre>
+    <div class="out" id="trap"></div>
+
+    <h2>The fix — extract the shared bit</h2>
+<pre>// shared.js
+export const fromA = "A";
+export const fromB = "B";
+
+// a.js  → import { fromA, fromB } from "./shared.js";
+// b.js  → import { fromA, fromB } from "./shared.js";  // no cycle</pre>
+    <div class="out" id="fix"></div>
+
+    <script>
+      // ─── Trap demo ─────────────────────────────────────────────
+      // Simulate ESM cycle: main starts loading a, which starts loading b,
+      // which reaches back into a (still mid-evaluation) and reads from
+      // a's partial export — at that moment, fromA hasn't been declared yet.
+      const trapLines = [];
+      const trapLog = (cls, msg) => trapLines.push(`<span class="${cls}">${msg}</span>`);
+
+      const a_partial = {};   // a's "live binding" object — empty so far
+      const b_module  = {};
+
+      // Loading b.js (triggered by a's import statement)
+      const fromA_atLoad = a_partial.fromA;   // undefined — a hasn't filled it yet
+      b_module.fromB = "B";
+      trapLog("bad", `b.js loaded; sees fromA = ${JSON.stringify(fromA_atLoad)}  ← undefined`);
+
+      // Back to a.js: now a finishes its body
+      a_partial.fromA = "A";
+      const fromB_atLoad = b_module.fromB;    // by now b has finished, this works
+      trapLog("muted", `a.js finishes; sees fromB = ${JSON.stringify(fromB_atLoad)}`);
+
+      document.getElementById("trap").innerHTML = trapLines.join("\n");
+
+      // ─── Fix demo ──────────────────────────────────────────────
+      const fixLines = [];
+      const fixLog = (cls, msg) => fixLines.push(`<span class="${cls}">${msg}</span>`);
+
+      // shared.js loads first, fully
+      const shared = { fromA: "A", fromB: "B" };
+      fixLog("ok", `shared.js loaded — fromA = ${JSON.stringify(shared.fromA)}, fromB = ${JSON.stringify(shared.fromB)}`);
+      fixLog("ok", `a.js  sees fromB = ${JSON.stringify(shared.fromB)}  ← correct`);
+      fixLog("ok", `b.js  sees fromA = ${JSON.stringify(shared.fromA)}  ← correct`);
+
+      document.getElementById("fix").innerHTML = fixLines.join("\n");
+    </script>
+  </body>
+</html>

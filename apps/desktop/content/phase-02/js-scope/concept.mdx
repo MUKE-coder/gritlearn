@@ -1,0 +1,355 @@
+## JS scope and the scope chain
+
+Scope is the set of rules JavaScript uses to answer one question: *"when I write `name` on this line, which `name` do you mean?"* The answer isn't magic — it follows a predictable lookup that walks outward from where the variable is used to where it was declared. Once you internalize that walk, the half-mysterious bugs that come from "I declared it but it's undefined here" stop being mysterious.
+
+<Analogy>
+JavaScript scope is **a kid asking for permission in a Russian-doll family**.
+
+Picture a child standing in their bedroom. They want a cookie. They check the room: no cookie. They walk out to the hallway: nobody there. They walk to the living room: mom and dad. The first adult who says "yes" wins — once permission is granted, the search stops.
+
+That walk is exactly how JavaScript resolves `name` in `console.log(name)`. Start in the **block where the line lives**. Don't find it? Walk out to the **enclosing function**. Don't find it there? Walk out to the **outer function**, and so on, until you hit **the global scope** — the front porch of the house, where the variables everyone in the family can see live. If even global doesn't have it, JavaScript throws `ReferenceError`: nobody in the family has heard of `name`.
+
+The two rules that flow from this:
+
+- **A variable is "in scope" anywhere its scope or any nested scope can see it.** The kid in the bedroom can ask mom in the living room; mom can't see into the bedroom unless she walks in.
+- **Inner scopes can read outer variables; outer scopes cannot read inner variables.** Inside a function, you can read a `const` declared at module top. From module top, you cannot read a `const` declared inside the function — the function's locals are private by design.
+
+Three more rules let you predict what'll happen 95% of the time:
+
+1. **`{ ... }` makes a new block scope for `let`/`const`.** Anything declared with `let` or `const` inside braces lives only inside those braces. (Old `var` doesn't respect this — it's function-scoped, the source of most weird bugs.)
+2. **Functions create their own scope.** The parameters and any `let`/`const`/`var` inside the function are local to the function.
+3. **Lookup goes outward, never inward.** When two variables share a name, the *nearest* one wins ("shadowing"). The outer one still exists; it's just hidden.
+
+When the bug is "I can see `name` in the source but it's `undefined` here", the answer is almost always: you're either reading a variable that lives in a sibling scope (the kid asked the neighbour, not their parents), or you're reading it before the line that assigned it (hoisting — separate concept).
+</Analogy>
+
+<Illustration
+  alt="Diagram of a nested scope tree and the variable lookup walking outward"
+  caption="Lookup walks outward from where the variable is used. First match wins."
+>
+
+```
+   GLOBAL scope                       SOURCE                       LOOKUP for `topic`
+   ┌────────────────────────┐         const site = "jbeditor"      from line ⓹
+   │ const site             │         function shop() {            ───────────────
+   │                        │    ┌──    const topic = "tech"
+   │  SHOP function scope   │    │      function inner() {           ⓹ in inner?  no
+   │  ┌──────────────────┐  │    │  ┌─    const x = topic + site     ⓸ in shop?   yes ✓
+   │  │ const topic      │  │    │  │     console.log(x)              (search stops)
+   │  │                  │  │    │  │   }
+   │  │  INNER scope     │  │    │  │   inner()
+   │  │  ┌──────────┐    │  │    │  └ }
+   │  │  │ const x  │    │ ⓸│    │    shop()
+   │  │  └──────────┘ ⓹  │  │    │
+   │  └──────────────────┘  │    │    Outer scopes can NOT
+   └────────────────────────┘    └─   reach in: nothing here
+                                       can read `topic` or `x`
+                                       except `shop`/`inner`.
+```
+
+</Illustration>
+
+### Three flavors of scope
+
+```js
+// 1. Global scope — declared at the top of a file, outside any function.
+const SITE = "jbeditor.com";
+
+function outer() {
+  // 2. Function scope — declared inside a function.
+  const role = "tutor";
+
+  if (true) {
+    // 3. Block scope — declared inside { ... }.
+    // Only let / const respect this. var does NOT.
+    let secret = "shh";
+    console.log(SITE, role, secret);  // ✓ all three visible
+  }
+
+  console.log(SITE, role);             // ✓ SITE + role
+  // console.log(secret);              // ✗ ReferenceError: out of scope
+}
+
+outer();
+console.log(SITE);                     // ✓
+// console.log(role);                  // ✗ ReferenceError
+```
+
+Three concentric circles: global, function, block. Inner sees outer; outer never sees inner.
+
+### `let` / `const` vs. `var` — the modern rule
+
+`let` and `const` are **block-scoped**. `var` is **function-scoped** and breaks the mental model:
+
+```js
+function showBlocks() {
+  if (true) {
+    let a = 1;
+    var b = 2;
+  }
+  console.log(a);   // ✗ ReferenceError
+  console.log(b);   // ✓ 2  (var ignored the if block)
+}
+```
+
+In modern code: **never use `var`**. Use `const` by default, `let` when you need to reassign. The block-scoped rule is the only one your reading brain has to track.
+
+### Shadowing — the inner name wins
+
+When an inner scope declares a variable with the same name as an outer one, the outer one is hidden inside that inner scope:
+
+```js
+const name = "Ada";
+
+function speak() {
+  const name = "Lin";        // shadows the outer name
+  console.log(name);          // "Lin"
+}
+
+speak();
+console.log(name);             // "Ada"  (outer is untouched)
+```
+
+Shadowing is legal and sometimes useful, but accidental shadowing is a common bug — the inner variable silently masks the outer one, and reading the code top-down it looks like the outer should win. Editors warn about it with a yellow squiggle; pay attention.
+
+### The scope chain — how lookup actually works
+
+Every function captures a reference to the scope it was *defined in* — not the scope it's *called from*. When the function reads a variable, JavaScript walks the chain from the current scope outward:
+
+```js
+const a = 1;
+
+function outer() {
+  const b = 2;
+
+  function inner() {
+    const c = 3;
+    console.log(a, b, c);   // 1 2 3 — walks inner → outer → global
+  }
+
+  return inner;
+}
+
+const fn = outer();
+fn();                        // still prints 1 2 3 even though we're "outside" outer
+```
+
+`inner` doesn't lose access to `outer`'s scope when it leaves. It carries the reference with it — that's the foundation of closures (next concept).
+
+### Block scope inside `if` / `for` / `while`
+
+Every pair of braces creates a block. The clearest example is `for`:
+
+```js
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 10);
+}
+// → 0 1 2
+
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 10);
+}
+// → 3 3 3 (all three closures share the SAME var i)
+```
+
+This is the canonical "var bug." `let` gives each iteration its own `i`; `var` doesn't. Same trap, three weeks of confusion in 2017 when this was the interview question of choice.
+
+### Global pollution — what to avoid
+
+When you forget `const`/`let`/`var` entirely, the assignment leaks to the global scope:
+
+```js
+function leaky() {
+  oops = "I'm global now";   // no declaration keyword
+}
+leaky();
+console.log(oops);            // "I'm global now"
+```
+
+Modern code runs in **strict mode** by default (every ES module is strict; every Next.js / Vite / React project is module-by-default), so the example above is a `ReferenceError` instead of silent pollution. But the rule is timeless: every variable starts with `const` or `let`. Never assign to an undeclared name.
+
+### Modules introduce their own scope
+
+In modern JavaScript, each `.js` / `.ts` file used as an ES module is its own scope. Variables declared at the top of `utils.js` are not visible from `main.js` unless you explicitly `export` and `import` them:
+
+```js
+// utils.js
+const secret = "private";       // visible only inside utils.js
+export const name = "Ada";       // visible to importers
+
+// main.js
+import { name } from "./utils.js";
+console.log(name);                // "Ada"
+// console.log(secret);           // ✗ ReferenceError — never exported
+```
+
+This is the modern answer to "how do I avoid global pollution?" — modules give you a scope per file by default. We cover module mechanics in their own concept.
+
+### Closures — the natural next step
+
+When an inner function references variables from an outer function, and the inner function escapes the outer (returned, stored, scheduled), it carries the outer's scope with it. That's a **closure**. The full concept gets its own lesson — but you've already seen the foundation: the scope chain doesn't get torn down when the outer function returns; the inner function holds it open.
+
+### What to do when the scope is confusing
+
+Three habits that prevent 90% of scope bugs:
+
+1. **Declare close to use.** Put `const totalCents` right above the loop that uses it, not 30 lines higher.
+2. **Smaller functions.** A function that does one thing has one scope worth tracking. A 200-line function has six nested scopes and you'll lose the thread.
+3. **Avoid `var`. Avoid global writes.** Modules + `const`/`let` solve every problem `var` and globals were trying to solve.
+
+<ExampleProject
+  src="scope-chain"
+  title="Nested scopes — watch the lookup walk outward"
+  description="A three-level nested function with one variable declared in each level. The deepest function reads from all three; the page logs which level each read came from. Demonstrates the lookup walking inward → outward and where shadowing wins."
+/>
+
+<ExampleProject
+  src="let-vs-var"
+  title="The classic 'var in a for loop' bug, side by side"
+  description="Two identical for loops with setTimeout — one with let, one with var. The let loop prints 0 1 2; the var loop prints 3 3 3. The page renders both at once so the difference is visible the moment it runs."
+/>
+
+<Exercise
+  title="Build a scope-aware counter without globals"
+  starter={`Write a small module that exposes a single function makeCounter():
+
+  1. makeCounter() returns an object: { increment, decrement, get, reset }.
+  2. The count is stored in a variable inside makeCounter — NOT on the
+     returned object, NOT on a global, NOT on window.
+  3. Each method reads or writes that variable. Outside makeCounter,
+     there is no way to inspect or modify the count except through
+     the four methods.
+  4. Create two counters in the same file (counterA, counterB) and
+     prove they don't share state — bumping A doesn't affect B.
+
+Use const / let only. No var anywhere. No globals (no window.x = ...).
+Modern ES module style.`}
+>
+
+- A function `makeCounter` is declared. Inside it, a variable (`let count = 0`) holds the state.
+- `makeCounter` returns an object with `increment`, `decrement`, `get`, `reset` methods. Each closes over the same `count`.
+- There is no way to read or write `count` from outside `makeCounter` except via the returned methods.
+- Two counters are created via two `makeCounter()` calls; bumping counter A does not affect counter B (each call creates a *new* scope with its own `count`).
+- The file uses `const` for the function/objects and `let` for the mutable `count`. `var` does not appear.
+- No global variables are created (no `window.counter = ...`, no bare assignments).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `let` and `var`?
+
+**A:** **`let` is block-scoped; `var` is function-scoped.**
+
+```js
+function demo() {
+  if (true) {
+    let a = 1;
+    var b = 2;
+  }
+  console.log(a);   // ✗ ReferenceError — a only existed inside the if
+  console.log(b);   // ✓ 2          — var ignored the if block
+}
+```
+
+`var` was the only option pre-ES6. Its function-scoping causes two everyday bugs:
+
+1. **Loop closures share the same var.** `for (var i = 0; ...) { setTimeout(() => log(i)) }` logs the final value every time because all three callbacks closed over the *same* `i`. `for (let i = 0; ...)` gives each iteration its own `i`.
+2. **Hoisting hides assignments.** `var` declarations are hoisted to the top of the function as `undefined`, which means you can reference a `var` before its line and get `undefined` instead of `ReferenceError`. Confusing in any file longer than 30 lines.
+
+Modern rule: **`const` by default, `let` if you need to reassign, never `var`.** Every linter / style guide / editor template enforces this. The only legitimate use of `var` today is reading legacy code.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is "shadowing" in JavaScript scope?
+
+**A:** **Shadowing happens when an inner scope declares a variable with the same name as an outer one — the inner declaration hides the outer one *within* its scope.**
+
+```js
+const name = "Ada";
+
+function speak() {
+  const name = "Lin";   // shadows the outer name
+  console.log(name);     // "Lin"
+}
+
+speak();
+console.log(name);        // "Ada"  (outer untouched)
+```
+
+The outer `name` still exists — it's just not reachable from inside `speak`, because lookup finds the inner one first and stops walking. Once `speak` returns, the outer one is visible again.
+
+Shadowing is legal and occasionally intentional (re-using common names like `i`, `result`, `data` in narrow scopes). It's a frequent source of accidental bugs: a function parameter named `data` shadows a module-level `data` and you read the parameter when you meant the module one. Editors flag it with a yellow squiggle in strict mode.
+
+Modern style guides discourage shadowing when it can be avoided — pick a different name for the inner variable (`current`, `next`, `temp`) and the code reads cleaner. The compiler doesn't care; the reader does.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does it mean that JavaScript has "lexical scope"?
+
+**A:** **"Lexical scope" means a variable's scope is determined by where it's written in the source code, not by where the function is called from.**
+
+```js
+const flavor = "vanilla";
+
+function ask() {
+  console.log(flavor);   // reads flavor where ask is DEFINED — "vanilla"
+}
+
+function caller() {
+  const flavor = "chocolate";
+  ask();                  // ↑ still prints "vanilla" — the caller's
+                          //   chocolate is invisible to ask.
+}
+
+caller();
+```
+
+The opposite — "dynamic scope" — would have `ask` see whatever `flavor` exists where it was *called* (so it would print "chocolate" inside `caller`). Some languages do that; JavaScript doesn't.
+
+Two practical consequences:
+
+1. **You can predict variable values by reading the source top-to-bottom.** You don't need to know who calls the function — the variables it sees are the ones in scope where you wrote it.
+2. **Closures work.** A function returned from a factory carries the factory's scope with it forever. The "captured" scope is the lexical one, not the call-site one. That's why a counter returned from `makeCounter()` keeps incrementing the same count even when called from totally unrelated code.
+
+Lexical scope is the foundation that makes modules, closures, and React hooks behave the way they do. If JavaScript were dynamically scoped, none of those patterns would work.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is the classic "`var` in a `for` loop with `setTimeout`" bug so common?
+
+**A:** **Because `var` is function-scoped, so all iterations of the loop share the same `i` — and by the time the timers fire, the loop has finished and `i` is at its final value.**
+
+```js
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 10);
+}
+// logs: 3, 3, 3
+```
+
+Step through what happens:
+
+1. The loop runs synchronously: `i` goes 0 → 1 → 2 → 3. The body schedules three timers.
+2. The timers don't fire until the loop has finished. By then, `i` is 3.
+3. Each timer's arrow function closes over the *one* `i` declared by `var`. All three read it after the loop, all three see `3`.
+
+Switch to `let` and the bug disappears:
+
+```js
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 10);
+}
+// logs: 0, 1, 2
+```
+
+`let` is block-scoped, and each iteration of the `for` block gets its *own* `i`. Each arrow function closes over its iteration's `i` — three separate variables, three different logged values.
+
+This was the interview question of choice in 2017 because it exposed two concepts at once: scope (where does `i` live?) and closure (what does the callback remember?). Today it's a non-issue if you've internalized "use `let`/`const`, never `var`" — but reading legacy code, you'll spot the pattern and know exactly what's happening.
+
+</InterviewQuestion>

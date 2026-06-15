@@ -1,0 +1,62 @@
+<!--
+  Three nested scopes; the deepest reads from all three.
+
+  Each variable is named after the level it lives at, so the lookup
+  walk is visible in the log: inner reads `inner`, then `middle`, then
+  `outer` — each from a different scope.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Scope chain walk</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; }
+      h1 { font-size: 1.3rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 1rem; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.55;
+      }
+      .accent { color: #7fff5b; }
+      p.note { color: #555; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Scope chain — three levels deep</h1>
+    <p class="note">Log shows which scope each variable was found in. The lookup walks outward from <code>inner</code>.</p>
+    <pre id="out"></pre>
+
+    <script>
+      const out = document.getElementById("out");
+      const log = (s) => { out.textContent += s + "\n"; };
+
+      const outerVar = "I'm in OUTER (global module scope)";
+
+      function middle() {
+        const middleVar = "I'm in MIDDLE (middle's function scope)";
+
+        function inner() {
+          const innerVar = "I'm in INNER (inner's function scope)";
+
+          log("From inner, looking up 'innerVar':");
+          log("  → " + innerVar);
+          log("");
+          log("From inner, looking up 'middleVar':");
+          log("  → " + middleVar);
+          log("");
+          log("From inner, looking up 'outerVar':");
+          log("  → " + outerVar);
+          log("");
+          log("Shadowing demo — local takes precedence:");
+          const middleVar2 = "(shadow) I override the outer";
+          log("  middleVar (still) → " + middleVar);
+          log("  middleVar2 (new)  → " + middleVar2);
+        }
+
+        inner();
+      }
+
+      middle();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,403 @@
+## Closures
+
+When a function references a variable from a scope outside its own, and that function leaves that scope (returned, stored, scheduled), it carries the outer scope's variables with it. That bundle — the function plus the captured variables — is a **closure**. It's the single most useful pattern in JavaScript: every React hook uses it, every event handler depends on it, every "remember this value between calls" idiom is built on it.
+
+<Analogy>
+A closure is **a backpack a function carries with it**.
+
+You hand a courier a sealed envelope and ask them to deliver it to room 312 in three hours. The courier walks out of your office, takes the elevator down, has lunch, comes back at 2pm, finds room 312, and delivers it. *Between when you handed them the envelope and when they delivered it*, you went home, the office closed, the lights turned off. None of that matters. The envelope was in the courier's backpack the whole time. The delivery still happens because the backpack came along.
+
+A JavaScript function works the same way. When the function is defined inside another function, it picks up the outer function's local variables and tucks them into its backpack. From that moment on, no matter where the function travels — passed to `setTimeout`, returned and reassigned, attached to a DOM event, stored in a React render — the variables come along. When the function finally runs, it reaches into its backpack and reads them as if the outer function were still standing there.
+
+```js
+function makeGreeter(name) {
+  // `name` is the outer variable.
+  return function () {           // ← this inner function's backpack contains `name`
+    console.log("Hi, " + name);
+  };
+}
+
+const greetAda = makeGreeter("Ada");
+const greetLin = makeGreeter("Lin");
+
+// makeGreeter has long since returned — but the closures still know.
+greetAda();   // "Hi, Ada"
+greetLin();   // "Hi, Lin"
+```
+
+Three things make closures useful in everyday code:
+
+1. **Persistence.** State that survives between calls, *without* a global variable. Counters, caches, hook state, observer registries — every "remember this" pattern in JS uses a closure.
+2. **Privacy.** The captured variables aren't on the returned object. They're not on `window`. The only way to read or write them is through the returned function. That's how you get encapsulation without the ceremony of classes.
+3. **Per-instance state.** Every call to `makeGreeter` creates a *new* backpack. `greetAda` and `greetLin` don't share `name` — they each carry their own copy. Two counters from the same factory don't share their counts. This is how React hooks give each component instance its own state without a class.
+
+The cost is purely conceptual: you have to keep "this inner function remembers stuff from up there" in your head while reading. The win, once you internalize it: half of JavaScript's coolest patterns become obvious.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a function returned from a factory, carrying its captured variables in a backpack"
+  caption="Outer function returns; closure walks out with the captured variables tucked into its backpack."
+>
+
+```
+   BEFORE makeCounter() is called           AFTER returns:  inc carries a backpack
+
+   ┌──────────────────────────────┐         ┌───────────────────┐
+   │ function makeCounter() {     │         │  const inc = ...  │
+   │   let count = 0;             │         └─────────┬─────────┘
+   │                              │                   │
+   │   return function inc() {    │                   ▼
+   │     count++;                 │            ┌────────────┐
+   │     return count;            │            │   inc()    │
+   │   };                         │            │            │
+   │ }                            │            │   📎 backpack:
+   │                              │            │     count = 0 → 1 → 2 → ...
+   └──────────────────────────────┘            └────────────┘
+
+   makeCounter's stack frame is GONE,         ...but `count` survives because
+   the function returned and exited.          inc keeps a reference to it.
+```
+
+</Illustration>
+
+### The mechanical version
+
+```js
+function outer() {
+  let secret = 42;
+  function inner() {
+    return secret;
+  }
+  return inner;
+}
+
+const fn = outer();
+console.log(fn());   // 42
+```
+
+Sequence:
+1. `outer()` runs. Local `secret = 42` exists.
+2. `outer()` returns `inner` to the caller.
+3. Normally, `outer`'s scope would be garbage-collected here.
+4. But `inner` holds a reference to `secret`. The garbage collector sees a live reference and keeps `secret` alive.
+5. When `fn()` runs, `inner` reads `secret` from its captured scope. Still 42.
+
+That last step is the entire closure mechanism. The fancy name is "the function captured its lexical environment." The reading translation: it brought the variables in its backpack.
+
+### Counter — the classic example
+
+A counter is a value that survives between calls and is private to whoever holds the increment function:
+
+```js
+function makeCounter() {
+  let count = 0;
+  return {
+    increment: () => ++count,
+    decrement: () => --count,
+    get:        () => count,
+    reset:      () => (count = 0),
+  };
+}
+
+const c = makeCounter();
+c.increment();        // 1
+c.increment();        // 2
+c.get();              // 2
+c.reset();
+c.get();              // 0
+```
+
+Four functions share the same `count` because they were all defined inside the same `makeCounter` call. Their backpacks all point at the same variable. From outside, there's no way to touch `count` — no `c.count` property, no global. The only API is the four methods.
+
+### Private state without classes
+
+The same trick gives you encapsulation that pre-dates ES6 classes by 15 years:
+
+```js
+function makeUser(name) {
+  let active = true;
+  return {
+    getName:    () => name,
+    isActive:   () => active,
+    deactivate: () => { active = false; },
+  };
+}
+
+const u = makeUser("Ada");
+u.getName();      // "Ada"
+u.isActive();     // true
+u.deactivate();
+u.isActive();     // false
+// u.active        // undefined — there's no public property
+```
+
+`name` and `active` exist only inside the closure. The returned object exposes only what `makeUser` chooses to expose. Modern equivalents use `class` with `#privateFields`, but the closure version still works everywhere and reads cleanly when the object is small.
+
+### Closures in event handlers
+
+Every `addEventListener` callback is a closure. The callback gets defined inside some setup function and stays alive long after that function returns:
+
+```js
+function attachLogger(name) {
+  document.getElementById("btn").addEventListener("click", () => {
+    console.log("clicked by " + name);
+  });
+}
+
+attachLogger("Ada");
+// click the button later — logs "clicked by Ada"
+// even though attachLogger has long since returned.
+```
+
+The callback's backpack contains `name`. The DOM keeps a reference to the callback; the callback keeps a reference to `name`; `name` stays alive.
+
+### Closures in React hooks
+
+This is the daily payoff. Every `useState` returns a setter that closes over the component's state slot. Every `useEffect` callback closes over the props and state at the time the effect was scheduled. The "stale closure" trap (React's most common bug) is just this: the effect captured *old* values; the component re-rendered with *new* ones; the running effect still sees the old.
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      // Closure captures `count` from THIS render.
+      // Won't see new counts on later re-renders — needs setCount(c => c+1).
+      console.log(count);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);   // empty deps → captures count: 0 forever
+}
+```
+
+Half of React's debugging is "which render's closure am I in?" The answer is always: the one that was alive when this function was defined. Lexical scope, all the way down.
+
+### The garbage collector and closures
+
+JavaScript reclaims memory only when nothing references a value. Closures keep references alive — which is the whole point — but the cost is that a long-lived closure pinned to a small variable keeps that small variable alive forever.
+
+```js
+function setup() {
+  const huge = new Array(1_000_000).fill(0);   // big allocation
+  const trivial = 42;
+
+  // This closure only uses `trivial`. But because it was defined inside
+  // setup, V8 typically keeps the entire scope (including `huge`) alive.
+  return () => trivial;
+}
+```
+
+In practice this is rarely an issue — modern engines do "scope optimization" and prune unused variables. But if you store a long-lived closure (a setInterval callback that fires forever, a DOM event handler attached on page load), be aware that whatever it references won't be freed until the closure itself is collected.
+
+### Currying — closures as a tool
+
+A function that takes one argument and returns another function is a closure factory:
+
+```js
+const multiply = (a) => (b) => a * b;
+const double   = multiply(2);
+const triple   = multiply(3);
+
+double(7);   // 14
+triple(7);   // 21
+```
+
+`double` and `triple` each carry their own captured `a` in their backpacks. This pattern is the basis of currying, partial application, and a lot of functional-programming idioms — all powered by the same closure mechanic.
+
+### When closures bite — the stale value
+
+If a closure captures a variable that the surrounding code mutates, the closure sees the *latest* value when it reads — not the value at capture time:
+
+```js
+let mode = "dark";
+const log = () => console.log(mode);
+
+log();             // "dark"
+mode = "light";
+log();             // "light"  — the closure reads `mode` again, sees the new value
+```
+
+This is by design — the backpack holds a *reference* to `mode`, not a snapshot. If you want a snapshot, copy the value:
+
+```js
+const log = ((m) => () => console.log(m))(mode);   // captures "dark"
+mode = "light";
+log();             // "dark"
+```
+
+Now `log` closes over its own parameter `m`, which was assigned the value of `mode` at the time the IIFE ran. Mutating `mode` later doesn't affect `m`.
+
+<ExampleProject
+  src="counter-closure"
+  title="A makeCounter factory — two independent counters from the same factory"
+  description="Two counters built with the same makeCounter function, each with their own private count. Buttons increment one without affecting the other; a third button proves there's no global counter variable to read from outside."
+/>
+
+<ExampleProject
+  src="private-state"
+  title="A makeUser factory — name + active flag, no public properties"
+  description="Demonstrates closure-as-encapsulation: the returned object exposes only getters and one mutator. Trying to read u.active or u.name returns undefined; the only way to interact is through the methods."
+/>
+
+<Exercise
+  title="Build a memoize() higher-order function with a closure"
+  starter={`Write a function memoize(fn) that:
+
+  1. Takes any unary function (one argument) and returns a NEW function
+     with the same signature.
+  2. The new function caches results: if called with the same argument
+     it has seen before, it returns the cached result instead of
+     re-running fn.
+  3. The cache lives in a closure — NOT on the returned function as a
+     property, NOT on a global, NOT on the wrapped function.
+
+Test it:
+
+  - Wrap a slow function: const square = memoize(n => { console.log("computing"); return n * n; });
+  - Call square(4) twice and confirm "computing" only prints once.
+  - Call square(5) — confirm "computing" prints again (different arg).
+  - Make sure two separate memoize wrappers don't share their caches.
+
+Use const/let only. No globals. The cache should be invisible from outside.`}
+>
+
+- `memoize(fn)` is a higher-order function — accepts a function, returns a function.
+- The cache (e.g. a `Map` or plain object) is declared **inside** `memoize` and referenced only by the inner function.
+- Calling the memoized function twice with the same argument runs `fn` only once.
+- Calling the memoized function with a new argument runs `fn` again.
+- Two different `memoize(fn)` calls produce two functions with **independent caches**.
+- The cache is **not** accessible from outside the returned function — there is no `.cache` property, no global.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is a closure in plain language?
+
+**A:** **A closure is a function plus the variables it remembers from the scope it was defined in, even after that scope has finished running.**
+
+```js
+function makeAdder(n) {
+  return function (x) { return x + n; };
+}
+
+const add5 = makeAdder(5);
+add5(3);   // 8 — `add5` still knows n is 5
+```
+
+`makeAdder` finishes and returns the inner function. Normally `n` would be discarded with `makeAdder`'s stack frame — but the returned function still references it, so JavaScript keeps `n` alive. From the inner function's perspective, `n` is just another variable it can read; from the language's perspective, the inner function captured its lexical environment.
+
+Three things this gives you:
+
+- **Persistent state** between calls without a global.
+- **Per-instance state**: every call to the factory creates a new closure with its own copy of the captured variables. Two `makeAdder` calls don't share `n`.
+- **Privacy**: outside code can't reach the captured variables except through the returned function's interface.
+
+If you can explain those three properties with an example, you understand closures well enough to use them every day.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do two counters made by the same `makeCounter` factory not share state?
+
+**A:** **Because each call to `makeCounter` creates a *new* scope — and the returned functions close over *that specific scope's* variables, not the factory's.**
+
+```js
+function makeCounter() {
+  let count = 0;
+  return () => ++count;
+}
+
+const a = makeCounter();   // new scope #1; this scope has count = 0
+const b = makeCounter();   // new scope #2; this scope has its OWN count = 0
+
+a();    // 1   (in scope #1)
+a();    // 2
+b();    // 1   (in scope #2, untouched by a's calls)
+```
+
+The mental model: `makeCounter` is a *blueprint*. Each call runs the blueprint and produces a fresh instance, with its own `count` variable, in its own little scope. The returned function carries a reference to *its* `count` — not the blueprint's, not some other instance's.
+
+This is the foundation of how every React component instance gets its own `useState` value: each render creates a closure over that render's specific state slot. Two `<Counter />` elements on the page are like two `makeCounter()` calls — same code, two private little worlds.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the "stale closure" trap, and how does it show up in React?
+
+**A:** **A closure captures *references* to its outer variables. If the surrounding code mutates those variables, the closure sees the latest value when it next reads — but if the closure was scheduled to run later (timer, effect, callback), the values it sees can lag behind the current state.**
+
+The most common form in React:
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log(count);     // ← closes over THIS render's count
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);    // empty deps → effect runs once
+}
+```
+
+Click the button to bump `count` from 0 → 1 → 2. The interval still logs `0` forever. Why: the effect ran on the first render, captured `count = 0`, and the empty deps array means the effect doesn't re-run on re-renders. The interval's callback is a closure over the first render's `count` — and the first render's `count` was 0 and never changed.
+
+Two ways out:
+
+1. **Add `count` to the deps array.** The effect re-runs on every count change, re-creating the interval with a fresh closure. (Often combined with cleaning up the previous interval — which the example already does.)
+2. **Use the setter's functional form.** `setCount(c => c + 1)` reads the latest count *at update time*, not the captured-at-render time. Doesn't fix the *log*, but fixes most "I'm reading stale state in my updater" bugs.
+
+The deeper lesson: in React, every render is a snapshot. Every closure inside that render captures *that snapshot's* values. If you store the closure beyond the render (a timer, a subscription, a long-running effect), you need a plan for what it should see — either re-create it on relevant changes, or read fresh state via a ref / setter callback.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How would you use a closure to create a private counter without using a class?
+
+**A:** **Wrap a `let count` inside a factory function and expose only the methods you want callers to use. Outside code has no path to `count`.**
+
+```js
+function makeCounter() {
+  let count = 0;
+  return {
+    increment: () => ++count,
+    decrement: () => --count,
+    get:        () => count,
+    reset:      () => (count = 0),
+  };
+}
+
+const c = makeCounter();
+c.increment();
+c.increment();
+c.get();     // 2
+
+c.count;     // undefined — no public property
+// Even with devtools, there's no way to read `count` except through .get()
+```
+
+What's happening:
+
+- `count` lives in `makeCounter`'s function scope.
+- The returned object has four methods. Each method is a closure that captured `count`.
+- All four methods share the *same* `count` (they were defined in the same `makeCounter` call).
+- The returned object has no `.count` property and no way to attach one to the existing closure.
+
+The pattern is sometimes called the "module pattern" or "revealing module pattern" (especially in pre-ES6 code, before classes had private fields). It's the everyday closure use-case: state that needs to persist, mutate in controlled ways, and not be reachable from outside. Modern equivalents:
+
+```js
+class Counter {
+  #count = 0;                // private field — also unreachable from outside
+  increment() { return ++this.#count; }
+  get() { return this.#count; }
+}
+```
+
+Same end result; different mechanism. The closure version is slightly more flexible (each instance is just an object literal you can shape per-call), and it's older — used in production code from 2005 to now. Recognize both; pick whichever reads cleaner in context.
+
+</InterviewQuestion>
