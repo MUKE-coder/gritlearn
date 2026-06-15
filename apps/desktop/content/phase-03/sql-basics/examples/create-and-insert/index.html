@@ -1,0 +1,221 @@
+<!--
+  Step-by-step walkthrough: CREATE TABLE products, then INSERT three
+  rows. Press "Next" to step through each SQL statement; the table on
+  the right grows as each statement executes. Lets the student see the
+  shape go from "definition" → "definition + rows" without typing.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CREATE TABLE → INSERT — step through, see the cabinet grow</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.6rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.82rem; line-height: 1.55;
+        margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .step-strip {
+        display: flex; gap: 0.45rem; margin-top: 0.7rem;
+      }
+      .step-dot {
+        width: 1.5rem; height: 1.5rem; border-radius: 999px;
+        background: #e4e4e7; color: #71717a;
+        display: grid; place-items: center; font-size: 0.74rem; font-weight: 700;
+      }
+      .step-dot.done   { background: #15803d; color: #fff; }
+      .step-dot.active { background: #fbbf24; color: #18181b; outline: 2px solid #f59e0b; }
+      .actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
+      .actions button {
+        padding: 0.45rem 0.95rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.82rem;
+      }
+      .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .actions button.secondary {
+        background: #fff; color: #52525b; border-color: #d4d4d8;
+      }
+      .table {
+        width: 100%; border-collapse: collapse; font-size: 0.81rem;
+        font-family: ui-monospace, monospace; background: #fff;
+      }
+      .table th, .table td {
+        border: 1px solid #e4e4e7; padding: 0.4rem 0.6rem; text-align: left;
+      }
+      .table th {
+        background: #f4f4f5; color: #18181b; font-weight: 600;
+      }
+      .table .type { color: #71717a; font-size: 0.72rem; display: block; }
+      .table tr.new { background: #ecfdf5; animation: flash 0.6s ease; }
+      @keyframes flash { 0% { background: #fef3c7; } 100% { background: #ecfdf5; } }
+      .help {
+        font-size: 0.84rem; padding: 0.6rem 0.85rem; background: #fef3c7; color: #92400e;
+        border-radius: 4px; margin-top: 0.7rem; border-left: 3px solid #f59e0b;
+      }
+      .empty { color: #71717a; font-style: italic; padding: 0.7rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Watch a table take shape</h1>
+    <p>Four SQL statements. Click <strong>Run next</strong> to execute each one and watch the <code>products</code> table appear, then fill with rows.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>SQL — step <span id="step-num">1</span> of 4</h2>
+        <pre id="sql"></pre>
+        <div class="step-strip" id="step-strip"></div>
+        <div class="actions">
+          <button id="run-btn" type="button">Run next ▶</button>
+          <button id="reset-btn" class="secondary" type="button">Reset</button>
+        </div>
+        <div class="help" id="explain"></div>
+      </div>
+
+      <div class="col">
+        <h2>products — the cabinet drawer</h2>
+        <div id="table-host"><div class="empty">No table yet — press Run.</div></div>
+      </div>
+    </div>
+
+    <script>
+      // Each step has SQL, the highlighted markup, the schema/data delta,
+      // and a short explanation. Running advances the model + animates
+      // the table.
+      const steps = [
+        {
+          sql:
+`<span class="keyword">CREATE TABLE</span> products (
+  id           <span class="keyword">serial</span>        <span class="keyword">PRIMARY KEY</span>,
+  name         <span class="keyword">text</span>          <span class="keyword">NOT NULL</span>,
+  price_cents  <span class="keyword">int</span>           <span class="keyword">NOT NULL</span>,
+  stock        <span class="keyword">int</span>           <span class="keyword">NOT NULL DEFAULT</span> <span class="number">0</span>,
+  created_at   <span class="keyword">timestamptz</span>   <span class="keyword">NOT NULL DEFAULT now</span>()
+);`,
+          explain: "Defines the shape. The cabinet now knows there is a 'products' drawer with five tabs — id, name, price_cents, stock, created_at. The drawer is still empty.",
+          apply: (state) => {
+            state.columns = [
+              { name: "id",          type: "serial",      pk: true },
+              { name: "name",        type: "text" },
+              { name: "price_cents", type: "int" },
+              { name: "stock",       type: "int" },
+              { name: "created_at",  type: "timestamptz" },
+            ];
+          },
+        },
+        {
+          sql:
+`<span class="keyword">INSERT INTO</span> products (name, price_cents)
+<span class="keyword">VALUES</span> (<span class="string">'Notebook'</span>, <span class="number">1200</span>);`,
+          explain: "Inserts one row. We only supplied 'name' + 'price_cents'; the cabinet filled 'id' (serial counts up), 'stock' (DEFAULT 0), and 'created_at' (DEFAULT now()). Three columns auto-populated by the rules in the CREATE TABLE.",
+          apply: (state) => {
+            state.rows.push({ id: 1, name: "Notebook", price_cents: 1200, stock: 0, created_at: "2026-06-16 11:02:14+00" });
+            state.newRowIds = [1];
+          },
+        },
+        {
+          sql:
+`<span class="keyword">INSERT INTO</span> products (name, price_cents, stock)
+<span class="keyword">VALUES</span> (<span class="string">'Mechanical pen'</span>, <span class="number">2800</span>, <span class="number">42</span>);`,
+          explain: "Same shape, this time we provided 'stock'. 'id' counts up to 2; 'created_at' is again filled by the default.",
+          apply: (state) => {
+            state.rows.push({ id: 2, name: "Mechanical pen", price_cents: 2800, stock: 42, created_at: "2026-06-16 11:03:55+00" });
+            state.newRowIds = [2];
+          },
+        },
+        {
+          sql:
+`<span class="keyword">INSERT INTO</span> products (name, price_cents, stock) <span class="keyword">VALUES</span>
+  (<span class="string">'Sketchbook A5'</span>, <span class="number">1500</span>, <span class="number">15</span>),
+  (<span class="string">'Sketchbook A4'</span>, <span class="number">2200</span>, <span class="number">7</span>);
+<span class="comment">-- Two rows in one statement — single round-trip to the database.</span>`,
+          explain: "One INSERT, two rows. Faster than two separate INSERTs because the database sees both at once.",
+          apply: (state) => {
+            state.rows.push({ id: 3, name: "Sketchbook A5", price_cents: 1500, stock: 15, created_at: "2026-06-16 11:05:10+00" });
+            state.rows.push({ id: 4, name: "Sketchbook A4", price_cents: 2200, stock: 7,  created_at: "2026-06-16 11:05:10+00" });
+            state.newRowIds = [3, 4];
+          },
+        },
+      ];
+
+      let step = 0;
+      let state = { columns: [], rows: [], newRowIds: [] };
+
+      const sqlEl       = document.getElementById("sql");
+      const stepNumEl   = document.getElementById("step-num");
+      const stepStripEl = document.getElementById("step-strip");
+      const explainEl   = document.getElementById("explain");
+      const tableHost   = document.getElementById("table-host");
+      const runBtn      = document.getElementById("run-btn");
+      const resetBtn    = document.getElementById("reset-btn");
+
+      function renderSql() {
+        const s = steps[step] || steps[steps.length - 1];
+        sqlEl.innerHTML = s.sql;
+        stepNumEl.textContent = String(Math.min(step + 1, steps.length));
+        explainEl.textContent = s.explain;
+        // Step strip
+        stepStripEl.innerHTML = steps.map((_, i) => {
+          const cls = i < step ? "done" : i === step ? "active" : "";
+          return `<div class="step-dot ${cls}">${i + 1}</div>`;
+        }).join("");
+        runBtn.textContent = step >= steps.length ? "Done ✓" : "Run next ▶";
+        runBtn.disabled = step >= steps.length;
+      }
+
+      function renderTable() {
+        if (state.columns.length === 0) {
+          tableHost.innerHTML = `<div class="empty">No table yet — press Run.</div>`;
+          return;
+        }
+        const head = state.columns.map(c => `
+          <th>
+            ${c.name}${c.pk ? " *" : ""}
+            <span class="type">${c.type}</span>
+          </th>
+        `).join("");
+        const body = state.rows.length === 0
+          ? `<tr><td colspan="${state.columns.length}" class="empty">Drawer is empty — no rows yet.</td></tr>`
+          : state.rows.map(r => {
+              const isNew = state.newRowIds.includes(r.id);
+              return `<tr class="${isNew ? 'new' : ''}">${state.columns.map(c => `<td>${r[c.name] ?? "<i style=color:#71717a>NULL</i>"}</td>`).join("")}</tr>`;
+            }).join("");
+        tableHost.innerHTML = `
+          <table class="table">
+            <thead><tr>${head}</tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+          <div style="font-size:0.74rem;color:#71717a;margin-top:0.4rem;">* primary key</div>
+        `;
+      }
+
+      function render() {
+        renderSql();
+        renderTable();
+      }
+
+      runBtn.addEventListener("click", () => {
+        if (step >= steps.length) return;
+        state.newRowIds = [];
+        steps[step].apply(state);
+        step += 1;
+        render();
+      });
+
+      resetBtn.addEventListener("click", () => {
+        step = 0;
+        state = { columns: [], rows: [], newRowIds: [] };
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

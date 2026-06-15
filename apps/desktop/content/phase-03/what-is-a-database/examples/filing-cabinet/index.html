@@ -1,0 +1,208 @@
+<!--
+  A visual rendering of the filing-cabinet analogy: a "customers" table
+  with rows (folders). Click any row to "open the folder" and see the
+  column-by-column data. Toggle a schema view to see the cabinet's
+  contract — what columns exist + their types + constraints.
+
+  Purpose: lets the student see a database table as a physical object
+  before SQL syntax shows up.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The filing cabinet — a database table, rendered</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .actions { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+      .actions button {
+        padding: 0.4rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.83rem;
+      }
+      .actions button:hover { background: #f4f4f5; }
+      .actions button.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1rem; }
+
+      /* The cabinet (left) */
+      .cabinet {
+        border: 1px solid #c7c7cc; border-radius: 8px; padding: 0.8rem;
+        background: linear-gradient(180deg, #f4f4f5 0%, #e4e4e7 100%);
+      }
+      .cabinet h2 {
+        margin: 0 0 0.5rem; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .drawer-label {
+        font-family: ui-monospace, monospace; font-size: 1rem; font-weight: 700;
+        margin-bottom: 0.6rem;
+      }
+      .folders { display: flex; flex-direction: column; gap: 0.3rem; }
+      .folder {
+        background: #fff; border: 1px solid #d4d4d8; border-left: 4px solid #b45309;
+        padding: 0.5rem 0.7rem; cursor: pointer; border-radius: 0 4px 4px 0;
+        display: flex; align-items: center; justify-content: space-between;
+        transition: transform 80ms ease;
+      }
+      .folder:hover { transform: translateX(2px); background: #fef3c7; }
+      .folder.active { background: #fef3c7; border-left-color: #92400e; }
+      .folder .row-id { color: #71717a; font-family: ui-monospace, monospace; font-size: 0.75rem; }
+      .folder .row-label { font-weight: 600; font-size: 0.92rem; }
+
+      /* The detail / schema panel (right) */
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fff; min-height: 22rem; }
+      .panel h2 {
+        margin: 0 0 0.75rem; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .field {
+        display: grid; grid-template-columns: 8rem 1fr; gap: 0.6rem; align-items: baseline;
+        padding: 0.5rem 0; border-bottom: 1px dashed #e4e4e7; font-size: 0.88rem;
+      }
+      .field .col-name { font-family: ui-monospace, monospace; color: #52525b; font-size: 0.78rem; }
+      .field .col-value { color: #18181b; }
+      .badge {
+        font-size: 0.66rem; padding: 1px 6px; border-radius: 999px;
+        font-family: ui-monospace, monospace; margin-left: 0.4rem;
+      }
+      .b-pk { background: #fef3c7; color: #92400e; }
+      .b-uq { background: #dbeafe; color: #1e40af; }
+      .b-fk { background: #f3e8ff; color: #6b21a8; }
+      .b-nn { background: #dcfce7; color: #166534; }
+      .b-null { background: #f4f4f5; color: #71717a; }
+      .type {
+        font-family: ui-monospace, monospace; font-size: 0.72rem; color: #71717a;
+        background: #f4f4f5; padding: 1px 6px; border-radius: 3px;
+      }
+      .schema-row {
+        display: grid; grid-template-columns: 8rem auto 1fr; gap: 0.5rem; padding: 0.45rem 0;
+        border-bottom: 1px dashed #e4e4e7; font-size: 0.83rem;
+      }
+      .schema-row .col-n { font-family: ui-monospace, monospace; color: #18181b; }
+      .help {
+        font-size: 0.78rem; color: #71717a; margin-top: 0.7rem;
+        padding: 0.6rem 0.8rem; background: #f4f4f5; border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>customers — a table, rendered as a drawer</h1>
+    <p>This is the "Customers" drawer of the cabinet. Each row of the table is a folder. Click one to open it and see the columns inside. Toggle <strong>schema view</strong> to see what columns the cabinet enforces — the contract.</p>
+
+    <div class="actions">
+      <button id="view-rows" class="active" type="button">View rows (folders)</button>
+      <button id="view-schema" type="button">View schema (the contract)</button>
+    </div>
+
+    <div class="grid">
+      <div class="cabinet">
+        <h2>Drawer</h2>
+        <div class="drawer-label">📁 customers</div>
+        <div class="folders" id="folders"></div>
+        <div class="help">Each folder ↑ is a row. The drawer's label (<code>customers</code>) is the table name.</div>
+      </div>
+
+      <div class="panel" id="panel"></div>
+    </div>
+
+    <script>
+      const columns = [
+        { name: "id",         type: "serial",       constraints: ["primary key"], badge: "pk", note: "Auto-generated, unique, the row's identity." },
+        { name: "email",      type: "varchar(255)", constraints: ["unique", "not null"], badge: "uq", note: "Used for sign-in; the cabinet refuses two rows with the same email." },
+        { name: "name",       type: "text",         constraints: ["not null"], badge: "nn", note: "Required — every customer has a name." },
+        { name: "phone",      type: "varchar(20)",  constraints: ["nullable"], badge: "null", note: "Optional — newer rows may have it, older ones may not." },
+        { name: "signup_at",  type: "timestamptz",  constraints: ["not null"], badge: "nn", note: "When the row was created. Filled by default at insert time." },
+        { name: "country",    type: "varchar(2)",   constraints: ["nullable"], badge: "null", note: "ISO 2-letter country code, optional." },
+      ];
+
+      const rows = [
+        { id: 1,  email: "ava@studio.io",   name: "Ava Cole",       phone: "+1 415 555 0114", signup_at: "2026-03-18T09:22:00Z", country: "US" },
+        { id: 2,  email: "ben@nyhouse.co",  name: "Ben Okonkwo",    phone: null,              signup_at: "2026-04-02T14:01:00Z", country: "US" },
+        { id: 3,  email: "lia@workd.es",    name: "Lia Hernández",  phone: "+34 600 555 044", signup_at: "2026-04-19T11:38:00Z", country: "ES" },
+        { id: 4,  email: "kai@studio.io",   name: "Kai Sato",       phone: "+81 90 1234 5678", signup_at: "2026-05-07T03:15:00Z", country: "JP" },
+        { id: 5,  email: "ros@workd.es",    name: "Rosa Pérez",     phone: null,              signup_at: "2026-05-21T16:45:00Z", country: "ES" },
+        { id: 6,  email: "ben2@ny.co",      name: "Ben Liu",        phone: "+1 212 555 0006", signup_at: "2026-06-01T19:09:00Z", country: "US" },
+      ];
+
+      let mode = "rows";
+      let selected = rows[0].id;
+
+      const foldersEl  = document.getElementById("folders");
+      const panelEl    = document.getElementById("panel");
+      const viewRowsBtn   = document.getElementById("view-rows");
+      const viewSchemaBtn = document.getElementById("view-schema");
+
+      function renderFolders() {
+        foldersEl.innerHTML = rows.map(r => `
+          <div class="folder ${r.id === selected && mode === 'rows' ? 'active' : ''}" data-id="${r.id}">
+            <span class="row-label">${r.name}</span>
+            <span class="row-id">id ${r.id}</span>
+          </div>
+        `).join("");
+        foldersEl.querySelectorAll(".folder").forEach(el => {
+          el.addEventListener("click", () => {
+            selected = Number(el.dataset.id);
+            mode = "rows";
+            render();
+          });
+        });
+      }
+
+      function renderRowDetail() {
+        const row = rows.find(r => r.id === selected);
+        if (!row) {
+          panelEl.innerHTML = `<h2>Folder — select one ←</h2>`;
+          return;
+        }
+        const fmt = (v) => v === null ? `<span class="badge b-null">NULL</span>` : v;
+        panelEl.innerHTML = `
+          <h2>Folder — row id ${row.id}</h2>
+          ${columns.map(c => `
+            <div class="field">
+              <span class="col-name">${c.name} <span class="type">${c.type}</span></span>
+              <span class="col-value">${fmt(row[c.name])}</span>
+            </div>
+          `).join("")}
+          <div class="help">Each line ↑ is one column. The <code>type</code> tag is what the cabinet enforces (the <code>email</code> field has to be text, the <code>id</code> field has to be a number). Try clicking a different folder on the left.</div>
+        `;
+      }
+
+      function renderSchema() {
+        panelEl.innerHTML = `
+          <h2>Schema — the cabinet's contract</h2>
+          ${columns.map(c => `
+            <div class="schema-row">
+              <span class="col-n">${c.name}</span>
+              <span class="type">${c.type}</span>
+              <span>
+                ${c.constraints.map(con => `<span class="badge b-${c.badge}">${con}</span>`).join("")}
+                <span style="color:#71717a">${c.note}</span>
+              </span>
+            </div>
+          `).join("")}
+          <div class="help">
+            The schema is the cabinet's rulebook — declared once, enforced on every insert and update.
+            <br/><br/>
+            <strong>primary key</strong>: the unique row identity (no two rows share it; auto-generated).<br/>
+            <strong>unique</strong>: the cabinet rejects a second row with the same value.<br/>
+            <strong>not null</strong>: a value is required at insert time.<br/>
+            <strong>nullable</strong>: missing is allowed (rendered as <code>NULL</code> in row view).
+          </div>
+        `;
+      }
+
+      function render() {
+        viewRowsBtn.classList.toggle("active",   mode === "rows");
+        viewSchemaBtn.classList.toggle("active", mode === "schema");
+        renderFolders();
+        if (mode === "rows") renderRowDetail();
+        else renderSchema();
+      }
+
+      viewRowsBtn.addEventListener("click", () => { mode = "rows"; render(); });
+      viewSchemaBtn.addEventListener("click", () => { mode = "schema"; render(); });
+
+      render();
+    </script>
+  </body>
+</html>

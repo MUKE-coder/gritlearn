@@ -1,0 +1,327 @@
+## SQL basics — tables, rows, columns
+
+SQL (pronounced "ess-cue-ell" or "sequel" — both common) is the language you use to talk to a relational database. It's been the standard for fifty years; you learn it once and it transfers to every Postgres, MySQL, SQLite, SQL Server, and managed cloud database you'll ever touch. Even when you use Prisma (the next batch) to query from TypeScript, what Prisma sends over the wire to Postgres is SQL — knowing SQL means you can read what Prisma is doing, debug it when something looks off, and reach past Prisma when you need a query the ORM can't express.
+
+This concept covers the half of SQL that *creates and changes* — `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`. The next concept (`sql-queries`) covers the half that *asks questions* — `SELECT`, `WHERE`, `JOIN`.
+
+<Analogy>
+SQL is **a precise dialect for talking to the filing cabinet.** Every sentence is one of a small number of verbs, in the same order, every time. You're not having a conversation with the cabinet; you're issuing instructions, and the cabinet does exactly what you asked — nothing more, nothing less.
+
+There are four verbs you use to *change* the cabinet's contents:
+
+- **`CREATE TABLE`** — tell the cabinet "open a new drawer called X, with these tabs on every folder." This defines the shape of the table — its **schema**.
+- **`INSERT`** — slide a new folder into a drawer. You provide the values for each tab; the cabinet checks they match the shape.
+- **`UPDATE`** — pull a folder, change the values on some tabs, slide it back.
+- **`DELETE`** — pull a folder and shred it.
+
+Each verb follows the same rigid grammar:
+
+```sql
+CREATE TABLE <name> ( <columns and their types> );
+
+INSERT INTO <name> ( <column names> ) VALUES ( <values> );
+
+UPDATE <name> SET <col> = <value>, <col> = <value> WHERE <condition>;
+
+DELETE FROM <name> WHERE <condition>;
+```
+
+Three rules that govern all four:
+
+1. **Statements end with a semicolon.** The cabinet sees the semicolon as "ok, I have a complete instruction, execute it." Without it, you're mid-sentence; the cabinet waits for more.
+
+2. **Keywords are case-insensitive, but conventionally UPPER CASE.** `select * from users` and `SELECT * FROM users` are identical. Convention: UPPER for SQL keywords, lower_snake_case for your table and column names. The contrast makes the structure pop on a long query.
+
+3. **String values use single quotes**, not double. `'hello'` is a string; `"hello"` is (in Postgres) a column name with weird spaces in it. This trips up every JavaScript developer once. Doubled single quotes inside a string escape: `'it''s'` is the string `it's`.
+
+The grammar is the whole interface. There are no methods, no callbacks, no objects. Just instruction lines, executed one at a time against a piece of furniture sitting in your data center.
+</Analogy>
+
+### `CREATE TABLE` — build the drawer
+
+```sql
+CREATE TABLE users (
+  id          serial      PRIMARY KEY,
+  email       varchar(255) UNIQUE NOT NULL,
+  name        text         NOT NULL,
+  bio         text,
+  created_at  timestamptz  NOT NULL DEFAULT now()
+);
+```
+
+Read top to bottom:
+
+- **`users`** — the table name. By convention, plural and lowercase. The folder drawer that will hold many user rows.
+- Each line inside the parentheses is one column. The shape is `<column_name>  <type>  <constraints>`.
+
+Walk through the columns:
+
+- **`id  serial  PRIMARY KEY`**
+  - `serial` is a Postgres shortcut for "an integer that auto-increments on every insert." First row gets `id = 1`, second gets `2`, etc. You don't supply this value; the database picks it.
+  - `PRIMARY KEY` means this column uniquely identifies the row. No two rows can share an `id`. Every table has exactly one primary key (sometimes spanning multiple columns; usually just `id`).
+
+- **`email  varchar(255)  UNIQUE NOT NULL`**
+  - `varchar(255)` is text capped at 255 characters. Postgres also accepts plain `text` (no limit) which is more idiomatic; you'll see both in the wild.
+  - `UNIQUE` — no two rows can have the same email. The cabinet rejects the second insert.
+  - `NOT NULL` — the value is required. Without this constraint, the column accepts `NULL` (meaning "no value").
+
+- **`name  text  NOT NULL`** — text of any length, required.
+
+- **`bio  text`** — text, optional. No `NOT NULL`, so `NULL` is allowed.
+
+- **`created_at  timestamptz  NOT NULL DEFAULT now()`**
+  - `timestamptz` = "timestamp with time zone." Stores a moment in time, always in UTC.
+  - `DEFAULT now()` — if the insert doesn't supply this, Postgres fills it with the current time. Means you almost never have to write `created_at` in your `INSERT` statements.
+
+### Column types — the common dozen
+
+You'll meet many type names but lean on a small set every day:
+
+| Type | What it holds | Example |
+|--|--|--|
+| `serial` / `bigserial` | Auto-incrementing integer (primary keys) | `1, 2, 3, ...` |
+| `int` / `integer` | Whole numbers | `42` |
+| `bigint` | Large whole numbers (8 bytes) | `9999999999` |
+| `numeric(p, s)` | Exact decimal — for money | `19.99` |
+| `text` | Text of any length | `'Hello, world'` |
+| `varchar(n)` | Text up to n characters | `'abc'` |
+| `boolean` | True / false | `true`, `false` |
+| `timestamptz` | Moment in time with time zone | `'2026-06-16 10:30:00+00'` |
+| `date` | Just a calendar date | `'2026-06-16'` |
+| `uuid` | A 128-bit unique identifier | `'a3b9c8...'` |
+| `jsonb` | Arbitrary JSON, indexable | `'{"theme":"dark"}'` |
+
+Rules of thumb:
+
+- **For money, use `numeric(12, 2)`** (12 total digits, 2 after the decimal). NEVER use `float` / `double` — they're inexact and `0.1 + 0.2 ≠ 0.3` is a real bug that has cost companies real money.
+- **For timestamps, always use `timestamptz`** (with time zone). The non-tz variant `timestamp` stores naked numbers without context and you'll regret it the first time the server moves to a different time zone.
+- **For IDs, `serial` is fine for small apps**; cloud-modern apps often use `uuid` (so IDs are not guessable / are unique across multiple machines).
+- **`jsonb` is for genuinely variable shapes** (user preferences, an arbitrary metadata blob). It's tempting to use it as "schemaless escape hatch" — resist. If the shape is known, give it real columns.
+
+### `INSERT` — slide a folder in
+
+```sql
+INSERT INTO users (email, name, bio)
+VALUES ('ava@studio.io', 'Ava Cole', 'Designer based in Tokyo');
+```
+
+You don't supply `id` or `created_at` — those are auto-filled (`serial` + `DEFAULT now()`). Only the columns you list get values.
+
+Insert multiple rows in one statement:
+
+```sql
+INSERT INTO users (email, name) VALUES
+  ('ava@studio.io',   'Ava Cole'),
+  ('ben@nyhouse.co',  'Ben Okonkwo'),
+  ('lia@workd.es',    'Lia Hernández');
+```
+
+One round-trip to the database, three rows inserted. Faster than three separate `INSERT` statements.
+
+Get the inserted row back (Postgres-specific syntax — useful for grabbing the auto-generated `id`):
+
+```sql
+INSERT INTO users (email, name)
+VALUES ('kai@studio.io', 'Kai Sato')
+RETURNING id, created_at;
+```
+
+`RETURNING` makes the `INSERT` behave like a `SELECT` of the freshly-inserted row. Without it, you'd have to insert and then immediately query by the values you just supplied to find out what `id` Postgres assigned.
+
+### `UPDATE` — change a folder's contents
+
+```sql
+UPDATE users
+SET    bio = 'Updated bio text'
+WHERE  id = 4;
+```
+
+Three parts:
+- **`UPDATE <table>`** — which drawer.
+- **`SET <col> = <value>, <col> = <value>, ...`** — what changes.
+- **`WHERE <condition>`** — which rows to apply it to.
+
+The `WHERE` clause is the most important part of any `UPDATE`. **Without it, every row in the table gets updated.** A typo'd missing `WHERE` is one of the canonical "junior dev wipes production" stories — `UPDATE users SET bio = 'hi'` runs against every user row in the database.
+
+Update multiple columns at once:
+
+```sql
+UPDATE users
+SET    name = 'Kai S. Sato',
+       bio  = 'Designer, NYC'
+WHERE  id = 4;
+```
+
+Return the changed rows:
+
+```sql
+UPDATE users SET bio = 'new bio' WHERE id = 4 RETURNING *;
+```
+
+`*` means "all columns of the affected rows." Useful for confirming the update did what you expected.
+
+### `DELETE` — pull a folder and shred it
+
+```sql
+DELETE FROM users WHERE id = 4;
+```
+
+Same lesson as `UPDATE`: **always include `WHERE`.** `DELETE FROM users;` (no `WHERE`) empties the entire table.
+
+Conditional deletes look like `WHERE` clauses you'd write for `SELECT`:
+
+```sql
+DELETE FROM users WHERE created_at < '2024-01-01';   -- old accounts
+DELETE FROM users WHERE bio IS NULL;                 -- no bio set
+```
+
+### Constraints — the cabinet's enforcement rules
+
+When you wrote `UNIQUE` and `NOT NULL` and `PRIMARY KEY` in the table definition, you taught the cabinet rules. Those rules are checked on every insert / update. A few more you'll meet:
+
+- **`CHECK (condition)`** — arbitrary boolean. `CHECK (price >= 0)` refuses negative prices.
+- **`DEFAULT <value>`** — fill missing values on insert. `created_at  timestamptz  DEFAULT now()`.
+- **`REFERENCES <table>(<column>)`** — foreign key. The most important constraint for relational data.
+
+A foreign key:
+
+```sql
+CREATE TABLE posts (
+  id         serial       PRIMARY KEY,
+  user_id    int          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title      text         NOT NULL,
+  body       text,
+  created_at timestamptz  NOT NULL DEFAULT now()
+);
+```
+
+`user_id  REFERENCES users(id)` says: every value in `posts.user_id` must match some `users.id`. The cabinet refuses to insert a post with a user_id of `999` if there's no user with id `999`. This is the integrity guarantee that makes relational data trustable.
+
+`ON DELETE CASCADE` says: when a user row is deleted, automatically delete all their posts too. Without it, you'd get a foreign-key violation when you tried to delete the user. Other options:
+
+- `ON DELETE RESTRICT` — refuse to delete the user if posts reference them (the default).
+- `ON DELETE SET NULL` — set `posts.user_id` to `NULL` (only works if `user_id` is nullable).
+
+### A complete schema, in one go
+
+A small blog backend in 30 lines:
+
+```sql
+CREATE TABLE users (
+  id         serial       PRIMARY KEY,
+  email      text         UNIQUE NOT NULL,
+  name       text         NOT NULL,
+  created_at timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE posts (
+  id           serial       PRIMARY KEY,
+  user_id      int          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title        text         NOT NULL,
+  body         text,
+  published_at timestamptz,
+  created_at   timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE comments (
+  id         serial       PRIMARY KEY,
+  post_id    int          NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id    int          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       text         NOT NULL,
+  created_at timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX posts_user_id_idx    ON posts(user_id);
+CREATE INDEX comments_post_id_idx ON comments(post_id);
+```
+
+The two `CREATE INDEX` lines at the bottom are a small extra — they tell Postgres to maintain a sorted lookup structure for those columns, so queries like "all posts by user 7" run in milliseconds even when the table has millions of rows. The general rule: index any column you frequently filter (`WHERE user_id = ?`) or join on. Postgres doesn't auto-create indexes for foreign keys; you do it explicitly.
+
+### `NULL` — the absence of a value
+
+`NULL` is not a value. It means "we don't know" or "not applicable." This has two surprising consequences:
+
+1. **`NULL != NULL`.** Comparing two unknown values doesn't give true; it gives `NULL` (we don't know if they're equal). To test for absence, use `IS NULL`, not `= NULL`:
+
+   ```sql
+   SELECT * FROM users WHERE bio IS NULL;       -- correct
+   SELECT * FROM users WHERE bio = NULL;        -- wrong — always returns no rows
+   ```
+
+2. **Arithmetic with `NULL` is `NULL`.** `5 + NULL` is `NULL`. `'hello' || NULL` is `NULL`. The `COALESCE(value, default)` function takes the first non-NULL argument:
+
+   ```sql
+   SELECT COALESCE(bio, 'No bio yet') FROM users;
+   ```
+
+`NULL` is so error-prone that strict shops mark every column `NOT NULL` unless they have a specific reason to allow it.
+
+### Migrations — schema changes over time
+
+The schema you write on day one will change as you build. You'll add columns, rename columns, change types, drop tables. These changes are called **migrations**, and they're tracked in version control just like code.
+
+You won't write raw `ALTER TABLE` statements much — Prisma (next batch) generates them for you when you change the schema file. But knowing what's happening underneath: every change goes through `ALTER`:
+
+```sql
+ALTER TABLE users ADD COLUMN avatar_url text;
+ALTER TABLE users DROP COLUMN bio;
+ALTER TABLE users ALTER COLUMN name SET NOT NULL;
+ALTER TABLE users RENAME COLUMN bio TO biography;
+```
+
+Rules to live by:
+
+- **Migrations only move forward.** Once a migration ships to production, you write a new one to undo it — you don't edit the old one. The git log of your migrations is the history of your database shape.
+- **Never delete a column with live data without a back-out plan.** Drop the column in a follow-up migration after a release, so you can roll back the release if something breaks.
+- **Adding a `NOT NULL` column to a non-empty table needs a default.** Either provide one, or the migration fails on the existing rows that have no value.
+
+The "real database" lesson (`postgres-prisma`) covers Prisma's migration workflow — you change the schema file, Prisma writes the SQL, you review it, you run it.
+
+<ExampleProject
+  src="create-and-insert"
+  title="Build a table, then insert rows"
+  description="Step-by-step interactive: walks you through CREATE TABLE for a 'products' schema, then INSERT for three rows. Each SQL statement is highlighted and explained as you press Run. The cabinet builds in real time on the right."
+/>
+
+<Exercise
+  title="Write CREATE TABLE for an e-commerce database"
+  starter={`Write the SQL — actual valid Postgres — for an online store with four
+tables. Don't worry about getting every constraint perfect; focus on the
+shape.
+
+The tables:
+
+  customers
+    id, email (unique), name, created_at
+
+  products
+    id, name, price (money — use numeric(10, 2)), stock (int), description (text), created_at
+
+  orders
+    id, customer_id (foreign key to customers), total (numeric(10, 2)),
+    status (text — 'pending', 'paid', 'shipped'), created_at
+
+  order_items
+    id, order_id (foreign key to orders), product_id (foreign key to
+    products), quantity (int), unit_price (numeric(10, 2))
+
+Constraints to include:
+
+  - Every primary key is 'serial PRIMARY KEY'.
+  - Every email, every product name, every status — NOT NULL.
+  - Foreign keys use REFERENCES ... ON DELETE CASCADE (when the customer
+    is deleted, all their orders + order items go too).
+  - Add a CHECK constraint on products.stock to forbid negative stock.
+  - Add a CHECK on order_items.quantity to enforce >= 1.
+
+Then write three INSERT statements:
+
+  1. Insert two customers.
+  2. Insert three products.
+  3. Insert one order for customer 1 with two order_items (one for each
+     of two products, with different quantities and unit_prices).
+
+Read what you wrote out loud. Does the structure match the cabinet you
+drew in the previous concept's exercise? The CREATE TABLE statements are
+how the cabinet sketch becomes real.`}
+/>

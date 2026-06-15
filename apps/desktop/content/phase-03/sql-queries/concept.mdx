@@ -1,0 +1,482 @@
+## SQL queries — SELECT, WHERE, JOIN
+
+You've built a schema (`sql-basics`) and inserted some rows. Now the most useful half of SQL: **asking the cabinet questions**. The verbs:
+
+- **`SELECT`** — read rows from a table. The verb you'll write 100× more than any other.
+- **`WHERE`** — narrow the rows down by a condition.
+- **`ORDER BY`** + **`LIMIT`** — sort and truncate.
+- **`JOIN`** — combine rows from two tables on a matching column.
+- Aggregates: **`COUNT`**, **`SUM`**, **`AVG`**, **`MAX`**, **`MIN`** + **`GROUP BY`** — count, sum, summarise.
+
+Master these and you can answer ~95% of the questions a web app asks of its database. The remaining 5% is fancier stuff (window functions, common table expressions, full-text search) that you reach for when you actually need it.
+
+<Analogy>
+A query is **a request you hand to the cabinet, written in the form of a question with filters.**
+
+Imagine you walk up to the cabinet and want all the customers who signed up in May. You can't say "give me May's customers." The cabinet doesn't understand prose. You have to phrase it in the cabinet's grammar:
+
+```
+FROM the customers drawer
+PICK the rows
+WHERE signup_at is between May 1 and May 31
+RETURN the name, email, and signup_at columns
+ORDER BY signup_at ascending.
+```
+
+That's almost word-for-word a SQL query — just with the clause order rearranged because SQL was designed in the 1970s:
+
+```sql
+SELECT   name, email, signup_at         -- what columns to bring back
+FROM     customers                       -- which drawer
+WHERE    signup_at >= '2026-05-01'       -- filter by row
+  AND    signup_at <  '2026-06-01'
+ORDER BY signup_at ASC;                   -- sort
+```
+
+Every query has the same structure: **what** (SELECT), **from where** (FROM), **filtered by** (WHERE), **sorted** (ORDER BY), **limited** (LIMIT). Different combinations of those five clauses cover almost every question a web app needs to answer.
+
+Think of each clause as a stage in a pipeline:
+
+```
+   ┌──────────────┐
+   │ all rows of  │  ← FROM customers
+   │  customers   │
+   └──────┬───────┘
+          │  filter
+          ▼
+   ┌──────────────┐
+   │ rows where   │  ← WHERE signup_at BETWEEN ...
+   │ condition is │
+   │     true     │
+   └──────┬───────┘
+          │  reshape (only some columns)
+          ▼
+   ┌──────────────┐
+   │ name, email, │  ← SELECT name, email, signup_at
+   │ signup_at    │
+   └──────┬───────┘
+          │  sort
+          ▼
+   ┌──────────────┐
+   │  ordered by  │  ← ORDER BY signup_at
+   │  signup_at   │
+   └──────┬───────┘
+          │  truncate
+          ▼
+   ┌──────────────┐
+   │ first N rows │  ← LIMIT 50
+   └──────────────┘
+```
+
+The query starts wide (every row in the table) and narrows down through each clause until you have exactly the slice of data you wanted. Each `SELECT` you write is just choosing which stages to include and what each stage's rule is.
+</Analogy>
+
+### `SELECT` — the minimum query
+
+The smallest possible query:
+
+```sql
+SELECT * FROM users;
+```
+
+`*` means "every column." Returns every row of `users` with every column. Use it for exploration; for production code, list the columns explicitly so the query keeps working when someone adds a new column to the table:
+
+```sql
+SELECT id, email, name, created_at FROM users;
+```
+
+Smaller result + clearer intent + immune to schema additions.
+
+Rename columns in the output:
+
+```sql
+SELECT
+  id,
+  email,
+  created_at AS signed_up
+FROM users;
+```
+
+`AS` (the keyword is optional but conventional) lets the output column have a different name from the underlying column. Useful for display and for working with reserved SQL words.
+
+### `WHERE` — pick rows
+
+```sql
+SELECT * FROM users WHERE id = 4;            -- exactly one row
+SELECT * FROM posts WHERE published_at IS NOT NULL;
+SELECT * FROM products WHERE price_cents > 1000;
+SELECT * FROM users WHERE email LIKE '%@studio.io';
+```
+
+The grammar after `WHERE` is a boolean expression. Some operators:
+
+| Operator | Meaning |
+|--|--|
+| `=` | Equals |
+| `!=` or `<>` | Not equals |
+| `<`, `>`, `<=`, `>=` | Comparison |
+| `BETWEEN x AND y` | Between two values (inclusive) |
+| `IN (a, b, c)` | Value is in this list |
+| `LIKE 'pat%'` | Pattern matching (`%` = any sequence, `_` = single char) |
+| `ILIKE 'pat%'` | Case-insensitive `LIKE` (Postgres-specific) |
+| `IS NULL` / `IS NOT NULL` | Test for absent values |
+
+Combine with `AND`, `OR`, `NOT`:
+
+```sql
+SELECT * FROM products
+WHERE (stock = 0 OR stock > 1000)
+  AND price_cents BETWEEN 500 AND 5000;
+```
+
+Parentheses control precedence the same as in JavaScript. When in doubt, parenthesise — clarity beats brevity for the next reader.
+
+### `ORDER BY` — sort
+
+```sql
+SELECT * FROM users ORDER BY created_at DESC;        -- newest first
+SELECT * FROM products ORDER BY price_cents ASC;      -- cheapest first
+SELECT * FROM users ORDER BY name ASC, created_at DESC;
+```
+
+Multi-column sort: rows sort by the first column, then for ties by the second, etc. Common pattern: `ORDER BY priority DESC, created_at ASC` — high-priority first, oldest within each priority group.
+
+### `LIMIT` and `OFFSET` — pagination
+
+```sql
+SELECT * FROM users ORDER BY created_at DESC LIMIT 50;            -- first page
+SELECT * FROM users ORDER BY created_at DESC LIMIT 50 OFFSET 50;  -- second page
+```
+
+`LIMIT n` returns at most `n` rows; `OFFSET m` skips the first `m`. Combine for pagination: page 1 = `LIMIT 50 OFFSET 0`, page 2 = `LIMIT 50 OFFSET 50`, etc.
+
+For pages deep into a huge table, `OFFSET` gets slow (the database still has to skip those rows). The modern alternative is **cursor pagination**: `WHERE created_at < <last-seen-timestamp> LIMIT 50`. We'll meet that later in this curriculum.
+
+### `JOIN` — combine two tables
+
+This is the heart of why relational databases are so powerful. Two tables, related by a foreign key, fetched in one query.
+
+Setup. Two tables:
+
+```
+users:                            posts:
+  id | name                         id | user_id | title
+  ---+-----------                   ---+---------+----------------
+   1 | Alice                         101 |   1    | First post
+   2 | Bob                           102 |   1    | Second post
+   3 | Carla                         103 |   2    | Bob's only post
+```
+
+`posts.user_id` points at `users.id`. Each post has one author; each user can have many posts.
+
+Get every post with its author's name:
+
+```sql
+SELECT
+  posts.id,
+  posts.title,
+  users.name AS author
+FROM posts
+JOIN users ON users.id = posts.user_id;
+```
+
+Result:
+
+```
+ id  | title           | author
+ ----+-----------------+-------
+ 101 | First post      | Alice
+ 102 | Second post     | Alice
+ 103 | Bob's only post | Bob
+```
+
+What happened: the database walked through every row in `posts`, found the matching row in `users` (where `users.id = posts.user_id`), and stitched the two rows together side-by-side. The `SELECT` list then picks columns from either side. Carla doesn't appear because she has no posts.
+
+#### `INNER JOIN` vs. `LEFT JOIN` — the kinds of join
+
+Plain `JOIN` is `INNER JOIN` (the keyword `INNER` is optional). It returns only rows where the join matched on **both** sides.
+
+`LEFT JOIN` returns **every row from the left table**, with `NULL` filled in for the right side where there's no match.
+
+```sql
+-- Every user, with their posts (or NULL if they have no posts)
+SELECT
+  users.id,
+  users.name,
+  posts.title
+FROM users
+LEFT JOIN posts ON posts.user_id = users.id;
+```
+
+Result:
+
+```
+ id | name  | title
+ ---+-------+-----------------
+  1 | Alice | First post
+  1 | Alice | Second post
+  2 | Bob   | Bob's only post
+  3 | Carla | NULL
+```
+
+Carla shows up now — with `NULL` for `title` because there's no matching post. `LEFT JOIN` is the right call when "users with no posts" is meaningful for your question. `INNER JOIN` is the right call when you only care about pairs.
+
+There's also `RIGHT JOIN` and `FULL OUTER JOIN`; you'll meet them once a year. The 99% case is `INNER` and `LEFT`.
+
+#### Multi-table joins
+
+A query that joins three tables:
+
+```sql
+SELECT
+  comments.body,
+  users.name      AS commenter,
+  posts.title     AS on_post
+FROM comments
+JOIN users ON users.id = comments.user_id
+JOIN posts ON posts.id = comments.post_id
+WHERE posts.published_at IS NOT NULL
+ORDER BY comments.created_at DESC
+LIMIT 20;
+```
+
+Read top to bottom: start at `comments`, attach the author via `users`, attach the parent post via `posts`, filter to published posts only, sort newest first, take 20. The shape stays the same no matter how many tables you stack.
+
+#### Aliases — shorter table references
+
+For readability in long queries, alias each table:
+
+```sql
+SELECT
+  c.body,
+  u.name  AS commenter,
+  p.title AS on_post
+FROM comments c
+JOIN users u ON u.id = c.user_id
+JOIN posts p ON p.id = c.post_id
+WHERE p.published_at IS NOT NULL
+ORDER BY c.created_at DESC
+LIMIT 20;
+```
+
+`comments c` means "wherever I'd write `comments.something`, I can write `c.something`." A two-letter alias is the convention.
+
+### Aggregates — count, sum, average
+
+Sometimes you don't want individual rows; you want a number. **`COUNT`**, **`SUM`**, **`AVG`**, **`MIN`**, **`MAX`** are aggregate functions: they take many values and return one.
+
+```sql
+SELECT COUNT(*) FROM users;                         -- total user count
+SELECT COUNT(*) FROM users WHERE created_at > '2026-06-01';
+SELECT SUM(price_cents) FROM products;
+SELECT AVG(price_cents) FROM products;
+SELECT MAX(created_at) FROM users;                 -- most recent signup
+```
+
+Each returns one row, one column.
+
+### `GROUP BY` — aggregate per category
+
+The killer move: aggregate, but **per group**, not over everything.
+
+```sql
+SELECT
+  user_id,
+  COUNT(*) AS post_count
+FROM posts
+GROUP BY user_id
+ORDER BY post_count DESC;
+```
+
+Reads: "for each distinct `user_id` in `posts`, count the rows, return user_id + count, sorted by count." Result:
+
+```
+ user_id | post_count
+ --------+-----------
+       1 |          2
+       2 |          1
+```
+
+You can mix aggregates with join — the most common analytics query pattern:
+
+```sql
+SELECT
+  users.name,
+  COUNT(posts.id) AS posts
+FROM users
+LEFT JOIN posts ON posts.user_id = users.id
+GROUP BY users.id, users.name
+ORDER BY posts DESC;
+```
+
+"Every user, with their post count, sorted by who's posted most." Carla shows up with `posts = 0` because of the `LEFT JOIN`.
+
+`GROUP BY` rule: any column in your `SELECT` list that isn't inside an aggregate function must be in `GROUP BY`. The database refuses otherwise — there's no sensible way to display one value when each group has many.
+
+### `HAVING` — `WHERE` for groups
+
+`WHERE` filters individual rows before grouping. `HAVING` filters groups after aggregating.
+
+```sql
+SELECT
+  user_id,
+  COUNT(*) AS post_count
+FROM posts
+GROUP BY user_id
+HAVING COUNT(*) >= 5             -- only users with 5+ posts
+ORDER BY post_count DESC;
+```
+
+Mental model: `WHERE` runs on rows; `HAVING` runs on the results of the `GROUP BY`.
+
+### Subqueries — a query inside a query
+
+When you need the result of one query as input to another:
+
+```sql
+SELECT *
+FROM posts
+WHERE user_id IN (
+  SELECT id FROM users WHERE created_at > '2026-01-01'
+);
+```
+
+The inner query returns a list of user IDs. The outer query uses that list as the `IN` argument. Same result as a `JOIN`, often easier to read for read-only questions:
+
+```sql
+-- Equivalent JOIN
+SELECT posts.*
+FROM posts
+JOIN users ON users.id = posts.user_id
+WHERE users.created_at > '2026-01-01';
+```
+
+When the database has to materialise the inner result into a temporary table, `JOIN` is usually faster. For one-off scripts, write whichever is clearer.
+
+### Distinct rows
+
+```sql
+SELECT DISTINCT country FROM users ORDER BY country;
+```
+
+Returns one row per unique value. Useful for "what categories exist in this column."
+
+### Practical patterns — the queries you'll write every week
+
+A handful of patterns you'll keep returning to:
+
+```sql
+-- Newest 20 posts, with author name
+SELECT p.id, p.title, p.created_at, u.name AS author
+FROM posts p
+JOIN users u ON u.id = p.user_id
+WHERE p.published_at IS NOT NULL
+ORDER BY p.created_at DESC
+LIMIT 20;
+
+-- One user's latest 50 comments
+SELECT c.body, c.created_at, p.title AS on_post
+FROM comments c
+JOIN posts p ON p.id = c.post_id
+WHERE c.user_id = 42
+ORDER BY c.created_at DESC
+LIMIT 50;
+
+-- Per-month signup count, last year
+SELECT
+  date_trunc('month', created_at) AS month,
+  COUNT(*) AS signups
+FROM users
+WHERE created_at >= now() - interval '1 year'
+GROUP BY month
+ORDER BY month;
+
+-- Search by title (case-insensitive, partial)
+SELECT id, title
+FROM posts
+WHERE title ILIKE '%react%'
+ORDER BY created_at DESC
+LIMIT 10;
+
+-- Top-spending customers
+SELECT
+  c.id, c.name,
+  SUM(o.total) AS lifetime_value
+FROM customers c
+JOIN orders o ON o.customer_id = c.id
+WHERE o.status = 'paid'
+GROUP BY c.id, c.name
+HAVING SUM(o.total) > 1000
+ORDER BY lifetime_value DESC
+LIMIT 50;
+```
+
+Each is the same shape: choose columns, pick the table(s), join if you need data from elsewhere, filter, group if you're summarising, sort, limit. Internalise that order and SQL becomes muscle memory.
+
+### How to read someone else's query
+
+Long SQL can look daunting. The trick: read from `FROM` upward, not top-down.
+
+1. **`FROM`** — what tables.
+2. **`JOIN`** — how are they connected.
+3. **`WHERE`** — which rows pass the filter.
+4. **`GROUP BY` / `HAVING`** — how are rows grouped, then filtered.
+5. **`SELECT`** — what shape comes back.
+6. **`ORDER BY` / `LIMIT`** — sort and truncate.
+
+That's the *execution order* — what the database actually does — even though the *writing order* puts `SELECT` first. Once you've internalised the execution order, even unfamiliar queries decode quickly.
+
+### Query plans — when something's slow
+
+When a query becomes slow, prepend `EXPLAIN` to see how Postgres plans to execute it:
+
+```sql
+EXPLAIN ANALYZE
+SELECT u.name, COUNT(p.id) AS posts
+FROM users u
+LEFT JOIN posts p ON p.user_id = u.id
+GROUP BY u.id, u.name
+ORDER BY posts DESC;
+```
+
+You'll see lines like `Seq Scan on posts` (read every row — bad on a million-row table) or `Index Scan using posts_user_id_idx` (use the index — fast). The fix is usually `CREATE INDEX` on the column you're filtering or joining on. You don't need to read query plans on day one, but knowing they exist is the difference between "this is mysteriously slow" and "I'll add an index."
+
+<ExampleProject
+  src="query-playground"
+  title="Click together a query and see live results"
+  description="A small dataset (users, posts, comments) in your browser. Pick a table, add WHERE clauses, add a JOIN, choose ORDER BY + LIMIT — and the rendered SQL + the result table update in real time. Build the intuition for which clause does what before you have to write the SQL from memory."
+/>
+
+<Exercise
+  title="Five queries against a blog database"
+  starter={`Imagine the three tables from the sql-basics exercise (users, posts,
+comments). Write SQL for each of the following questions. Don't worry
+about your query being perfect — focus on choosing the right clauses.
+
+  1. List every post with its title, the author's name, and the
+     created_at timestamp. Sort newest first, limit 20.
+
+  2. Find every user who has zero comments. (Hint: LEFT JOIN comments,
+     filter to rows where comments.id IS NULL.)
+
+  3. For each post, return the post's title and the number of comments
+     on it. Sort by comment count descending. Include posts with zero
+     comments.
+
+  4. Find the email addresses of users who have commented on a post that
+     wasn't written by themselves. (One JOIN from comments to posts,
+     compare comments.user_id != posts.user_id.)
+
+  5. The five most recent comments, with the commenter's name, the
+     parent post's title, and the comment body. Multi-table JOIN.
+
+Reading your own queries out loud is the best test. "From posts, joined
+with users, filtered to published, sorted by created_at descending,
+first 20 rows" — if you can say it in English in that order, the SQL
+will follow.
+
+Save your queries somewhere. When we connect Postgres with Prisma (next
+batch), you'll see the same questions, but Prisma writes the SQL for
+you. Comparing your hand-written SQL with what Prisma generates is the
+fastest way to internalise both.`}
+/>

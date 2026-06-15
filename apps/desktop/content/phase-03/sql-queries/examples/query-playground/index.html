@@ -1,0 +1,304 @@
+<!--
+  Click-together SQL playground. Two tables (users, posts) of in-memory
+  data; controls let the student:
+    - choose the base table
+    - toggle WHERE clauses
+    - add an INNER or LEFT JOIN
+    - pick ORDER BY column + direction
+    - set LIMIT
+
+  As they tick controls, the rendered SQL on the left updates AND the
+  result table on the right re-runs. Lets them build intuition for
+  which clause does what before they have to write it from memory.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Query playground — click to build SQL</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-top: 1rem; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .panel h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .row { display: flex; align-items: center; gap: 0.4rem; margin: 0.35rem 0; }
+      .row label { font-size: 0.84rem; flex: 1; }
+      select, input[type="number"], input[type="text"] {
+        font-size: 0.83rem; padding: 0.22rem 0.4rem; border: 1px solid #d4d4d8;
+        border-radius: 4px; background: #fff; font-family: ui-sans-serif, system-ui;
+      }
+      input[type="checkbox"] { accent-color: #15803d; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.82rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .table {
+        width: 100%; border-collapse: collapse; font-size: 0.8rem;
+        font-family: ui-monospace, monospace; background: #fff; margin-top: 0.6rem;
+      }
+      .table th, .table td {
+        border: 1px solid #e4e4e7; padding: 0.32rem 0.55rem; text-align: left; vertical-align: top;
+      }
+      .table th {
+        background: #f4f4f5; font-weight: 600;
+      }
+      .table .null { color: #a1a1aa; font-style: italic; }
+      .result-meta {
+        font-size: 0.75rem; color: #71717a; margin-top: 0.6rem;
+      }
+      .section-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin: 0.7rem 0 0.3rem; }
+      .help {
+        font-size: 0.78rem; color: #92400e; padding: 0.5rem 0.7rem; background: #fef3c7;
+        border-left: 3px solid #f59e0b; border-radius: 4px; margin-top: 0.7rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Click together a query</h1>
+    <p>Pick the table, toggle a filter, add a JOIN — watch the SQL on the right and the result update live. <em>No real database</em>; the rows live in your browser.</p>
+
+    <div class="grid">
+      <!-- Controls -->
+      <div class="panel">
+        <h2>Controls</h2>
+        <div class="row">
+          <label for="base-table">FROM</label>
+          <select id="base-table">
+            <option value="posts">posts</option>
+            <option value="users">users</option>
+          </select>
+        </div>
+
+        <div class="section-title">WHERE</div>
+        <div class="row">
+          <input type="checkbox" id="w-published" />
+          <label for="w-published">published_at IS NOT NULL</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="w-recent" />
+          <label for="w-recent">created_at &gt;= '2026-05-01'</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="w-title" />
+          <label for="w-title">title ILIKE</label>
+          <input type="text" id="w-title-val" value="react" style="width:8rem;" />
+        </div>
+
+        <div class="section-title">JOIN users</div>
+        <div class="row">
+          <select id="join-kind">
+            <option value="none">no join</option>
+            <option value="inner">INNER JOIN</option>
+            <option value="left">LEFT JOIN</option>
+          </select>
+          <label>on posts.user_id = users.id</label>
+        </div>
+
+        <div class="section-title">ORDER BY</div>
+        <div class="row">
+          <select id="order-col">
+            <option value="">(none)</option>
+            <option value="created_at">created_at</option>
+            <option value="title">title</option>
+            <option value="id">id</option>
+          </select>
+          <select id="order-dir">
+            <option value="ASC">ASC</option>
+            <option value="DESC" selected>DESC</option>
+          </select>
+        </div>
+
+        <div class="section-title">LIMIT</div>
+        <div class="row">
+          <input type="number" id="limit" value="10" min="1" max="50" style="width:5rem;" />
+          <label>rows</label>
+        </div>
+
+        <div class="help">Try: ✔ <em>published_at IS NOT NULL</em>, INNER JOIN, ORDER BY <code>created_at</code> DESC, LIMIT 5. That's the "homepage feed" query.</div>
+      </div>
+
+      <!-- SQL + result -->
+      <div class="panel">
+        <h2>Generated SQL</h2>
+        <pre id="sql"></pre>
+
+        <h2 style="margin-top:1rem">Result</h2>
+        <div id="result"></div>
+        <div class="result-meta" id="result-meta"></div>
+      </div>
+    </div>
+
+    <script>
+      const users = [
+        { id: 1, name: "Ava Cole",      email: "ava@studio.io" },
+        { id: 2, name: "Ben Okonkwo",   email: "ben@nyhouse.co" },
+        { id: 3, name: "Lia Hernández", email: "lia@workd.es" },
+        { id: 4, name: "Kai Sato",      email: "kai@studio.io" },
+        { id: 5, name: "Rosa Pérez",    email: "ros@workd.es" },   // no posts
+      ];
+      const posts = [
+        { id: 101, user_id: 1, title: "React server components, finally",  published_at: "2026-05-12T11:00:00Z", created_at: "2026-05-12T10:30:00Z" },
+        { id: 102, user_id: 1, title: "Hooks I no longer use",              published_at: null,                    created_at: "2026-05-20T14:01:00Z" },
+        { id: 103, user_id: 2, title: "What I learned shipping at NyHouse", published_at: "2026-06-01T09:10:00Z", created_at: "2026-06-01T08:45:00Z" },
+        { id: 104, user_id: 3, title: "Postgres tricks every full-stack dev should know", published_at: "2026-04-22T16:00:00Z", created_at: "2026-04-22T15:30:00Z" },
+        { id: 105, user_id: 3, title: "Why I write SQL by hand",            published_at: "2026-06-09T07:20:00Z", created_at: "2026-06-09T07:00:00Z" },
+        { id: 106, user_id: 4, title: "React + TypeScript — taming generics", published_at: "2026-03-04T12:00:00Z", created_at: "2026-03-04T11:00:00Z" },
+        { id: 107, user_id: 4, title: "Drafting in public",                 published_at: null,                    created_at: "2026-06-13T18:55:00Z" },
+      ];
+
+      // ── controls ────────────────────────────────────────────────────
+      const $ = (id) => document.getElementById(id);
+      const ctl = {
+        baseTable: $("base-table"),
+        wPublished: $("w-published"),
+        wRecent:    $("w-recent"),
+        wTitle:     $("w-title"),
+        wTitleVal:  $("w-title-val"),
+        joinKind:   $("join-kind"),
+        orderCol:   $("order-col"),
+        orderDir:   $("order-dir"),
+        limit:      $("limit"),
+      };
+      Object.values(ctl).forEach((el) => el.addEventListener("input", render));
+
+      // ── query model ─────────────────────────────────────────────────
+      function buildQueryConfig() {
+        const base = ctl.baseTable.value;
+        const isPosts = base === "posts";
+        const wheres = [];
+        if (isPosts && ctl.wPublished.checked) wheres.push({ type: "published" });
+        if (ctl.wRecent.checked)                wheres.push({ type: "recent" });
+        if (isPosts && ctl.wTitle.checked)       wheres.push({ type: "title", val: ctl.wTitleVal.value });
+
+        return {
+          base,
+          joinKind: isPosts ? ctl.joinKind.value : "none",
+          wheres,
+          orderCol: ctl.orderCol.value,
+          orderDir: ctl.orderDir.value,
+          limit: Math.max(1, Math.min(50, Number(ctl.limit.value) || 10)),
+        };
+      }
+
+      // ── SQL render ──────────────────────────────────────────────────
+      function renderSql(q) {
+        const baseAlias = q.base === "posts" ? "p" : "u";
+        const isPosts = q.base === "posts";
+        const colsList = isPosts
+          ? (q.joinKind !== "none"
+              ? `p.id, p.title, p.created_at, u.name <span class="keyword">AS</span> author`
+              : `p.id, p.title, p.created_at, p.user_id`)
+          : `u.id, u.name, u.email`;
+
+        const lines = [];
+        lines.push(`<span class="keyword">SELECT</span>\n  ${colsList}`);
+        lines.push(`<span class="keyword">FROM</span>   ${q.base} ${baseAlias}`);
+
+        if (isPosts && q.joinKind !== "none") {
+          const kw = q.joinKind === "inner" ? "INNER JOIN" : "LEFT JOIN";
+          lines.push(`<span class="keyword">${kw}</span>  users u <span class="keyword">ON</span> u.id = p.user_id`);
+        }
+
+        if (q.wheres.length) {
+          const ws = q.wheres.map(w => {
+            if (w.type === "published") return `${baseAlias}.published_at <span class="keyword">IS NOT NULL</span>`;
+            if (w.type === "recent")    return `${baseAlias}.created_at &gt;= <span class="string">'2026-05-01'</span>`;
+            if (w.type === "title")     return `${baseAlias}.title <span class="keyword">ILIKE</span> <span class="string">'%${w.val || ''}%'</span>`;
+            return "";
+          });
+          lines.push(`<span class="keyword">WHERE</span>  ${ws.join(`\n  <span class="keyword">AND</span>    `)}`);
+        }
+
+        if (q.orderCol) {
+          lines.push(`<span class="keyword">ORDER BY</span> ${baseAlias}.${q.orderCol} <span class="keyword">${q.orderDir}</span>`);
+        }
+        lines.push(`<span class="keyword">LIMIT</span>  <span class="number">${q.limit}</span>;`);
+
+        document.getElementById("sql").innerHTML = lines.join("\n");
+      }
+
+      // ── execute against in-memory data ──────────────────────────────
+      function runQuery(q) {
+        const isPosts = q.base === "posts";
+        // Step 1 — pick source rows.
+        let rows;
+        if (isPosts) {
+          rows = posts.map(p => {
+            const author = users.find(u => u.id === p.user_id) || null;
+            return { ...p, user: author };
+          });
+        } else {
+          rows = users.map(u => ({ ...u }));
+        }
+        // Step 2 — JOIN behaviour (only meaningful for posts).
+        if (isPosts && q.joinKind === "none") {
+          // Don't surface author columns.
+          rows = rows.map(({ user, ...rest }) => rest);
+        }
+        // Step 3 — WHERE.
+        for (const w of q.wheres) {
+          if (w.type === "published") rows = rows.filter(r => r.published_at);
+          if (w.type === "recent")    rows = rows.filter(r => (r.created_at || "") >= "2026-05-01");
+          if (w.type === "title")     rows = rows.filter(r => (r.title || "").toLowerCase().includes((w.val || "").toLowerCase()));
+        }
+        // Step 4 — ORDER BY.
+        if (q.orderCol) {
+          rows.sort((a, b) => {
+            const av = a[q.orderCol] ?? "";
+            const bv = b[q.orderCol] ?? "";
+            if (av === bv) return 0;
+            const dir = q.orderDir === "DESC" ? -1 : 1;
+            return av > bv ? dir : -dir;
+          });
+        }
+        // Step 5 — LIMIT.
+        const limited = rows.slice(0, q.limit);
+        return { rows: limited, total: rows.length };
+      }
+
+      // ── result table render ─────────────────────────────────────────
+      function renderResult(q, exec) {
+        const host = document.getElementById("result");
+        if (exec.rows.length === 0) {
+          host.innerHTML = `<div style="font-size:0.82rem;color:#71717a;font-style:italic;padding:0.7rem 0;">No rows matched the filters.</div>`;
+          document.getElementById("result-meta").textContent = "0 rows";
+          return;
+        }
+        const isPosts = q.base === "posts";
+        const cols = isPosts
+          ? (q.joinKind !== "none"
+              ? ["id", "title", "created_at", "author"]
+              : ["id", "title", "created_at", "user_id"])
+          : ["id", "name", "email"];
+        const head = cols.map(c => `<th>${c}</th>`).join("");
+        const body = exec.rows.map(r => {
+          const cells = cols.map(c => {
+            let v;
+            if (c === "author") v = r.user ? r.user.name : `<span class="null">NULL</span>`;
+            else                v = (r[c] === null || r[c] === undefined) ? `<span class="null">NULL</span>` : String(r[c]);
+            return `<td>${v}</td>`;
+          }).join("");
+          return `<tr>${cells}</tr>`;
+        }).join("");
+        host.innerHTML = `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+        document.getElementById("result-meta").textContent = `${exec.rows.length} of ${exec.total} matching row${exec.total === 1 ? "" : "s"}`;
+      }
+
+      function render() {
+        const q = buildQueryConfig();
+        renderSql(q);
+        renderResult(q, runQuery(q));
+      }
+
+      render();
+    </script>
+  </body>
+</html>

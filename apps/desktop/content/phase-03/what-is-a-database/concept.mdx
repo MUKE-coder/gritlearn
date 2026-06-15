@@ -1,0 +1,246 @@
+## What a database is
+
+You've been storing data in memory — `const notes = new Map()` at the top of your route handler — and you've noticed the obvious problem: every time the server restarts, the notes disappear. The browser's `localStorage` survives a reload but it lives on *one user's machine* and dies with the browser cache. To build anything real — accounts that persist, posts other people can see, orders, comments, payments — you need a place outside your code where data lives. That place is a **database**.
+
+A database is software that does one thing, very well: it holds structured data on disk, lets many programs read and write to it at once, and guarantees that nothing gets lost or corrupted when things go wrong (crashes, power cuts, two requests writing the same row at the same time). Your Next.js server connects to it, asks questions, and gets answers back as data. Your code doesn't manage the storage; the database does.
+
+<Analogy>
+A database is **a filing cabinet for a busy office** — a piece of physical furniture built around three guarantees that an ordinary drawer can't make.
+
+Picture the cabinet. It has labeled drawers. Each drawer holds folders of the same shape. Each folder has tabs along the top edge showing what's inside. The cabinet sits in the middle of the office; people walk up to it, pull a folder, read or update its contents, and slide it back.
+
+Three things make this filing cabinet special, vs. a kitchen drawer:
+
+1. **Each drawer has a strict shape.** The "Customers" drawer only holds customer folders. Every customer folder has the same fields on its tab: name, phone, email, signup date. You cannot file a recipe in the Customers drawer — the cabinet refuses, the way a bank refuses a deposit slip with no account number. This is **schema**: the cabinet knows ahead of time what each kind of folder must contain, and the contents of every folder match.
+
+2. **No two people can damage a folder by writing to it at the same time.** When Maria walks up to update "Customer #47," the cabinet locks that folder for the half-second Maria's writing. If Tom arrives to read the same folder, the cabinet either makes him wait or hands him the previous version. Nobody ever sees a folder half-edited. This is **concurrency control**: even though hundreds of office workers (read: web requests) touch the cabinet at once, none of them can corrupt the data.
+
+3. **The cabinet can survive the building burning down.** Every change is journaled — written to a separate ledger — before the folder itself is touched. If the power goes out mid-write, the next time the cabinet is opened, it reads the ledger and finishes (or undoes) whatever was in flight. No half-changed folders. This is **durability** + **atomicity** (the "A" and "D" in ACID).
+
+Together — schema, concurrency control, durability — these are what make a database a *database* and not just "a file on disk." A `.json` file you `JSON.stringify` and write with `fs.writeFile` has none of them. Two requests writing to it at the same time will corrupt it within seconds in production. A crash mid-write leaves it in a broken state. The minute you have more than one user or one server process, you need the cabinet, not the kitchen drawer.
+
+In code:
+
+- **The database** is the cabinet itself — a separate program (Postgres, MySQL, SQLite, MongoDB) running on a machine somewhere.
+- **A table** is a drawer — "users," "posts," "orders."
+- **A row** is a folder — one customer, one post, one order.
+- **A column** is a tab/field on the folder — the customer's email, the post's title, the order's status.
+- **A schema** is the cabinet's labeling system — what drawers exist, what fields go on each folder, what the field types are.
+
+This concept covers the cabinet itself: why it's a separate piece of software, what guarantees it offers, and the two main families (relational vs. NoSQL). The next two concepts (`sql-basics`, `sql-queries`) cover the *language* you use to talk to the cabinet — SQL.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing the database sitting alongside the Next.js server, with the connection and the schema model"
+  caption="The database is a separate program. Your Next.js server connects to it the way a browser connects to your server."
+>
+
+```
+   ┌──────────────────────────────────┐
+   │  Your laptop / Vercel server     │
+   │  ┌────────────────────────────┐  │
+   │  │   Next.js process          │  │       network
+   │  │   (route handlers,         │  │  ─────connection──────┐
+   │  │    server components,      │  │                       │
+   │  │    server actions)         │  │                       ▼
+   │  └────────────────────────────┘  │           ┌────────────────────────┐
+   └──────────────────────────────────┘           │  Postgres / MySQL etc. │
+                                                  │  (a separate process,  │
+                                                  │   on its own port,     │
+                                                  │   reading/writing to   │
+                                                  │   disk on its host)    │
+                                                  └────────────────────────┘
+                                                            │
+                                                            ▼
+                                                       ┌─────────┐
+                                                       │  disk   │
+                                                       │  files  │
+                                                       └─────────┘
+
+   Inside the database, your data is organised by:
+     users  table → many user rows  → columns: id, email, name, createdAt
+     posts  table → many post rows  → columns: id, userId, title, body, publishedAt
+     orders table → many order rows → columns: id, userId, total, status
+```
+
+</Illustration>
+
+### Why not just write to a file?
+
+The instinct on day one is "I'll just save my data to `notes.json`." It works for one user, on your laptop, for ten minutes. It breaks the moment any of the following becomes true:
+
+1. **Two requests arrive at the same time.** Both read the file, both modify their in-memory copy, both write the file back. The second write wipes the first. The classic "lost update" bug, ten lines of `fs.writeFile` away.
+
+2. **The server crashes mid-write.** You wrote half the JSON to disk before the power cut. The file is now invalid JSON. Next start-up, `JSON.parse` throws. Your data is unreadable.
+
+3. **You deploy to Vercel.** Vercel's serverless functions don't have a writable disk — and even if they did, every request might land on a different instance. The file your last request wrote doesn't exist for the next request.
+
+4. **You need to find something.** "Get all the notes by user X" with a `.json` file means loading the whole file into memory, parsing it, iterating every row, filtering. For 100 notes, fine. For 100,000, the file won't fit in memory and the parse takes seconds. A database can answer that question in milliseconds because it has **indexes** — sorted lookup structures it maintains automatically.
+
+A database solves all four. That's why every real web app uses one.
+
+### Relational vs. document (the big choice)
+
+Two main families. You'll pick one per project; most teams pick the same one for every project they ship.
+
+**Relational databases** (Postgres, MySQL, SQLite, SQL Server) organise data into **tables** with strict columns. Rows in different tables relate to each other through **foreign keys** — IDs that point from one table to another. To get a user and all their posts, you write a query that **joins** the two tables on `posts.userId = users.id`. The language is **SQL** (Structured Query Language), and it has been the industry standard for fifty years.
+
+**Document databases** (MongoDB, Firestore, DynamoDB) organise data into **collections** of **documents**, where each document is a JSON-shaped blob. You don't define columns up front; documents in the same collection can have different fields. Instead of joining, you nest — a user document might contain its posts as a sub-array inside the same document.
+
+Two examples of the same data:
+
+```sql
+-- Relational (Postgres / SQL): two tables, joined on user_id
+users
+  id     | name     | email
+  -------+----------+-------------
+  1      | Alice    | a@x.com
+  2      | Bob      | b@x.com
+
+posts
+  id     | user_id  | title
+  -------+----------+----------------
+  101    | 1        | First post
+  102    | 1        | Second post
+  103    | 2        | Bob's only post
+```
+
+```json
+// Document (MongoDB): one collection, posts nested inside the user
+users
+  { _id: 1, name: "Alice", email: "a@x.com",
+    posts: [
+      { _id: 101, title: "First post" },
+      { _id: 102, title: "Second post" }
+    ] }
+  { _id: 2, name: "Bob", email: "b@x.com",
+    posts: [
+      { _id: 103, title: "Bob's only post" }
+    ] }
+```
+
+When to reach for each:
+
+| | Relational | Document |
+|--|--|--|
+| Shape of the data | Many entities, well-defined, related to each other | One main entity per request, loosely related to others |
+| Query patterns | "Show me all posts by users who signed up this month" — questions that cross entities | "Get the user record" — questions that fit one document |
+| Strictness | Schema enforced — every row in `posts` has a `user_id` | Permissive — a post can be missing fields without an error |
+| Tooling maturity | Decades old, every ORM, every cloud has managed offerings | Newer, fewer cross-cutting tools, but excellent for real-time / mobile sync |
+
+**Our pick: Postgres.** The rest of this curriculum (and most modern web stacks — Vercel, Supabase, Neon, Railway) defaults to Postgres because the relational model fits the typical web app perfectly (users, posts, comments, orders — all relate), the SQL skills transfer to every other relational database, and the tooling (Prisma, Drizzle, Postgres extensions) is the strongest in the ecosystem.
+
+You can build great apps on document databases too — but you only need to learn one well to start, and Postgres is the safer first bet for everything from a side project to a Series-B startup.
+
+### What "schema" actually means
+
+Schema is the contract between your code and the database. It says:
+
+- *These* tables exist.
+- *This* table has *these* columns.
+- *Each* column has *this* type (number, text, date, boolean).
+- *Some* columns can be `NULL`; *others* must always have a value.
+- *Certain* columns are unique (no two users share an email).
+- *Some* columns are foreign keys (every `posts.user_id` must match some `users.id`).
+
+The database enforces all of it. If your code tries to insert a post with a `user_id` that doesn't exist, the database refuses with an error. If two requests try to insert users with the same email, only the first succeeds.
+
+That enforcement is why databases feel more solid than `localStorage`. The shape of your data is *guaranteed*, not just hoped for.
+
+The next concept (`sql-basics`) covers the SQL you write to define a schema — `CREATE TABLE`, column types, constraints. The one after that (`sql-queries`) covers the SQL you write to read and modify rows. Two concepts from now, you'll use the same vocabulary to drive Prisma — the ORM that lets you query from TypeScript with autocompletion and types, rather than writing raw SQL strings.
+
+### ACID — the durability guarantees
+
+You'll see this acronym everywhere in database docs. It describes what a *real* database guarantees that a hand-rolled file can't:
+
+- **A**tomicity. A group of changes either all happen or none happen. Transferring $50 from account A to B is two writes (debit A, credit B). If the crash hits between them, the database rolls back so neither happens. You never end up with $50 missing.
+
+- **C**onsistency. The database state after the change still satisfies all the rules (foreign keys, uniqueness, types). If a change would break a rule, the change is rejected.
+
+- **I**solation. Concurrent transactions don't interfere with each other. Each transaction sees the database as if it were the only one running.
+
+- **D**urability. Once a transaction is committed, it survives crashes. The change has been written to disk in a way that the next power cycle will preserve.
+
+Postgres, MySQL, SQLite — all fully ACID. MongoDB became ACID-across-multiple-documents around 2018; before that it was per-document only. When someone says "I need ACID," they mean transactions that survive crashes and don't see each other's half-finished work. For payments, orders, anything financial — you need ACID.
+
+### Where the database actually runs (and the connection string)
+
+The database is a separate program. In development, you have a few options:
+
+- **Run Postgres locally.** Install via Postgres.app (Mac), the installer (Windows), or `apt` / `brew install postgresql`. You get a Postgres server listening on `localhost:5432` that your Next.js code connects to.
+
+- **Use Docker.** `docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres` spins up a Postgres in a container. Same connection string as a local install.
+
+- **Use a cloud Postgres.** Neon, Supabase, Railway, Render — all offer free Postgres tiers. You get a URL like `postgresql://user:pass@host.neon.tech:5432/dbname`. No install. Pop the URL into `.env.local` and your code connects.
+
+For learning, cloud Postgres is the lowest-friction. For production, you'll use a managed service so you don't have to babysit backups, upgrades, and disk space.
+
+Your code reaches the database via a **connection string** (also called a "URL" or "DSN"):
+
+```
+postgresql://username:password@host:5432/database_name
+```
+
+It lives in `.env.local` as `DATABASE_URL`. Prisma (and every other database client) reads it, opens a connection, and gives you a typed API.
+
+```env
+# .env.local — never committed
+DATABASE_URL="postgresql://postgres:dev@localhost:5432/myapp_dev"
+```
+
+You won't connect by hand in this curriculum — Prisma does it for you. But knowing the URL shape is what un-confuses "why won't my code talk to the database" the first time it happens (typed URL wrong, port blocked, password contains a `@` that wasn't URL-encoded — all classic).
+
+<ExampleProject
+  src="filing-cabinet"
+  title="The filing cabinet, rendered"
+  description="An interactive view of a 'customers' table inside a database. Browse rows, see the columns (the tabs on each folder), and watch the schema show up as a header. Visual mapping of the cabinet analogy onto real database vocabulary."
+/>
+
+<Exercise
+  title="Model a blog database"
+  starter={`Sketch the tables you'd need for a blog like Medium. For each table,
+write the columns + types. Don't worry about SQL syntax yet — just the
+shape. You're modelling the cabinet, not writing the query language.
+
+Tables to think through (write each in the format below):
+
+  users
+    id           number (auto, unique)
+    email        text (unique)
+    name         text
+    bio          text (optional)
+    created_at   timestamp
+
+  posts
+    id           ?
+    user_id      ? (which user wrote it)
+    title        ?
+    body         ?
+    published_at ?
+
+  comments
+    id           ?
+    post_id      ?
+    user_id      ?
+    body         ?
+    created_at   ?
+
+  follows  (who follows whom)
+    follower_id  ?
+    following_id ?
+    created_at   ?
+
+Questions to answer as you fill in the types:
+
+  1. Which columns are foreign keys (point at another table's id)?
+  2. Which columns should be unique across all rows?
+  3. Which columns can be null (the value is optional)?
+  4. What's the difference between 'posts.user_id' and 'users.id'?
+     (Hint: one is the author of the post; the other is the user's own id.)
+  5. Do you need a 'likes' table? If a post can be liked by many users
+     and a user can like many posts, where does the relationship live?
+
+Once you've sketched it, you've already done 80% of database design.
+The SQL we'll write in the next concept is just the language for
+expressing this sketch to Postgres.`}
+/>
