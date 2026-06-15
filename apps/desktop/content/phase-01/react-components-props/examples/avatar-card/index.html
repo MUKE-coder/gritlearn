@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reusable Card with children</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .card.primary { border-color: #4763e4; }
+      .card.danger { border-color: #ef4444; }
+      .card h3 { margin: 0 0 6px; font-size: 16px; }
+      .card .body { color: #4b5563; font-size: 14px; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #eef2ff; color: #4763e4; margin-bottom: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>One Card component, three call sites</h1>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function Card({ title, variant = "default", children }) {
+        return (
+          <div className={`card ${variant}`}>
+            <h3>{title}</h3>
+            <div className="body">{children}</div>
+          </div>
+        );
+      }
+
+      function App() {
+        return (
+          <div className="grid">
+
+            {/* Just title + text */}
+            <Card title="Welcome">
+              The simplest call: one prop + some children.
+            </Card>
+
+            {/* Title + variant + JSX children */}
+            <Card title="Reminder" variant="primary">
+              <p style={{margin: '0 0 6px'}}>You can pass <strong>any JSX</strong> as children — multiple elements, nested components, anything.</p>
+            </Card>
+
+            {/* Title + variant + complex JSX children */}
+            <Card title="Heads up" variant="danger">
+              <span className="badge">ATTENTION</span>
+              <p style={{margin: 0}}>The same Card component, used three times with different props, looks like three different cards.</p>
+            </Card>
+
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

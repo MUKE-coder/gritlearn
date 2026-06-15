@@ -1,0 +1,348 @@
+## React components and props
+
+You've met components — functions that return JSX. Now we connect them to real data. **Props** (short for "properties") are how a parent component hands data down to a child. They're just *function arguments* — the same idea you've used for every JS function, but with a tighter convention. Once you can pass props, you can build reusable components. Once you can build reusable components, you can build any UI.
+
+<Analogy>
+Props are **the arguments you hand to a recipe**.
+
+A pancake recipe is a function: input ingredients (flour, milk, eggs), output pancakes. The recipe doesn't know in advance how many you want, whether you have buttermilk or regular, whether you'll add blueberries. You hand it those *as arguments at call time*: `makePancakes(servings: 4, milk: "buttermilk", mixIn: "blueberries")`. The same recipe, called with different ingredients, makes different pancakes.
+
+React components are functions. Props are the ingredients you hand them. A `Button` component doesn't know in advance whether it says "Save" or "Cancel," whether it's blue or red, whether clicking does anything specific:
+
+```jsx
+<Button label="Save" variant="primary" onClick={save} />
+<Button label="Cancel" variant="ghost" onClick={close} />
+```
+
+Same component function, different props, different rendered output. The recipe stays the same; the ingredients change per call.
+
+One important property: in React, props are **read-only inside the component**. The component receives them and renders. It cannot reach up and modify them — the parent owns that data. Think of it as the recipe taking ingredients but not running to the pantry to get more. If a child wants to *cause* a change, it calls a function the parent passed in (typically a prop like `onClick` or `onChange`). The parent updates state; the change flows back down on the next render.
+</Analogy>
+
+<Illustration
+  alt="Diagram of data flowing down from parent to child via props, and events flowing up via callback props"
+  caption="React's data flow: props go down from parent to child. To communicate up, the parent passes a callback function as a prop; the child calls it on user action."
+>
+
+```
+   ┌─────────────── Parent ────────────────┐
+   │  const [count, setCount] = useState(0);│
+   │                                        │
+   │  <Counter                              │
+   │     value={count}        ──── props ─┐│
+   │     onIncrement={() =>               ││ down
+   │       setCount(count + 1)}           ││
+   │  />                                   ▼│
+   │                       ┌──── Child ─────│
+   │  ───── callback ◄──── │  function       │
+   │   (parent updates     │   Counter({     │
+   │    state, props       │     value,      │
+   │    flow down again)   │     onIncrement│
+   │                       │   }) { ... }   │
+   │                       └─────────────────│
+   └─────────────────────────────────────────┘
+```
+
+</Illustration>
+
+### Defining a component with props
+
+A component is a function that takes a `props` object as its first argument and returns JSX:
+
+```jsx
+function Greeting(props) {
+  return <h1>Hello, {props.name}!</h1>;
+}
+```
+
+Use it like an HTML tag, passing props as attributes:
+
+```jsx
+<Greeting name="Aisha" />
+// → renders <h1>Hello, Aisha!</h1>
+```
+
+You'll almost always use **destructuring** in the parameter to pull out the props you care about:
+
+```jsx
+function Greeting({ name, age }) {
+  return <h1>Hello, {name}! You are {age}.</h1>;
+}
+```
+
+`{ name, age }` in the parameter position is destructuring the `props` object. The component now has `name` and `age` as local variables.
+
+### Passing different types of props
+
+Anything you can put in a JS expression you can pass as a prop:
+
+```jsx
+<Card
+  title="Welcome"                  // string  — quote it
+  count={42}                       // number  — braces, no quotes
+  premium={true}                   // boolean — braces, no quotes
+  user={currentUser}               // object — braces
+  tags={["sale", "new"]}           // array  — braces
+  onClick={() => doThing()}        // function — braces
+  style={{ padding: 20 }}          // object literal — doubled braces
+/>
+```
+
+The rule: **strings can use plain `"..."` quotes; everything else needs `{ }` braces** to drop into a JS expression.
+
+### Children — the special prop
+
+React treats whatever you put **between a component's opening and closing tags** as a special prop called `children`:
+
+```jsx
+<Card title="Welcome">
+  <p>This text and structure become props.children.</p>
+  <button>Got it</button>
+</Card>
+```
+
+In the component:
+
+```jsx
+function Card({ title, children }) {
+  return (
+    <div className="card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  );
+}
+```
+
+`children` can be any renderable thing — text, JSX, an array of elements, even another component. This is how layout/container components compose: `<Layout>`, `<Modal>`, `<Card>`, `<Section>` — they wrap arbitrary content via `children`.
+
+### Default values for props
+
+```jsx
+function Button({ label, variant = "primary", disabled = false }) {
+  return <button className={`btn btn-${variant}`} disabled={disabled}>{label}</button>;
+}
+
+<Button label="Save" />                       // variant defaults to "primary"
+<Button label="Delete" variant="danger" />    // override
+```
+
+Default values use the standard ES6 destructuring syntax. They apply when the caller doesn't pass the prop (or passes `undefined`).
+
+### Composition: components calling components
+
+Components compose by *embedding other components in their JSX*:
+
+```jsx
+function Avatar({ src, alt }) {
+  return <img className="avatar" src={src} alt={alt} />;
+}
+
+function UserChip({ user }) {
+  return (
+    <div className="chip">
+      <Avatar src={user.avatar} alt={user.name} />
+      <span>{user.name}</span>
+    </div>
+  );
+}
+
+function UserList({ users }) {
+  return (
+    <div className="list">
+      {users.map((u) => <UserChip key={u.id} user={u} />)}
+    </div>
+  );
+}
+```
+
+`UserList` doesn't know how to render an avatar; it asks `UserChip` to do that, which asks `Avatar`. Each level is small and focused. This is **the central skill of React**: breaking a UI into a tree of small, single-purpose components and composing them.
+
+### Spreading props (when it's useful — and when it's not)
+
+```jsx
+function Avatar({ size = 40, ...rest }) {
+  return <img width={size} height={size} {...rest} />;
+}
+
+<Avatar src="me.jpg" alt="Aisha" />
+// size defaults to 40; src and alt flow through via ...rest
+```
+
+The `...rest` syntax collects everything-not-destructured into an object. `{...rest}` on the `<img>` spreads those props as attributes. Use this for **wrapper components** that pass through standard HTML attributes. Use it sparingly elsewhere — explicitly listing props is more readable.
+
+### Props are read-only
+
+```jsx
+function Bad({ user }) {
+  user.name = "Hacked";   // ← don't do this
+  return <p>{user.name}</p>;
+}
+```
+
+A component **must not mutate its props**. The parent owns that data; mutating it leads to bugs that look like "the data sometimes changes for no reason." React enforces this in strict mode by freezing props in development.
+
+To "change a prop," the component asks the parent to do it — by calling a function prop the parent provided:
+
+```jsx
+function Child({ count, onIncrement }) {
+  return <button onClick={onIncrement}>Count: {count}</button>;
+}
+
+function Parent() {
+  const [count, setCount] = useState(0);
+  return <Child count={count} onIncrement={() => setCount(count + 1)} />;
+}
+```
+
+The child can't write `count = count + 1` — it doesn't own count. It calls `onIncrement`, the parent updates state, the new count flows back down on the next render. This is **one-way data flow**, and it makes React apps dramatically easier to reason about than imperative ones.
+
+<ExampleProject
+  src="avatar-card"
+  title="A reusable card with title, body, and children"
+  description="A Card component used three times on the same page with different props. Demonstrates string props, boolean props, object props, default values, and the children prop. The same component definition produces three different cards."
+/>
+
+<ExampleProject
+  src="composition"
+  title="Nested components — UserList → UserChip → Avatar"
+  description="A page with a list of users rendered through three layers of composition. Each component is small and focused. The data flows down through props; the structure stays composable."
+/>
+
+<Exercise
+  title="Build a Badge component"
+  starter={`Create a Badge component that takes these props:
+
+  - children (any renderable content — the badge text)
+  - variant ("ok", "warning", "danger", "info") — defaults to "ok"
+  - size ("sm", "md") — defaults to "md"
+  - className (extra classes to append)
+
+The component should render a <span> with a CSS class composed
+of "badge", "badge-{variant}", and "badge-{size}", plus the
+caller's className. The children go inside.
+
+Then on the page, render Badge five times to demonstrate every
+variant and both sizes. Each call site should be one line.
+
+Bonus: also accept an "icon" prop (a string like "★" or "⚠") that
+renders before the children if provided.`}
+>
+
+- The component destructures `{ children, variant = "ok", size = "md", className = "", icon }` in its parameter.
+- It composes the final className via a template literal that includes the variant, size, and caller's className.
+- All variants render with the children passed in.
+- The default values work — calling `<Badge>Hello</Badge>` produces a `badge-ok badge-md` styled span.
+- The icon prop renders only when provided (conditional rendering with `{icon && ...}`).
+- Children render inside the span, not as a sibling.
+- Five demo call sites show every variant on the page.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What are props in React?
+
+**A:** Props (short for "properties") are **the inputs to a component**. They flow from a parent component to a child via JSX attributes:
+
+```jsx
+<UserCard user={currentUser} active={true} />
+```
+
+Inside the child, they arrive as the first argument:
+
+```jsx
+function UserCard(props) {
+  return <div>{props.user.name}</div>;
+}
+// Or with destructuring:
+function UserCard({ user, active }) { ... }
+```
+
+Two key rules:
+
+1. **Props are read-only inside the component.** A child cannot mutate its props; the parent owns that data. To make a change, the child calls a function the parent passed in as a prop (callback pattern).
+2. **Any JavaScript value can be a prop** — strings, numbers, objects, arrays, functions, JSX. The syntax uses `"strings"` for string literals and `{ braces }` for everything else.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the `children` prop?
+
+**A:** `children` is a **special prop** that React fills with whatever you put between a component's opening and closing tags:
+
+```jsx
+<Card>
+  <h2>Hello</h2>
+  <p>This whole subtree is children.</p>
+</Card>
+```
+
+Inside `Card`:
+
+```jsx
+function Card({ children }) {
+  return <div className="card">{children}</div>;
+}
+```
+
+`children` can be any renderable thing — text, JSX elements, an array of elements, or even functions (the "render props" pattern). It's the standard way layout components wrap arbitrary content. `<Layout>`, `<Modal>`, `<Section>`, `<Box>` — all reach for `children`.
+
+You don't pass it as a normal prop (no `<Card children={...} />`); you write content between the tags. React handles the rest.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What is "one-way data flow" in React, and why does it matter?
+
+**A:** **One-way data flow** means data in React always flows from parent to child via props. Children cannot modify their props. To propagate a change *upward*, a child must call a function that the parent provided as a prop:
+
+```jsx
+function Parent() {
+  const [count, setCount] = useState(0);
+  return <Child count={count} onIncrement={() => setCount(count + 1)} />;
+}
+
+function Child({ count, onIncrement }) {
+  return <button onClick={onIncrement}>Count: {count}</button>;
+}
+```
+
+The child receives `count` and `onIncrement` from the parent. It can call `onIncrement` to ask for a change, but it can't write `count = count + 1` directly. The parent owns the state; it updates `count`; the new value flows back down.
+
+Why it matters:
+
+1. **Predictability.** State changes happen in a known place (the component that owns the state). Reading a component's logic tells you where its data comes from and where changes go.
+2. **Debugging.** "Who changed this?" has a small set of answers — the component that owns the state, and only it.
+3. **Composability.** Components don't need to know about each other; they just exchange props.
+
+The opposite — bidirectional flow (Angular's two-way binding, vanilla DOM mutation) — is more concise for small cases but quickly becomes "where does this state change come from??" in large ones. React's one-way constraint trades a little verbosity for a lot of clarity.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What happens if you mutate a prop inside a component?
+
+**A:** **You shouldn't, and React tries to prevent it.** In development mode (especially strict mode), React freezes props with `Object.freeze` — attempting to mutate throws a TypeError. In production, mutations succeed silently but cause bugs.
+
+```jsx
+function Bad({ user }) {
+  user.name = "Hacked";       // mutating a prop
+  return <p>{user.name}</p>;
+}
+```
+
+Why it's a bug:
+
+1. **The parent didn't ask for that change.** Other components using the same `user` object now see the mutation, which is a stale data nightmare.
+2. **React's re-render detection breaks.** React decides whether to re-render based on prop equality. Mutating a prop changes the value without changing its reference, so React doesn't know to update.
+3. **It violates the one-way data flow contract.** Data flows down via props; changes flow up via callbacks. A child mutating props is reaching past its boundary.
+
+The correct pattern when you want to "change" a prop: the parent owns the state; the child calls a callback (e.g. `props.onChange(newValue)`); the parent updates state; React re-renders the child with the new prop.
+
+If a component needs to track local-only state that's *derived* from a prop, use `useState` with the prop as the initial value (and `useEffect` if the prop can change). But don't write back to props themselves.
+
+</InterviewQuestion>

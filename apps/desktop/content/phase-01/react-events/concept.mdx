@@ -1,0 +1,354 @@
+## Handling events in React
+
+You've learned how vanilla DOM events work — `addEventListener("click", fn)`, the event object, `preventDefault`. React events are 95% the same idea wrapped in a slightly nicer syntax. You write `onClick={fn}` directly on the JSX element; React handles attaching, removing, and pooling the listener for you. The patterns are familiar; the conveniences are real.
+
+<Analogy>
+React event handlers are **doorbells you hand to the room itself instead of wiring each one separately**.
+
+In vanilla DOM, when you want a doorbell on every door of a house, you walk to each door, drill a hole, run a wire to the bell, and connect it. Every new door — every new button rendered on the page — gets the same manual installation. If you forget one, that door has no doorbell.
+
+In React, you tell the *room* (the component) what to do when the bell rings, and React handles the wiring. You write `onClick={save}` once in the component definition. Every render of that component automatically has the listener attached. You can delete the component; React tears down the listener. You can render it a thousand times; React attaches a thousand handlers (efficiently — they're delegated through a single root listener).
+
+The names also follow the camelCase convention: `onClick`, not `onclick`. You pass a function reference (not a string of code, never `onclick="foo()"`). The event object you receive is a `SyntheticEvent` — a thin wrapper React puts around the native event for cross-browser consistency. Otherwise the API is the same one you learned in the vanilla DOM lesson.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing vanilla DOM addEventListener to React onClick declaration in JSX"
+  caption="React wraps event binding in JSX attributes. The wiring is implicit; you just declare what to run."
+>
+
+```
+   VANILLA DOM                       REACT
+
+   const btn = document.querySelector("button");
+   btn.addEventListener("click", save);
+                                     <button onClick={save}>
+                                       Save
+                                     </button>
+                                     ▲
+                                     declarative — React wires it
+                                     when the component mounts, tears
+                                     it down when it unmounts
+```
+
+</Illustration>
+
+### The basics
+
+```jsx
+function SaveButton() {
+  const handleClick = () => {
+    console.log("clicked!");
+  };
+  return <button onClick={handleClick}>Save</button>;
+}
+```
+
+Three things:
+
+- The attribute is **`onClick`** (camelCase), not `onclick`.
+- The value is a **function reference**, not a function call: `onClick={save}`, not `onClick={save()}`.
+- Inside, you can use any function — declared, arrow, inline.
+
+### Common event names
+
+| What | React prop |
+|---|---|
+| Click | `onClick` |
+| Double-click | `onDoubleClick` |
+| Form submit | `onSubmit` |
+| Input typing | `onChange` (on `<input>`, `<textarea>`, `<select>`) |
+| Focus / blur | `onFocus`, `onBlur` |
+| Key | `onKeyDown`, `onKeyUp`, `onKeyPress` |
+| Mouse | `onMouseEnter`, `onMouseLeave`, `onMouseDown`, `onMouseUp`, `onMouseMove` |
+| Scroll | `onScroll` |
+| Drag | `onDragStart`, `onDragOver`, `onDrop` |
+
+All camelCase. All take a function. All work the same way.
+
+### The event object
+
+Just like vanilla DOM, the handler receives an event object as its first argument:
+
+```jsx
+function Input() {
+  return (
+    <input
+      onChange={(e) => {
+        e.target.value         // the current input value
+        e.target.name          // the input's name attribute
+        e.preventDefault()     // cancel default behavior
+        e.stopPropagation()    // stop bubbling
+      }}
+    />
+  );
+}
+```
+
+React wraps the native event in a **SyntheticEvent** — same API, normalized across browsers. `e.target`, `e.preventDefault()`, `e.key` all work identically to vanilla DOM.
+
+### Inline vs named handlers
+
+Both are common:
+
+```jsx
+// INLINE — fine for one-liners
+<button onClick={() => setCount(count + 1)}>+1</button>
+
+// NAMED — better when the logic gets more than one line
+const handleSubmit = (e) => {
+  e.preventDefault();
+  if (!email.trim()) return;
+  saveUser(email);
+};
+return <form onSubmit={handleSubmit}>...</form>;
+```
+
+Rule of thumb: if the handler is **one expression**, inline arrow is clean. If it's **multiple statements** or used in multiple places, extract a named function above the return.
+
+### Passing arguments to a handler
+
+```jsx
+function TodoList({ todos }) {
+  const deleteTodo = (id) => {
+    setTodos(todos.filter((t) => t.id !== id));
+  };
+
+  return (
+    <ul>
+      {todos.map((todo) => (
+        <li key={todo.id}>
+          {todo.text}
+          {/* Wrap in an arrow so we can pass the id */}
+          <button onClick={() => deleteTodo(todo.id)}>×</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+You wrap the call in an arrow function so you can pass any argument. Don't write `onClick={deleteTodo(todo.id)}` — that **invokes** the function immediately during render and passes its (probably `undefined`) return value as the handler.
+
+### Form submission: `onSubmit` + `preventDefault`
+
+The classic gotcha: a form's default behavior is to POST and reload the page. In a React app, you almost always want to handle it yourself:
+
+```jsx
+function LoginForm() {
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    fetch("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} />
+      <button>Sign in</button>
+    </form>
+  );
+}
+```
+
+Forgetting `e.preventDefault()` is the most common "why does my page reload?" bug. Always include it on `onSubmit` in a JS-driven app.
+
+### Controlled inputs
+
+You've seen this pattern:
+
+```jsx
+const [text, setText] = useState("");
+
+<input value={text} onChange={(e) => setText(e.target.value)} />
+```
+
+This is called a **controlled input**: React state drives the `value`, and `onChange` updates the state. One source of truth. The alternative is an *uncontrolled* input where the DOM holds the value and you read it on submit via a `ref` — less common but useful for performance with large forms.
+
+### Stopping propagation
+
+By default, events **bubble** from the target up through ancestors. Sometimes you want to stop a click on a button inside a card from bubbling to the card's click handler:
+
+```jsx
+<div className="card" onClick={openDetails}>
+  <h3>{title}</h3>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      deleteCard();
+    }}
+  >
+    delete
+  </button>
+</div>
+```
+
+Without `stopPropagation`, clicking delete *also* opens details. Use sparingly — too much makes event flow unpredictable.
+
+### Keyboard handling
+
+```jsx
+const handleKeyDown = (e) => {
+  if (e.key === "Enter")  submit();
+  if (e.key === "Escape") cancel();
+};
+
+<input onKeyDown={handleKeyDown} />
+```
+
+`e.key` is the modern way — it's the *value* of the key as a string ("Enter", "ArrowDown", "a"). `e.code` is the physical key code (less commonly used).
+
+For text inputs, **prefer `onChange` over `onKeyDown`** — it fires once per character no matter how the character was entered (typing, pasting, voice). `onKeyDown` misses paste events.
+
+<ExampleProject
+  src="event-handlers"
+  title="Six React event handlers in one panel"
+  description="A page with one component demonstrating onClick, onChange, onSubmit, onMouseEnter, onKeyDown, and onFocus. Each handler updates a small log. Inline vs named handler styles shown side by side."
+/>
+
+<ExampleProject
+  src="form-onsubmit"
+  title="A login form done right"
+  description="A controlled login form with email + password + remember-me. Uses onSubmit with preventDefault, validates client-side, disables the submit button during the (fake) request. The pattern you'll write a hundred times in real React apps."
+/>
+
+<Exercise
+  title="Build a search box with live filtering and keyboard shortcuts"
+  starter={`Create a component that:
+
+  - Has an input controlled by useState.
+  - Renders a list of fruits filtered live as you type.
+  - When the input is empty, shows all fruits.
+  - Adds these keyboard shortcuts (onKeyDown):
+    - Escape: clear the input
+    - Enter:  if exactly one match, log it; otherwise do nothing
+  - A "✕" button next to the input clears it.
+
+Start with this list:
+
+  const fruits = ["apple", "banana", "blueberry", "cherry",
+                  "date", "elderberry", "fig", "grape",
+                  "kiwi", "lemon", "mango", "orange"];
+
+Use ONE useState for the query. The filtered list is computed
+during render — no extra state for it.`}
+>
+
+- Query lives in **one** `useState`; the filtered list is derived (not stored).
+- The input is **controlled** (`value={query}` and `onChange={...}`).
+- The clear button updates state via `setQuery("")`.
+- Filtering uses `.filter((f) => f.toLowerCase().includes(query.toLowerCase()))`.
+- `onKeyDown` checks `e.key === "Escape"` and `e.key === "Enter"`.
+- The Enter case checks the filtered list length, not the input value.
+- Empty query shows the full list (the filter returns the whole array).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How is `onClick` in React different from `onclick` in HTML?
+
+**A:** Three differences:
+
+1. **Case.** React uses **camelCase** (`onClick`). HTML uses lowercase (`onclick`). The JSX compiler treats them as different names.
+2. **Type of value.** React expects a **function reference**: `onClick={save}`. HTML's `onclick` is a **string of code**: `onclick="save()"`. React's way is type-safe and benefits from scoping; HTML's `onclick` evaluates the string against the global scope and is a CSP hazard.
+3. **Synthetic events.** React wraps the native event in a `SyntheticEvent` for consistency across browsers. The API is the same (`e.target`, `e.preventDefault()`, etc.) but normalized.
+
+```jsx
+// React
+<button onClick={save}>Save</button>
+
+// HTML
+<button onclick="save()">Save</button>
+```
+
+Both work. The React pattern is the standard for React apps; the HTML attribute style isn't used in modern React code.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do you need to call `e.preventDefault()` inside a form's `onSubmit`?
+
+**A:** Because **the browser's default behavior on form submit is to POST the form to the server and reload the page**. In a React app, you almost always want to handle the submission with JavaScript (validate, send via fetch, update state) and *not* reload the page.
+
+```jsx
+const handleSubmit = (e) => {
+  e.preventDefault();          // ← stop the browser's POST + reload
+  // your handler logic
+};
+return <form onSubmit={handleSubmit}>...</form>;
+```
+
+Without `preventDefault`, the page reloads as soon as the user clicks the submit button (or presses Enter in a text input), losing your in-memory state. Every JS-driven form needs this line.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is `onClick={save}` correct but `onClick={save()}` wrong?
+
+**A:** Because the second one **invokes** `save` immediately during render instead of passing a function for React to call on click.
+
+```jsx
+// onClick gets a FUNCTION to call later
+<button onClick={save}>X</button>
+
+// onClick gets the RESULT of calling save() right now
+<button onClick={save()}>X</button>
+```
+
+The second one runs `save` every time the component renders, attaches its return value (probably `undefined`) as the handler, and *no longer fires on click*. The button looks dead; the side effect of `save()` is running constantly.
+
+To **pass arguments**, wrap in an arrow function so the call happens at click time:
+
+```jsx
+<button onClick={() => save(item.id)}>X</button>
+```
+
+The arrow function is the handler; React calls it on click; it then calls `save(item.id)`. Right pattern, every time.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's a "controlled" vs "uncontrolled" input in React?
+
+**A:**
+
+- **Controlled** — React state drives the input's `value`. Every change triggers `onChange`, which updates state, which re-renders the input with the new value. **One source of truth: React state**.
+
+```jsx
+const [text, setText] = useState("");
+<input value={text} onChange={(e) => setText(e.target.value)} />
+```
+
+- **Uncontrolled** — the DOM holds the value. React reads it on submit (or whenever needed) via a `ref`. **One source of truth: the DOM**.
+
+```jsx
+const inputRef = useRef(null);
+<input ref={inputRef} defaultValue="hello" />
+// later
+const value = inputRef.current.value;
+```
+
+**Prefer controlled** for most cases:
+
+- Live validation (highlight errors as the user types).
+- Conditional display (show a clear button when there's text).
+- Synchronized fields (one input mirrors another).
+- Easy to test (snapshot state, not DOM).
+
+**Use uncontrolled** for:
+
+- Forms with many fields where re-rendering on every keystroke is too slow (use a form library like react-hook-form).
+- One-shot reads (collect on submit, never during).
+- Integration with non-React libraries that own the DOM.
+
+The vast majority of React forms use the controlled pattern.
+
+</InterviewQuestion>

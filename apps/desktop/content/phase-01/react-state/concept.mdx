@@ -1,0 +1,359 @@
+## React state with `useState`
+
+So far your components have been *pure renderings* — they take props and produce JSX. That's enough for static UI. The moment something needs to *change over time* — a counter, an input's value, whether a modal is open, what's in the cart — your component needs **state**. State is data the component remembers between renders, that the component itself can update. In React, you add state with the **`useState` hook** — one of the most-used lines of code in the whole framework.
+
+<Analogy>
+State is **a component's memory**.
+
+When you walk into a room, your phone remembers your last call. Your fridge remembers what temperature it's set to. Your remote remembers which channel you were on. Each device holds a small piece of data that *survives between actions*, even though no one is actively rewriting it each second. That memory is what makes the device feel "smart" — it picks up where you left off.
+
+A React component without state is like an LED that's always green — it doesn't remember anything; it just looks the same every render. A component *with* state remembers — "I'm at count 7," "the dropdown is open," "this input contains 'aisha@x.com.'" Each render reads from that memory and renders accordingly. When the memory changes (`setCount(8)`), React re-renders with the new value.
+
+`useState` is how you give a component its first piece of memory. The line `const [count, setCount] = useState(0)` is the component opening a labeled jar called `count`, putting `0` inside, and getting back two things: the current value and a tool to change it. Calling the tool (`setCount(8)`) doesn't change the variable — it tells React "next render, please put 8 in the jar." React schedules the re-render; the next call to the component reads the new value.
+</Analogy>
+
+<Illustration
+  alt="Diagram of useState returning a value and a setter, the setter triggering a re-render with the new value"
+  caption="useState returns [value, setter]. Calling the setter schedules a re-render; on that next render the value is the new one."
+>
+
+```
+   const [count, setCount] = useState(0);
+          │         │              │
+          │         │              └─ initial value (used on first render)
+          │         └─ a function to update; calling it re-renders the component
+          └─ the current value
+
+   setCount(7);     ← does NOT change count immediately!
+                    ← schedules a re-render; on that render, count === 7
+```
+
+</Illustration>
+
+### The basics
+
+```jsx
+import { useState } from "react";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>+1</button>
+    </div>
+  );
+}
+```
+
+Read it as:
+
+- `useState(0)` returns an array of two things: the current state (initially `0`) and a setter.
+- We destructure them into `count` and `setCount`.
+- Clicking the button calls `setCount(count + 1)`, which schedules a re-render with the new value.
+- On the next render, `useState(0)` returns the *new* value, not `0`. React remembers state between renders for you.
+
+**The naming convention**: `[thing, setThing]`. Stick to it; every React codebase does.
+
+### State can be any type
+
+```jsx
+const [count,    setCount]    = useState(0);
+const [name,     setName]     = useState("");
+const [open,     setOpen]     = useState(false);
+const [user,     setUser]     = useState(null);
+const [users,    setUsers]    = useState([]);
+const [profile,  setProfile]  = useState({ name: "", email: "" });
+```
+
+Numbers, strings, booleans, objects, arrays, `null` — all valid. Pick the simplest type that fits your data.
+
+### The state-is-immutable rule
+
+When state is an **object or array**, you **must not mutate it**. Instead, create a new one and pass that to the setter:
+
+```jsx
+const [user, setUser] = useState({ name: "Aisha", age: 22 });
+
+// WRONG — React doesn't see the change
+user.age = 23;
+setUser(user);   // same reference; React skips the re-render
+
+// RIGHT — new object via spread
+setUser({ ...user, age: 23 });
+```
+
+Same with arrays:
+
+```jsx
+const [todos, setTodos] = useState([]);
+
+// WRONG
+todos.push(newTodo);
+setTodos(todos);
+
+// RIGHT
+setTodos([...todos, newTodo]);
+
+// To remove
+setTodos(todos.filter((t) => t.id !== id));
+
+// To update one
+setTodos(todos.map((t) => t.id === id ? { ...t, done: true } : t));
+```
+
+React detects changes by **reference comparison** (`oldState === newState`). Mutating in place keeps the same reference; React sees "nothing changed" and skips the re-render. Always return a *new* reference for object/array state.
+
+### Functional updates (when the new state depends on the old)
+
+If the new state is computed from the old one — incrementing a counter, appending to an array — pass a **function** to the setter:
+
+```jsx
+setCount((prev) => prev + 1);
+setTodos((prev) => [...prev, newTodo]);
+```
+
+Two reasons to do this:
+
+1. **Multiple updates in a row.** React batches state updates. `setCount(count + 1); setCount(count + 1);` only bumps count by 1 because both reads see the same stale `count`. The functional form sees the latest value each time.
+2. **Reads from outside the closure are stale.** Event handlers that fire later might capture an old `count`. The functional form always sees the latest.
+
+The rule: **if the new state depends on the old, use the function form**. If it's a fresh value (`setName("aisha")`), the direct form is fine.
+
+### Multiple useState calls
+
+Components often have several pieces of state. Just call `useState` multiple times:
+
+```jsx
+function LoginForm() {
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+
+  // ... use them in the JSX
+}
+```
+
+You'll also see people group related fields in one state object — `[form, setForm] = useState({ email: "", password: "" })`. Both styles work. **Prefer multiple `useState` calls for unrelated values**; group into an object only when the fields change together as a unit.
+
+### Lazy initial state
+
+If the initial value is expensive to compute, pass a *function* instead of the value:
+
+```jsx
+// Computed on EVERY render (wasteful)
+const [data, setData] = useState(JSON.parse(localStorage.getItem("data")));
+
+// Computed ONLY on the first render
+const [data, setData] = useState(() => JSON.parse(localStorage.getItem("data")));
+```
+
+React calls the function once during the first render and uses the result. For 99% of cases (a static initial value), just pass the value directly.
+
+### State is local to one component
+
+Each call to `useState` lives **inside the component that called it**. Rendering the same component twice creates *two independent* states:
+
+```jsx
+function App() {
+  return (
+    <>
+      <Counter />   {/* its own count */}
+      <Counter />   {/* its own count */}
+    </>
+  );
+}
+```
+
+If you need **shared state** between siblings, you "lift" it to the common parent — covered next batch.
+
+### A complete tiny example
+
+```jsx
+function TodoList() {
+  const [items, setItems] = useState([]);
+  const [text,  setText]  = useState("");
+
+  const addItem = () => {
+    if (!text.trim()) return;
+    setItems([...items, { id: Date.now(), text }]);
+    setText("");
+  };
+
+  return (
+    <div>
+      <input value={text} onChange={(e) => setText(e.target.value)} />
+      <button onClick={addItem}>Add</button>
+      <ul>
+        {items.map((item) => <li key={item.id}>{item.text}</li>)}
+      </ul>
+    </div>
+  );
+}
+```
+
+Two pieces of state, one event handler, one render. The DOM updates are all React's job. No `appendChild`, no `textContent`, no syncing — the component declares "for this state, here's the UI," and the framework handles the rest.
+
+<ExampleProject
+  src="counter"
+  title="A counter — basic useState"
+  description="The hello-world of useState — a counter with +1, -1, and reset buttons. Demonstrates the direct setter call (setCount(0)) and the functional form (setCount(c => c + 1)). Side panel logs every render so you can see how often the component re-renders."
+/>
+
+<ExampleProject
+  src="text-input-mirror"
+  title="A controlled input — state drives the DOM"
+  description="A text input whose value lives in React state. The input's onChange writes to state; React re-renders; the input's value attribute reflects the state. Below the input, the same value is mirrored in three other places. One source of truth, many consumers."
+/>
+
+<Exercise
+  title="Build a like-button component"
+  starter={`Create a LikeButton component that:
+
+  - Renders a button with a heart icon (♡) and a count starting
+    at 0.
+  - Tracks "liked" boolean state and "count" number state.
+  - When clicked while NOT liked: liked becomes true, count
+    increments. Button color turns red and the icon becomes ♥.
+  - When clicked while liked: liked becomes false, count
+    decrements. Back to normal.
+  - The button shows "{count} {count === 1 ? "like" : "likes"}".
+
+Use TWO useState hooks (one for liked, one for count) or one
+useState with an object (your choice — try both).
+
+Render the component twice on the page to confirm each instance
+keeps its own state.`}
+>
+
+- The component uses `useState` for state management (not props or refs).
+- Two state pieces: `liked` (boolean) and `count` (number), or one object with both.
+- The click handler updates BOTH pieces of state.
+- The button's appearance changes based on `liked` (className or inline style change).
+- The count text uses ternary for singular/plural ("1 like" vs "2 likes").
+- Rendering `<LikeButton />` twice produces two independent counters.
+- State updates use the functional form (`setCount(c => c + 1)`) for safety.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is `useState` and what does it return?
+
+**A:** `useState` is a **React Hook** that lets a function component hold state between renders. It returns an array with exactly two elements:
+
+```jsx
+const [count, setCount] = useState(0);
+```
+
+- `count` — the current state value.
+- `setCount` — a setter function. Calling it schedules a re-render with the new value.
+
+The argument to `useState` is the **initial state**, used only on the very first render. After that, React remembers the value between renders. Each call to `useState` is independent — a component can call it multiple times for separate pieces of state.
+
+The destructuring with `[value, setter]` is convention — you can name them anything (`[count, setCount]`, `[isOpen, setIsOpen]`, `[user, updateUser]`). Pair their names so the relationship is obvious.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why can't you mutate state directly in React?
+
+**A:** Because React **detects changes by reference comparison**. When you call `setX(newValue)`, React checks `Object.is(oldValue, newValue)`. If they're the same reference, React assumes nothing changed and skips the re-render — even if you mutated the inner contents.
+
+```jsx
+const [user, setUser] = useState({ name: "Aisha" });
+
+// WRONG — same reference; React skips the re-render
+user.name = "Brian";
+setUser(user);
+
+// RIGHT — new reference; React sees the change
+setUser({ ...user, name: "Brian" });
+```
+
+The rule:
+
+- For **objects**: spread to make a new one: `setX({ ...x, key: value })`.
+- For **arrays**: use non-mutating methods or spread: `setX([...x, item])`, `setX(x.filter(...))`, `setX(x.map(...))`.
+- For **primitives** (number, string, boolean): just pass the new value directly. They're immutable already.
+
+This is the "treat state as immutable" rule. It's annoying at first; once you internalize it, you get faster bugs and React's optimizations work correctly.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use the functional update form of a setter?
+
+**A:** When the **new state depends on the old state**. Pass a function instead of a value:
+
+```jsx
+setCount((prev) => prev + 1);
+setTodos((prev) => [...prev, newTodo]);
+```
+
+Two situations where it matters:
+
+1. **Multiple updates in a row.** React batches state updates within the same event handler. Reads from `count` inside both updates see the same stale value:
+
+```jsx
+// BUG — only bumps by 1
+setCount(count + 1);
+setCount(count + 1);
+
+// CORRECT — bumps by 2
+setCount((c) => c + 1);
+setCount((c) => c + 1);
+```
+
+2. **Stale closures.** A setter called from a later async callback (`setTimeout`, `useEffect`, event listener bound earlier) captures the `count` from when the closure was created — which is old. The functional form always reads the latest from React's internal store.
+
+```jsx
+useEffect(() => {
+  const id = setInterval(() => setCount((c) => c + 1), 1000);
+  return () => clearInterval(id);
+}, []);
+```
+
+**Rule of thumb**: if the new value is computed from the old (`x + 1`, `[...arr, item]`), use the function form. If it's a fresh value (`"new name"`), the direct form is fine.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Should you use one `useState` with an object, or multiple `useState` calls for related fields?
+
+**A:** **Prefer multiple `useState` calls** unless the fields change together as a unit.
+
+Multiple calls (recommended for unrelated fields):
+
+```jsx
+const [email,    setEmail]    = useState("");
+const [password, setPassword] = useState("");
+const [loading,  setLoading]  = useState(false);
+```
+
+Each is independent: updating one doesn't touch the others. No spread needed in setters.
+
+Single object (only when fields update together):
+
+```jsx
+const [form, setForm] = useState({ email: "", password: "" });
+// Must spread on every update:
+setForm({ ...form, email: e.target.value });
+```
+
+The object pattern adds boilerplate (spread on every update) and risks bugs (forgetting to spread, accidentally removing other fields). It's tempting because it groups related data, but in practice multiple `useState` calls read cleaner.
+
+Exceptions where the object pattern shines:
+
+- **Form state** with many related fields (often via `useReducer` or `react-hook-form`).
+- **Multi-step wizards** where the entire state moves together.
+- **Resource-shape state** (e.g. `{ data, loading, error }`) — though `useReducer` is often a better fit.
+
+For most "two unrelated booleans," use two `useState` calls.
+
+</InterviewQuestion>

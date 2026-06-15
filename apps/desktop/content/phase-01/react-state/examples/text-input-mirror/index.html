@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A controlled input — one source of truth</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 560px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .panel { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; }
+      input { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+      input:focus { outline: 2px solid #4763e4; border-color: #4763e4; }
+      .mirror { display: grid; grid-template-columns: 110px 1fr; gap: 8px 14px; align-items: center; margin-top: 14px; font-size: 13px; color: #6b7280; }
+      .mirror .label { font-family: ui-monospace, monospace; }
+      .mirror .val { font-family: ui-monospace, monospace; color: #111; background: white; border: 1px dashed #d1d5db; border-radius: 6px; padding: 6px 10px; }
+      .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #eef2ff; color: #4763e4; }
+    </style>
+  </head>
+  <body>
+    <h1>One value, many mirrors</h1>
+    <p>Type in the box. The same state drives every other render below.</p>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      function Mirror() {
+        const [text, setText] = useState("");
+        return (
+          <div className="panel">
+            <input
+              placeholder="type here..."
+              value={text}                  /* the DOM reads from state */
+              onChange={(e) => setText(e.target.value)}  /* state reads from the DOM */
+            />
+            <div className="mirror">
+              <span className="label">.length</span>
+              <span className="val">{text.length}</span>
+
+              <span className="label">.toUpperCase()</span>
+              <span className="val">{text.toUpperCase() || "(empty)"}</span>
+
+              <span className="label">.split(" ")</span>
+              <span className="val">[{text.split(" ").map(w => `"${w}"`).join(", ")}]</span>
+
+              <span className="label">empty?</span>
+              <span className="val">{text === "" ? <span className="badge">yes</span> : "no"}</span>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<Mirror />);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A tiny app as a component tree</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #f3f4f6; color: #111; line-height: 1.5; }
+      .layout { display: grid; grid-template-columns: 200px 1fr; grid-template-rows: 56px 1fr 40px; grid-template-areas: "header header" "sidebar main" "footer footer"; min-height: 100vh; }
+      header { grid-area: header; background: #111827; color: white; display: flex; align-items: center; padding: 0 18px; font-weight: 700; }
+      nav   { grid-area: sidebar; background: white; border-right: 1px solid #e5e7eb; padding: 14px; }
+      nav a { display: block; padding: 8px 12px; border-radius: 6px; color: #374151; text-decoration: none; font-size: 14px; }
+      nav a:hover { background: #f3f4f6; }
+      main  { grid-area: main; padding: 18px; }
+      footer { grid-area: footer; background: #1f2937; color: #d1d5db; display: flex; align-items: center; padding: 0 18px; font-size: 12px; }
+      .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin: 0 0 12px; }
+      .card h3 { margin: 0 0 6px; font-size: 15px; }
+      .ann { color: #6b7280; font-size: 11px; font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // ─── Leaf components ─────────────────────────────────────
+      function NavLink({ href, children }) {
+        return <a href={href}>{children}</a>;
+      }
+
+      function Card({ title, children }) {
+        return (
+          <div className="card">
+            <h3>{title}</h3>
+            <div className="ann">&lt;Card title="{title}"&gt;</div>
+            <div>{children}</div>
+          </div>
+        );
+      }
+
+      // ─── Mid-level components ───────────────────────────────
+      function Header({ title }) {
+        return <header>{title} <span className="ann" style={{marginLeft: 8, color: '#aeb9c7'}}>&lt;Header /&gt;</span></header>;
+      }
+
+      function Sidebar() {
+        return (
+          <nav>
+            <div className="ann" style={{marginBottom: 6}}>&lt;Sidebar /&gt;</div>
+            <NavLink href="#home">Home</NavLink>
+            <NavLink href="#blog">Blog</NavLink>
+            <NavLink href="#settings">Settings</NavLink>
+          </nav>
+        );
+      }
+
+      function Main() {
+        return (
+          <main>
+            <div className="ann" style={{marginBottom: 10}}>&lt;Main /&gt;</div>
+            <Card title="Welcome">
+              <p style={{margin: 0}}>This whole page is a tree of components. Open this file's source and look at how App composes them.</p>
+            </Card>
+            <Card title="Tips">
+              <p style={{margin: 0}}>Each Card is the SAME component called with different props. That's reuse.</p>
+            </Card>
+          </main>
+        );
+      }
+
+      function Footer({ year }) {
+        return <footer>© {year} GritLearn <span className="ann" style={{marginLeft: 8, color: '#aeb9c7'}}>&lt;Footer year={year} /&gt;</span></footer>;
+      }
+
+      // ─── Root ────────────────────────────────────────────────
+      function App() {
+        return (
+          <div className="layout">
+            <Header title="GritLearn admin" />
+            <Sidebar />
+            <Main />
+            <Footer year={2026} />
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

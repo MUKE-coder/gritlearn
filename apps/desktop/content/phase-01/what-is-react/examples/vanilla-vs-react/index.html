@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vanilla DOM vs React</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pane h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 14px; color: #4763e4; }
+      .counter { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+      .counter button { padding: 6px 14px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+      .counter span { font-size: 22px; font-weight: 700; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+      pre { background: #1c2230; color: #e6edf3; padding: 12px; border-radius: 6px; font-size: 11px; line-height: 1.4; overflow-x: auto; margin: 0; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>The same counter, two approaches</h1>
+    <p>Both panes show a button + count. The vanilla version manually keeps the DOM in sync. The React version describes the UI for any given state and lets React handle the DOM.</p>
+
+    <div class="row">
+
+      <div class="pane">
+        <h2>vanilla DOM</h2>
+        <pre>let count = 0;
+const span = document.querySelector("#vCount");
+document.querySelector("#vInc")
+  .addEventListener("click", () =&gt; {
+    count++;
+    span.textContent = count;  // ← manual update
+  });</pre>
+        <div class="counter">
+          <button id="vInc">+1</button>
+          <span id="vCount">0</span>
+        </div>
+      </div>
+
+      <div class="pane">
+        <h2>React (useState)</h2>
+        <pre>function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    &lt;div className="counter"&gt;
+      &lt;button onClick={() =&gt; setCount(count + 1)}&gt;+1&lt;/button&gt;
+      &lt;span&gt;{count}&lt;/span&gt;
+    &lt;/div&gt;
+  );
+}</pre>
+        <div id="reactRoot"></div>
+      </div>
+
+    </div>
+
+    <p style="font-size: 13px; color: #6b7280;">
+      The React version doesn't reach for the DOM — it describes what to render based on the current count. The framework handles the diff.
+    </p>
+
+    <script>
+      // Vanilla
+      let count = 0;
+      const span = document.querySelector("#vCount");
+      document.querySelector("#vInc").addEventListener("click", () => {
+        count++;
+        span.textContent = count;
+      });
+    </script>
+
+    <script type="text/babel">
+      const { useState } = React;
+      function Counter() {
+        const [count, setCount] = useState(0);
+        return (
+          <div className="counter">
+            <button onClick={() => setCount(count + 1)}>+1</button>
+            <span>{count}</span>
+          </div>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("reactRoot"))
+        .render(<Counter />);
+    </script>
+  </body>
+</html>

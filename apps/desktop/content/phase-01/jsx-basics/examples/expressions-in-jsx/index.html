@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Expressions vs statements in JSX</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+      .pane { padding: 14px; border-radius: 10px; }
+      .ok  { background: #ecfdf5; border: 1px solid #10b981; }
+      .err { background: #fef2f2; border: 1px solid #ef4444; }
+      pre { background: #1c2230; color: #e6edf3; padding: 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; margin: 6px 0 0; overflow-x: auto; }
+      h2 { margin: 0 0 6px; font-family: ui-monospace, monospace; font-size: 13px; }
+      .ok h2 { color: #047857; }
+      .err h2 { color: #b91c1c; }
+      .result { background: white; border: 1px dashed #d1d5db; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-family: ui-monospace, monospace; font-size: 12px; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Expressions vs statements</h1>
+    <p>Inside JSX's <code>{'{ }'}</code> braces, only <strong>expressions</strong> work. Statements (<code>if</code>, <code>for</code>, declarations) do not. Each pair below shows the wrong way and the right way.</p>
+
+    <div id="demo"></div>
+
+    <script type="text/babel">
+      function Demo() {
+        const x = 7;
+        const arr = ["a", "b", "c"];
+        return (
+          <>
+            {/* if/else → ternary */}
+            <div className="row">
+              <div className="pane err">
+                <h2>✗ if / else (statement)</h2>
+                <pre>{`<p>
+  { if (x > 5) "big"
+    else "small" }   ← won't parse
+</p>`}</pre>
+              </div>
+              <div className="pane ok">
+                <h2>✓ ternary (expression)</h2>
+                <pre>{`<p>{x > 5 ? "big" : "small"}</p>`}</pre>
+                <div className="result">renders: <strong>{x > 5 ? "big" : "small"}</strong></div>
+              </div>
+            </div>
+
+            {/* for → .map */}
+            <div className="row">
+              <div className="pane err">
+                <h2>✗ for loop (statement)</h2>
+                <pre>{`<ul>
+  { for (const a of arr) <li>{a}</li> }
+</ul>     ← won't parse`}</pre>
+              </div>
+              <div className="pane ok">
+                <h2>✓ .map (expression)</h2>
+                <pre>{`<ul>
+  {arr.map((a) => <li key={a}>{a}</li>)}
+</ul>`}</pre>
+                <div className="result">
+                  renders: <ul style={{ margin: 0, paddingLeft: 22 }}>{arr.map((a) => <li key={a}>{a}</li>)}</ul>
+                </div>
+              </div>
+            </div>
+
+            {/* let/const → outside the return */}
+            <div className="row">
+              <div className="pane err">
+                <h2>✗ declarations (statement)</h2>
+                <pre>{`<p>{ const y = 5; y * 2 }</p>
+   ← won't parse`}</pre>
+              </div>
+              <div className="pane ok">
+                <h2>✓ compute above; embed value</h2>
+                <pre>{`const y = 5;
+return <p>{y * 2}</p>;`}</pre>
+                <div className="result">renders: <strong>{(() => { const y = 5; return y * 2; })()}</strong></div>
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("demo")).render(<Demo />);
+    </script>
+  </body>
+</html>

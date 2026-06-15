@@ -1,0 +1,345 @@
+## JSX basics
+
+The first time you see React code, the strangest thing is the **HTML living inside JavaScript**:
+
+```jsx
+function Hello() {
+  return <h1>Hello, world!</h1>;
+}
+```
+
+That's **JSX** — a syntax extension to JavaScript that lets you write markup directly in your code. The browser doesn't understand it; a build step (Vite, Babel, esbuild) compiles each tag into a regular function call. The result is concise, readable, and surprisingly close to plain HTML. Once you've written ten components in JSX, the foreignness wears off and you wonder how you ever wrote `document.createElement(...)` by hand.
+
+<Analogy>
+JSX is **a phrasebook that lets you drop English words into Spanish sentences**.
+
+Imagine a polyglot writing a letter mostly in Spanish but with the occasional English term embedded — "voy a hacer una *brainstorming session* mañana." Two languages, one sentence, no boundary marker except a little italic to flag the borrowed word. The reader knows which is which; the meaning carries.
+
+JSX does the same thing with HTML and JavaScript. You're writing JavaScript — the function, the imports, the logic. But for the *return value*, you switch to a phrase of HTML-shaped syntax that maps to React calls:
+
+```jsx
+return <h1 className="hero">{name.toUpperCase()}</h1>;
+        ↑                   ↑                 ↑
+        HTML-ish phrase     drop back to       back to JS for one
+                            JS via { } braces  expression, then HTML again
+```
+
+The braces are how you cross between the two languages mid-sentence. `<h1>` is markup. `{name.toUpperCase()}` is JavaScript that evaluates to a string and gets inserted at that spot. The boundary is precise, the result is readable.
+
+Once you read JSX as "mostly HTML, drop into JS whenever I want," it stops being foreign. You're not writing a new language — you're writing JavaScript that happens to support HTML tags in expression positions.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing JSX as syntax sugar that compiles to React.createElement function calls"
+  caption="JSX is sugar. A build step compiles every tag into a React.createElement call. Same result, much nicer source."
+>
+
+```
+   You write:                            Compiles to:
+
+   <div className="card">                React.createElement(
+     <h2>{title}</h2>                      "div", { className: "card" },
+     <p>{body}</p>                         React.createElement("h2", null, title),
+   </div>                                   React.createElement("p", null, body)
+                                          )
+```
+
+</Illustration>
+
+### The basics
+
+```jsx
+// A JSX tag — looks like HTML
+<h1>Hello</h1>
+
+// Self-closing tags require the slash (unlike HTML where img can omit it)
+<br />
+<img src="cat.jpg" />
+
+// Multiple elements need ONE parent — wrap with a Fragment if you don't want a real div
+<>
+  <h1>Title</h1>
+  <p>Body</p>
+</>
+```
+
+Two things HTML lets slide that JSX doesn't:
+
+1. **Self-closing is required** for void elements. `<img>` won't parse; `<img />` will.
+2. **Every block of JSX must return exactly one element.** Two sibling elements without a wrapper is a parse error. Use a real container (`<div>`) when it makes semantic sense, or a **fragment** (`<>...</>`) when you just need to group without an extra DOM node.
+
+### Embedding expressions: `{...}`
+
+The curly braces drop you into JavaScript:
+
+```jsx
+const name = "Aisha";
+const age = 22;
+
+return <p>Hello, {name}! You are {age} years old.</p>;
+```
+
+Inside the braces you can put **any expression** — a variable, a function call, math, a ternary. **Not** a statement (no `if`, no `for`):
+
+```jsx
+// Expressions: OK
+<p>{user.name}</p>
+<p>{1 + 2}</p>
+<p>{getGreeting(user)}</p>
+<p>{user.age >= 18 ? "Adult" : "Minor"}</p>
+<p>{users.map((u) => <li key={u.id}>{u.name}</li>)}</p>
+
+// Statements: NOT OK
+<p>{if (x) "yes" else "no"}</p>      // ← won't parse
+```
+
+For conditional rendering, use the ternary (`cond ? a : b`) or the `&&` short-circuit:
+
+```jsx
+{isLoggedIn && <UserMenu />}              // render only if true
+{isLoggedIn ? <UserMenu /> : <LoginBtn />} // pick one or the other
+```
+
+### Attributes that differ from HTML
+
+A handful of HTML attributes have different names in JSX because their HTML names conflict with JavaScript reserved words or because camelCase is the JS convention.
+
+| HTML | JSX |
+|---|---|
+| `class` | `className` |
+| `for` (on `<label>`) | `htmlFor` |
+| `tabindex` | `tabIndex` |
+| `onclick` | `onClick` (and all events camelCase: `onChange`, `onSubmit`) |
+| `style="color: red"` | `style={{ color: "red" }}` (an object, not a string) |
+
+Note the **doubled braces** in `style={{ color: "red" }}` — the outer `{}` is "we're switching to JS"; the inner `{}` is "this JS expression is an object literal." Inside the object, properties use camelCase (`backgroundColor`, not `background-color`).
+
+`data-*` and `aria-*` attributes keep their dashes:
+
+```jsx
+<button data-user-id="42" aria-label="Save">Save</button>
+```
+
+### Rendering lists
+
+```jsx
+const items = ["apple", "banana", "cherry"];
+
+return (
+  <ul>
+    {items.map((item) => (
+      <li key={item}>{item}</li>
+    ))}
+  </ul>
+);
+```
+
+You build the list of `<li>` elements with `.map(...)` — each element becomes a child of the `<ul>`. The **`key` prop** is React-specific: it tells React how to match up elements between renders so it can update the DOM efficiently and preserve component state correctly. Use something stable and unique (an id, never the array index when items can reorder).
+
+Forgetting `key` is the single most common React warning. Always provide one when rendering an array of elements.
+
+### Inline conditionals
+
+The three patterns:
+
+```jsx
+{/* AND short-circuit — render only if condition is truthy */}
+{loading && <Spinner />}
+
+{/* Ternary — pick A or B */}
+{loading ? <Spinner /> : <Result data={data} />}
+
+{/* Early return for big branches */}
+if (!user) return <LoginPrompt />;
+return <Profile user={user} />;
+```
+
+A gotcha: don't use `&&` with values that can be `0`:
+
+```jsx
+{items.length && <List items={items} />}
+// When items.length is 0, React renders the literal "0" on screen!
+// Use boolean coercion: {items.length > 0 && <List />}
+```
+
+### A bigger example
+
+```jsx
+function UserCard({ user }) {
+  return (
+    <article className="card">
+      <img src={user.avatar} alt={`${user.name}'s avatar`} />
+      <h3>{user.name}</h3>
+      {user.bio && <p>{user.bio}</p>}
+      <ul>
+        {user.skills.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
+      {user.premium ? (
+        <span className="badge">★ Premium</span>
+      ) : (
+        <button onClick={() => upgrade(user.id)}>Upgrade</button>
+      )}
+    </article>
+  );
+}
+```
+
+Read it as a story: an article, with an image, a heading, an optional paragraph, a list of skills, and either a premium badge or an upgrade button. The JSX is almost prose; the dynamic bits hide in `{ }` braces.
+
+### What JSX is NOT
+
+- **Not HTML.** It compiles to JS. The runtime is React, not the browser's HTML parser.
+- **Not a templating language.** It's just JavaScript with markup sugar. No special template syntax to learn.
+- **Not strict.** TypeScript adds compile-time checking; vanilla JSX lets you pass any prop you want and crashes at runtime if it doesn't make sense. (We'll meet TS in the last batch of this phase.)
+
+<ExampleProject
+  src="jsx-tour"
+  title="Every JSX feature on one page"
+  description="A small page that uses fragments, attributes, inline styles, list rendering with keys, conditional rendering with && and ternary, and embedded JS expressions — all in one component. Annotated to show what's HTML, what's JSX-specific, and what's plain JavaScript."
+/>
+
+<ExampleProject
+  src="expressions-in-jsx"
+  title="Expressions vs statements, demystified"
+  description="A page that demonstrates which kinds of JavaScript code work inside { } and which don't. Shows the conversion patterns: if/else becomes a ternary, for becomes a map. Click each example to see the compiled output."
+/>
+
+<Exercise
+  title="Build a user profile component in JSX"
+  starter={`In a React + Babel CDN page (or your editor of choice),
+write a single component called UserProfile that takes a user
+object as props:
+
+  const user = {
+    name: "Aisha",
+    age: 22,
+    bio: "Learning React.",
+    skills: ["HTML", "CSS", "JavaScript"],
+    avatar: "https://picsum.photos/seed/aisha/120/120",
+    premium: true,
+  };
+
+The component should render:
+
+  - An <img> with the avatar.
+  - An <h1> with the name.
+  - A <p> with "{age} years old".
+  - The bio in a <p>, but only if user.bio is truthy.
+  - A <ul> of the skills, each in an <li>.
+  - A <span className="badge"> with "★ Premium" if user.premium
+    is true; otherwise a <button>Upgrade</button>.
+
+Wrap the whole thing in a single <article> element and use
+className for any styling classes.`}
+>
+
+- The component is a function `function UserProfile({ user })` (or with destructuring in the parameter).
+- The whole return value is wrapped in **one** outer element (an `<article>`).
+- `className` is used, not `class`.
+- The image uses `alt` with the user's name interpolated via `{...}`.
+- The bio uses `{user.bio && <p>...</p>}` — not rendered when bio is empty.
+- The skills list uses `.map(...)` with a `key` prop on each `<li>`.
+- The premium/upgrade switch uses a ternary or conditional rendering — not duplicated branches.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is JSX? Is it HTML?
+
+**A:** JSX is a **syntax extension to JavaScript** that lets you write markup directly in your code:
+
+```jsx
+const el = <h1>Hello</h1>;
+```
+
+It's **not HTML** — the browser doesn't understand it. A build step (Babel, Vite, esbuild) compiles each tag into a `React.createElement(...)` call:
+
+```js
+const el = React.createElement("h1", null, "Hello");
+```
+
+At runtime, React calls that and produces a virtual DOM node, which it then turns into a real DOM element. The reason JSX exists: writing `createElement(...)` calls by hand for hundreds of components is unreadable. JSX is sugar that makes React code look like the UI it produces.
+
+Three small differences from HTML to remember: `className` instead of `class`, self-closing void tags (`<img />`), and curly braces for embedded JavaScript expressions.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does JSX require `className` instead of `class`?
+
+**A:** Because **`class` is a reserved word** in JavaScript (used for class declarations). Since JSX compiles to JavaScript object literals where attribute names become object keys, using `class` as a key would clash with the reserved-word check.
+
+```jsx
+<div className="card">
+// compiles to:
+React.createElement("div", { className: "card" });
+```
+
+React's solution was to rename the attribute to `className` in JSX. At render time, React internally translates this to the `class` attribute on the real DOM element — the rendered HTML still says `<div class="card">`.
+
+Same logic applies to `htmlFor` (label's `for` attribute — `for` is also a reserved word). Other attributes that change in JSX use **camelCase** instead of dashes: `tabIndex`, `onClick`, `onChange`. The DOM attribute names are unchanged at runtime.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why does React require a `key` prop when rendering a list?
+
+**A:** Keys help React **identify which items changed, were added, or were removed** between renders. Without keys, React falls back to matching by index — fast, but wrong as soon as items reorder or get inserted in the middle.
+
+Example: a todo list where items can be deleted from the middle. Without keys, React reuses the existing DOM nodes for indices 0..N. After deleting the 2nd item, what was index 3 is now index 2, but React still sees the old DOM at index 2 and just patches its text. Any state attached to that DOM node — focused input, scroll position, animation — bleeds onto the wrong item.
+
+With **stable unique keys**, React matches by id instead. Removed items get unmounted; remaining items keep their state.
+
+```jsx
+{todos.map((todo) => (
+  <Todo key={todo.id} todo={todo} />
+))}
+```
+
+Rules:
+
+- Keys must be **unique among siblings** (not globally).
+- Prefer a stable id from your data. **Never use the array index** when items can reorder or be inserted in the middle.
+- A `Math.random()` key is worse than an index — it changes every render, so React thinks every item is new.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What can you put inside `{ }` in JSX?
+
+**A:** **Any JavaScript expression** — anything that evaluates to a value. Not statements.
+
+OK:
+
+```jsx
+{user.name}                // variable / property access
+{1 + 2}                    // arithmetic
+{getGreeting(user)}        // function call
+{isAdult ? "Adult" : "Minor"}   // ternary
+{items.map((i) => <li key={i.id}>{i.name}</li>)}  // map
+{isLoggedIn && <UserMenu />}    // && short-circuit
+```
+
+NOT OK:
+
+```jsx
+{if (x) "yes" else "no"}        // if is a statement, not expression
+{for (const x of arr) ...}      // for is a statement
+{const y = 5; y * 2}            // let/const declarations are statements
+```
+
+Workarounds:
+
+- `if/else` → use a ternary, or compute the value above the return.
+- `for` → use `.map(...)` which returns an array.
+- Multiple statements → extract to a helper function.
+
+The rule: **expressions inside `{ }`, statements outside the return**. If the logic needs statements, do it before the return and put the result into a variable that you embed into the JSX.
+
+</InterviewQuestion>

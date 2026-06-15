@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Composition — list → chip → avatar</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .list { display: flex; flex-direction: column; gap: 8px; }
+      .chip { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: white; border: 1px solid #e5e7eb; border-radius: 10px; }
+      .chip .name { font-weight: 600; }
+      .chip .role { color: #6b7280; font-size: 12px; }
+      .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+      .note { background: #1c2230; color: #e6edf3; border-radius: 8px; padding: 12px; font-family: ui-monospace, monospace; font-size: 12px; margin-top: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>Three layers of components</h1>
+    <p>UserList renders many UserChips. Each UserChip renders an Avatar. Read top-down — each component is small and named for what it does.</p>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // ─── leaf ──────────────
+      function Avatar({ src, alt, size = 36 }) {
+        return <img className="avatar" src={src} alt={alt} width={size} height={size} />;
+      }
+
+      // ─── middle ────────────
+      function UserChip({ user }) {
+        return (
+          <div className="chip">
+            <Avatar src={user.avatar} alt={user.name} />
+            <div>
+              <div className="name">{user.name}</div>
+              <div className="role">{user.role}</div>
+            </div>
+          </div>
+        );
+      }
+
+      // ─── parent ────────────
+      function UserList({ users }) {
+        return (
+          <div className="list">
+            {users.map((u) => (
+              <UserChip key={u.id} user={u} />
+            ))}
+          </div>
+        );
+      }
+
+      const users = [
+        { id: 1, name: "Aisha Nakato", role: "Frontend dev",  avatar: "https://picsum.photos/seed/1/100" },
+        { id: 2, name: "Brian Kim",    role: "Designer",      avatar: "https://picsum.photos/seed/2/100" },
+        { id: 3, name: "Daniel Reyes", role: "Engineer",      avatar: "https://picsum.photos/seed/3/100" },
+        { id: 4, name: "Sandra Lee",   role: "Product",       avatar: "https://picsum.photos/seed/4/100" },
+      ];
+
+      function App() {
+        return (
+          <>
+            <UserList users={users} />
+            <div className="note">UserList → UserChip → Avatar — three components, ~30 lines each, composed into one rendered list.</div>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

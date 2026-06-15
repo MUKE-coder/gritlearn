@@ -1,0 +1,254 @@
+## What React is and why components
+
+You've now built whole pages with vanilla DOM. You know how to make HTML, style it with CSS, listen for events, and update the page with JavaScript. That stack works — every site on the internet runs on top of it. But the moment you try to build something *big* — a dashboard, a settings page, a checkout flow — the vanilla approach starts to bend. The state lives in one place, the DOM lives in another, every change requires hand-coding the diff. **React** is the most popular answer to that pain. It's a library — not a framework — that lets you describe your UI as a tree of **components**, each one a small reusable piece, and lets React figure out how to update the DOM as your data changes.
+
+<Analogy>
+React components are **reusable LEGO bricks**.
+
+When you build with LEGO, you don't melt down plastic and cast a custom shape for every piece you need. You have a tub of bricks — 2×2 red, 1×4 white, the shiny one with a smiley face — and you combine them. The same red 2×2 brick shows up in the wheels of a car, the walls of a castle, the chimney of a house. Each brick is small, has its own shape, and clicks into other bricks via the same standard interface.
+
+React components are exactly that. A `Button` component, defined once, snaps into a dialog, a navbar, a settings page. A `Card` component wraps any content you give it. An `Avatar` component takes a user and renders the picture and name. You compose them — a `UserMenu` *contains* an `Avatar` and a `Button`; a `Page` contains a `Header` and a `Sidebar` and a `Main` — and the whole UI becomes a **tree of components**.
+
+The big mental shift from vanilla DOM: you stop *imperatively* describing changes ("clear this div, append three new lis, update the count badge") and start *declaratively* describing what the UI **should look like** for any given state. React handles the diff — it figures out the minimum DOM operations to get from the previous render to the new one. You write what; React handles how.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a React component tree with App containing Header, Main with multiple Cards, and Footer"
+  caption="A React app is a tree of components. The root is your App; every nested element is either another component or built-in HTML. Each component owns its own piece of the UI."
+>
+
+```
+   <App>
+     ├─ <Header logo="..." user={me} />
+     │     └─ <Avatar src={me.avatar} />
+     ├─ <Main>
+     │     ├─ <Card title="Welcome">...</Card>
+     │     ├─ <Card title="Tips">...</Card>
+     │     └─ <Card title="What's new">...</Card>
+     └─ <Footer year={2026} />
+```
+
+</Illustration>
+
+### The two ideas React is built on
+
+#### 1. Components
+
+A **component** is a JavaScript function that returns markup. It can take inputs (called **props**), keep its own internal state, and respond to events. The output looks like HTML — that's JSX, the next lesson — but it's really expressions the function evaluates.
+
+```jsx
+function Button({ label }) {
+  return <button className="btn">{label}</button>;
+}
+
+// Use it:
+<Button label="Save" />
+```
+
+Reuse means *calling the function with different props*. Two `Save` and `Cancel` buttons are two calls to the same `Button` function with different labels.
+
+#### 2. Re-render on state change
+
+You define state with a hook (`useState`). When that state changes, React **calls your component function again** to compute new markup, compares the new tree to the previous one, and updates only the DOM nodes that changed.
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>{count}</button>;
+}
+```
+
+Click the button: `setCount(1)` is called → React re-runs `Counter` → React sees `<button>1</button>` instead of `<button>0</button>` → React updates that one text node.
+
+You never touched the DOM. React did.
+
+### Why this matters: the vanilla DOM problem
+
+Compare the same counter in vanilla JS:
+
+```js
+let count = 0;
+const btn = document.querySelector("button");
+btn.textContent = count;
+btn.addEventListener("click", () => {
+  count++;
+  btn.textContent = count;   // ← manual DOM update
+});
+```
+
+The "0" appears in two places: the variable and the DOM. Every time `count` changes, you have to remember to keep the DOM in sync. With one button this is trivial; with a hundred elements that depend on the same data — a list, a counter badge, a chart, a "save" indicator — you end up writing dozens of "remember to update X when Y changes" lines. Inevitably one is forgotten and the UI drifts out of sync.
+
+React's promise: **describe what the UI should look like for any given state. React keeps it in sync.** Forget about DOM updates entirely. Your job is the data and the rendering function.
+
+### The component model in practice
+
+A real app is a tree:
+
+```jsx
+function App() {
+  return (
+    <Layout>
+      <Header />
+      <Sidebar>
+        <NavLink to="/home">Home</NavLink>
+        <NavLink to="/about">About</NavLink>
+      </Sidebar>
+      <Main>
+        <UserCard user={currentUser} />
+        <PostList posts={posts} />
+      </Main>
+      <Footer />
+    </Layout>
+  );
+}
+```
+
+Each component is *small* and does *one thing*. `Layout` handles overall structure. `Sidebar` handles the sidebar. `NavLink` handles one link. `PostList` handles the list — and probably calls `<Post>` inside its loop. The whole UI is a hierarchy you can read top-down like a sentence.
+
+Three benefits this unlocks:
+
+1. **Reusable.** A well-designed `Button` shows up everywhere.
+2. **Local reasoning.** To understand one piece, you read one file (or one function).
+3. **Testable.** Each component renders predictable output from props. Easy to verify in isolation.
+
+### Where React fits in the ecosystem
+
+React is a **library** — a focused tool for the *view* layer. It doesn't include routing, forms, state management, data fetching, or styling. Other libraries provide those: **React Router** for routing, **TanStack Query** for data fetching, **Zustand** or **Redux Toolkit** for global state, **Tailwind** or CSS modules for styling.
+
+**Next.js** wraps React with conventions: file-based routing, server components, data loading, deployment. Most production React apps run on Next.js or a similar framework today. We'll meet Next.js properly in Phase 3.
+
+For Phase 1, the goal is to understand the **components + state + re-render** mental model. Everything else is composition.
+
+### A first JSX glimpse
+
+The full JSX lesson is next. For now, the syntax to get used to:
+
+```jsx
+function Hello({ name }) {
+  return (
+    <div className="greeting">
+      <h1>Hello, {name}!</h1>
+      <p>Welcome to React.</p>
+    </div>
+  );
+}
+```
+
+Two things to notice:
+
+- **`className`** instead of `class` — `class` is a reserved word in JS, so React renamed it.
+- **`{name}`** drops in any JavaScript expression. The curly braces are how you embed values into the markup.
+
+That's basically the whole syntax. The rest is convention.
+
+<ExampleProject
+  src="vanilla-vs-react"
+  title="The same counter, vanilla DOM vs React"
+  description="Two side-by-side counters on one page — left written in vanilla DOM with manual textContent updates, right written in React with useState. Same UX; compare the source. The React version is shorter and the state-to-DOM mapping is implicit."
+/>
+
+<ExampleProject
+  src="component-tree"
+  title="A small app as a tree of components"
+  description="A tiny dashboard built out of nested components: Layout → Header / Sidebar / Main. Each component is annotated with its file/function name so you can see how the tree maps to the rendered output."
+/>
+
+<Exercise
+  title="Sketch your favorite page as components"
+  starter={`Pick a website you use daily (Twitter, GitHub, your school's
+LMS — anything). On paper or in a markdown file, do this:
+
+  1. Draw a rough box around every visual region of the page.
+  2. Name each box like a React component name (PascalCase): Header,
+     Sidebar, ProfileCard, FeedList, Tweet, ReplyForm.
+  3. Note which components contain which others — the tree.
+  4. For each component, list 2-3 props it would need to render
+     (e.g. Tweet needs author, text, timestamp).
+
+This is component design — the most important skill in React. You
+don't write any code; you just decide what the components are.`}
+>
+
+- Every visual region is named like a component (PascalCase, descriptive).
+- The components form a hierarchy — outer components contain inner ones.
+- Small "leaf" components (like `Tweet`, `NavLink`, `Avatar`) appear multiple times in the tree.
+- Each component has a clear, single purpose — not a soup of unrelated UI.
+- Props are listed for each — the *data* the component needs to render.
+- The tree has at most 4-5 levels of nesting (deeper than that suggests the components are too small).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is React?
+
+**A:** React is a **JavaScript library** for building user interfaces. It was created at Facebook in 2013 and is now used by most major websites. Its core idea: **describe the UI as a tree of small reusable components**, each driven by *props* (inputs) and *state* (internal data), and let React handle keeping the actual DOM in sync.
+
+The big shift it introduced: **declarative UI**. Instead of writing imperative DOM updates ("remove this li, append a new one"), you write a function that returns *what the UI should look like for the current data*. React diffs the new output against the previous render and updates only what changed.
+
+React is a *library*, not a *framework* — it does only the view layer. Routing, data fetching, forms, styling, etc. come from other libraries or from a framework like Next.js that bundles them.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a "component" in React?
+
+**A:** A component is **a JavaScript function that returns markup** (JSX, which compiles to React element objects). It can:
+
+- Take **props** as a parameter — inputs that customize what it renders.
+- Hold its own **state** via hooks (`useState`, `useReducer`).
+- Respond to **events** (`onClick`, `onChange`, etc.).
+- **Compose** other components inside itself.
+
+```jsx
+function Button({ label, onClick }) {
+  return <button className="btn" onClick={onClick}>{label}</button>;
+}
+```
+
+Two flavors used to exist: **class components** (the original) and **function components** (the modern). Function components + hooks is how all new React code is written. Class components still work but they're legacy.
+
+A React app is a tree of components: a top-level `App` that contains a `Layout` that contains a `Header` and a `Main` and so on. Each component does one thing; you compose them to build any UI.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How is React's approach to UI different from vanilla DOM?
+
+**A:** Two big differences:
+
+1. **Declarative vs imperative.** Vanilla DOM is imperative — you write step-by-step instructions to mutate the page (`textContent = ...`, `appendChild(...)`, `classList.add(...)`). React is declarative — you write a function that says "for *this* state, here's what the UI should look like." React figures out the minimum DOM changes to get there.
+
+2. **State is the source of truth.** In vanilla DOM, your data lives in JS *and* in the DOM, and you manually keep them in sync. In React, data lives in *state*. The DOM is derived from state. When state changes, React re-renders the affected components automatically. You never write DOM updates yourself.
+
+The win: for any non-trivial UI, you stop tracking "what changed since last time" and "which DOM nodes need updating." You write the *current state* and the *render function*; React handles diffs and DOM updates.
+
+The cost: there's a build step (JSX must compile), a runtime (React itself ships with your bundle), and a new mental model to learn (components, hooks, re-renders). For small static pages it's overkill; for any real interactive app it pays off massively.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Is React a "framework" or a "library"? Why does the distinction matter?
+
+**A:** React is a **library**, not a framework. The distinction:
+
+- A **library** gives you focused tools that you call when you need them. You're in control of the structure.
+- A **framework** dictates the overall structure of your app — it calls *your* code, not the other way around.
+
+React itself only handles the view layer — rendering components, managing state, updating the DOM. It deliberately leaves these unsolved:
+
+- **Routing** → React Router, TanStack Router
+- **Data fetching** → TanStack Query, SWR, RTK Query, server components
+- **Global state** → Zustand, Redux Toolkit, Jotai
+- **Forms** → React Hook Form, Formik
+- **Styling** → Tailwind, CSS modules, styled-components
+- **Build tooling** → Vite, Webpack, Parcel
+
+This unbundling is a feature: you can mix and match. **Next.js** is a *framework* built on React that bundles routing, server rendering, data loading, and deployment into one opinionated stack. Most production React apps use Next.js or Remix today; pure React without a framework is now mostly for embedded widgets or static sites.
+
+For your career: learning React first gets you the *core mental model* (components, props, state, hooks). Frameworks are layered on top once that clicks.
+
+</InterviewQuestion>

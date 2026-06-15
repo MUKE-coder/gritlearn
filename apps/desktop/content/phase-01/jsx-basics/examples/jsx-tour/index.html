@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JSX tour</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 12px 0; }
+      ul { padding-left: 22px; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; }
+      .green { color: #047857; font-weight: 700; }
+      .annotation { padding: 10px; background: #1c2230; color: #e6edf3; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.4; margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>One component, every common JSX feature</h1>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const user = {
+        name: "Aisha",
+        age: 22,
+        bio: "Learning React.",
+        skills: ["HTML", "CSS", "JavaScript", "React"],
+        premium: true,
+        avatar: "https://picsum.photos/seed/aisha/100/100",
+      };
+
+      function UserCard({ user }) {
+        // Variables computed in normal JS — usable below in {…}
+        const greeting = `Hello, ${user.name}!`;
+        const isAdult  = user.age >= 18;
+
+        return (
+          // Fragment: a wrapper that doesn't render a DOM node
+          <>
+            <div className="card">
+              <h2>{greeting}</h2>
+
+              {/* Embedded expression — math */}
+              <p>You are <span className="green">{user.age * 365}</span> days old (roughly).</p>
+
+              {/* Inline style — note the doubled braces (JSX -> object literal) */}
+              <img
+                src={user.avatar}
+                alt={`${user.name}'s avatar`}
+                style={{ borderRadius: 8, width: 80, height: 80 }}
+              />
+
+              {/* && conditional — only renders when truthy */}
+              {user.bio && <p><em>{user.bio}</em></p>}
+
+              {/* Ternary conditional */}
+              {isAdult ? (
+                <span className="badge">Adult</span>
+              ) : (
+                <span className="badge">Minor</span>
+              )}
+              {" "}
+              {user.premium && <span className="badge" style={{ background: "#fce7f3", color: "#9d174d" }}>★ Premium</span>}
+
+              {/* List rendering with .map and a key */}
+              <p>Skills:</p>
+              <ul>
+                {user.skills.map((skill) => (
+                  <li key={skill}>{skill}</li>
+                ))}
+              </ul>
+
+              <p className="green">All of this is one component, written as a single expression.</p>
+            </div>
+
+            <div className="annotation">
+              The fragment (&lt;&gt;...&lt;/&gt;) lets the component return multiple top-level elements without adding a useless wrapper div.
+            </div>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<UserCard user={user} />);
+    </script>
+  </body>
+</html>
