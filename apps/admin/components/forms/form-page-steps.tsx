@@ -18,7 +18,7 @@ export function FormPageSteps({ resource }: FormPageStepsProps) {
 
   const { data: item, isLoading } = useResourceItem(
     resource.endpoint,
-    editId ? Number(editId) : 0,
+    editId ?? "",
     { enabled: isEdit }
   );
 
@@ -31,7 +31,7 @@ export function FormPageSteps({ resource }: FormPageStepsProps) {
   const handleSubmit = (data: Record<string, unknown>) => {
     if (isEdit && editId) {
       update(
-        { id: Number(editId), body: data },
+        { id: editId, body: data },
         { onSuccess: () => router.push(`/resources/${resource.slug}`) }
       );
     } else {

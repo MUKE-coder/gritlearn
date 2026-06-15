@@ -20,7 +20,7 @@ export function FormModalSteps({ resource, item, onClose }: FormModalStepsProps)
   const handleSubmit = (data: Record<string, unknown>) => {
     if (isEdit) {
       update(
-        { id: Number(item.id), body: data },
+        { id: String(item.id), body: data },
         { onSuccess: () => onClose() }
       );
     } else {

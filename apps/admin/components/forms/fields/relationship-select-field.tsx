@@ -70,7 +70,7 @@ export function RelationshipSelectField({ field, value, onChange, error }: Relat
 
   const selectedLabel = useMemo(() => {
     if (!value) return "";
-    const found = (options as Record<string, unknown>[]).find((item) => item.id === value);
+    const found = (options as Record<string, unknown>[]).find((item) => String(item.id) === value);
     if (!found) return String(value);
     return String(found[displayField] || found.name || found.title || found.id || "");
   }, [value, options, displayField]);
@@ -109,7 +109,7 @@ export function RelationshipSelectField({ field, value, onChange, error }: Relat
               </button>
             )}
             {filtered.map((item) => {
-              const id = item.id as number;
+              const id = String(item.id);
               const label = String(item[displayField] || item.name || item.title || item.id || "");
               return (
                 <button

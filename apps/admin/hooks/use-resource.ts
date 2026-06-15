@@ -127,7 +127,7 @@ export function useBulkDeleteResource(endpoint: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (ids: number[]) => {
+    mutationFn: async (ids: string[]) => {
       await Promise.all(ids.map((id) => apiClient.delete(`${endpoint}/${id}`)));
     },
     onSuccess: () => {

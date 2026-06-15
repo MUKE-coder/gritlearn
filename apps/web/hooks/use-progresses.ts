@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+import { api } from "@/lib/api";
 
 interface Progress {
   id: string;
@@ -44,7 +44,7 @@ export function useProgresses({ page = 1, pageSize = 20, search = "", sortBy = "
       if (search) {
         params.set("search", search);
       }
-      const { data } = await apiClient.get(`/api/progresses?${params}`);
+      const { data } = await api.get(`/api/progresses?${params}`);
       return data;
     },
   });
@@ -54,7 +54,7 @@ export function useGetProgress(id: string) {
   return useQuery<Progress>({
     queryKey: ["progresses", id],
     queryFn: async () => {
-      const { data } = await apiClient.get(`/api/progresses/${id}`);
+      const { data } = await api.get(`/api/progresses/${id}`);
       return data.data;
     },
     enabled: !!id,
@@ -66,7 +66,7 @@ export function useCreateProgress() {
 
   return useMutation({
     mutationFn: async (input: Record<string, unknown>) => {
-      const { data } = await apiClient.post("/api/progresses", input);
+      const { data } = await api.post("/api/progresses", input);
       return data;
     },
     onSuccess: () => {
@@ -80,7 +80,7 @@ export function useUpdateProgress() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: { id: string } & Record<string, unknown>) => {
-      const { data } = await apiClient.put(`/api/progresses/${id}`, input);
+      const { data } = await api.put(`/api/progresses/${id}`, input);
       return data;
     },
     onSuccess: () => {
@@ -94,7 +94,7 @@ export function useDeleteProgress() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/api/progresses/${id}`);
+      await api.delete(`/api/progresses/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["progresses"] });

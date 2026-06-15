@@ -111,7 +111,7 @@ export function useUploadFile() {
   return useMutation({
     mutationFn: async (file: File) => {
       const result = await uploadFile(file);
-      return result.data as Upload;
+      return result.data as unknown as Upload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "uploads"] });

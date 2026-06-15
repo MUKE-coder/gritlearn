@@ -11,7 +11,6 @@ export {
   type ResetPasswordInput,
 } from "./user";
 export {
-  BlogSchema,
   CreateBlogSchema,
   UpdateBlogSchema,
   type CreateBlogInput,

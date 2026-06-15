@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+import { api } from "@/lib/api";
 
 interface ContentManifest {
   id: string;
@@ -42,7 +42,7 @@ export function useContentManifests({ page = 1, pageSize = 20, search = "", sort
       if (search) {
         params.set("search", search);
       }
-      const { data } = await apiClient.get(`/api/content_manifests?${params}`);
+      const { data } = await api.get(`/api/content_manifests?${params}`);
       return data;
     },
   });
@@ -52,7 +52,7 @@ export function useGetContentManifest(id: string) {
   return useQuery<ContentManifest>({
     queryKey: ["content_manifests", id],
     queryFn: async () => {
-      const { data } = await apiClient.get(`/api/content_manifests/${id}`);
+      const { data } = await api.get(`/api/content_manifests/${id}`);
       return data.data;
     },
     enabled: !!id,
@@ -64,7 +64,7 @@ export function useCreateContentManifest() {
 
   return useMutation({
     mutationFn: async (input: Record<string, unknown>) => {
-      const { data } = await apiClient.post("/api/content_manifests", input);
+      const { data } = await api.post("/api/content_manifests", input);
       return data;
     },
     onSuccess: () => {
@@ -78,7 +78,7 @@ export function useUpdateContentManifest() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: { id: string } & Record<string, unknown>) => {
-      const { data } = await apiClient.put(`/api/content_manifests/${id}`, input);
+      const { data } = await api.put(`/api/content_manifests/${id}`, input);
       return data;
     },
     onSuccess: () => {
@@ -92,7 +92,7 @@ export function useDeleteContentManifest() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/api/content_manifests/${id}`);
+      await api.delete(`/api/content_manifests/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["content_manifests"] });

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Shield, ExternalLink, AlertTriangle, Zap, Activity, AlertCircle, Globe } from "@/lib/icons";
-import { api } from "@/lib/api";
+import { apiClient as api } from "@/lib/api-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 

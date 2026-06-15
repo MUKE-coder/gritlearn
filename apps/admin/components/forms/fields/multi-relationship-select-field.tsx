@@ -70,7 +70,7 @@ export function MultiRelationshipSelectField({ field, value = [], onChange, erro
 
   const selectedLabels = useMemo(() => {
     return value.map((id) => {
-      const found = (options as Record<string, unknown>[]).find((item) => item.id === id);
+      const found = (options as Record<string, unknown>[]).find((item) => String(item.id) === id);
       if (!found) return { id, label: String(id) };
       return { id, label: String(found[displayField] || found.name || found.title || found.id || "") };
     });
@@ -122,7 +122,7 @@ export function MultiRelationshipSelectField({ field, value = [], onChange, erro
               </button>
             )}
             {filtered.map((item) => {
-              const id = item.id as number;
+              const id = String(item.id);
               const label = String(item[displayField] || item.name || item.title || item.id || "");
               const isSelected = value.includes(id);
               return (

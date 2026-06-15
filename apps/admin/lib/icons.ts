@@ -71,6 +71,9 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowLeft,
+  Globe,
+  Zap,
+  Cpu,
   type LucideIcon,
 } from "lucide-react";
 
@@ -167,4 +170,8 @@ export {
   TrendingUp,
   TrendingDown,
   ArrowLeft,
+  Shield,
+  Globe,
+  Zap,
+  Cpu,
 };
