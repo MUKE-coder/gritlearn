@@ -1,7 +1,7 @@
-// Per-platform download metadata for the marketing site. URLs are
-// placeholders until B12 deploys real binaries to File Storage; the
-// shape is what matters — the marketing page reads from this single
-// list so swapping in production URLs is a one-file change.
+// Per-platform download metadata for the marketing site. URLs point at
+// downloads.jbeditor.com — the binaries are uploaded by the release
+// workflow in B12. The marketing page reads from this single list so
+// swapping providers is a one-file change.
 
 export type Platform = "macos-arm" | "macos-intel" | "windows" | "linux";
 
@@ -19,28 +19,28 @@ export const downloads: DownloadOption[] = [
     label: "macOS (Apple Silicon)",
     detail: "M1, M2, M3 — universal native binary",
     filename: "jeditor-darwin-arm64.dmg",
-    url: "https://downloads.jeditor.dev/latest/jeditor-darwin-arm64.dmg",
+    url: "https://downloads.jbeditor.com/latest/jeditor-darwin-arm64.dmg",
   },
   {
     platform: "macos-intel",
     label: "macOS (Intel)",
     detail: "x86_64 Macs running macOS 11+",
     filename: "jeditor-darwin-amd64.dmg",
-    url: "https://downloads.jeditor.dev/latest/jeditor-darwin-amd64.dmg",
+    url: "https://downloads.jbeditor.com/latest/jeditor-darwin-amd64.dmg",
   },
   {
     platform: "windows",
     label: "Windows",
     detail: "Windows 10 / 11, 64-bit. NSIS installer.",
     filename: "jeditor-windows-amd64.exe",
-    url: "https://downloads.jeditor.dev/latest/jeditor-windows-amd64.exe",
+    url: "https://downloads.jbeditor.com/latest/jeditor-windows-amd64.exe",
   },
   {
     platform: "linux",
     label: "Linux",
     detail: "AppImage — runs on most distros without install.",
     filename: "jeditor-linux-amd64.AppImage",
-    url: "https://downloads.jeditor.dev/latest/jeditor-linux-amd64.AppImage",
+    url: "https://downloads.jbeditor.com/latest/jeditor-linux-amd64.AppImage",
   },
 ];
 

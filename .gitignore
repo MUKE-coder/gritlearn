@@ -60,3 +60,8 @@ pnpm-debug.log*
 
 # Claude Code local config (not project state)
 .claude/
+
+# Production env files — populated with real secrets, NEVER commit
+.env.production
+.env.production.*
+apps/*/.env.production
