@@ -1,4 +1,14 @@
-# gritlearn
+# JEditor
+
+The IDE that teaches you to code by analogy while you build real projects.
+Native desktop editor (Wails + Monaco) fused with an analogy-first curriculum
+that ships bundled in the binary and works fully offline after a one-time signup.
+
+Full name: **JBEditor** — shortened to **JEditor** in everyday use.
+
+Internal codename / repo / database / Docker containers are still `gritlearn` because
+renaming Go modules and Docker volumes is a large refactor; nothing user-facing
+uses that name.
 
 Built with [Grit](https://gritframework.dev) — Go + React. Built with Grit.
 

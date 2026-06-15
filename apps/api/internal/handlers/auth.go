@@ -185,7 +185,7 @@ func (h *AuthHandler) sendSignupEmails(user models.User) {
 
 		appName := h.Config.AppName
 		if appName == "" {
-			appName = "GritLearn"
+			appName = "JEditor"
 		}
 
 		// Welcome email — fired-and-forget; failures only get logged.

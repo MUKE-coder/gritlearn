@@ -23,7 +23,7 @@ export function Navbar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 border border-accent/20">
             <span className="text-accent font-mono font-bold text-sm">G</span>
           </div>
-          <span className="text-lg font-bold tracking-tight">gritlearn</span>
+          <span className="text-lg font-bold tracking-tight">JEditor</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">

@@ -18,9 +18,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GritLearn — Code you can finally see",
+  title: "JEditor — Code you can finally see",
   description:
-    "The IDE that teaches you to code by analogy while you build real projects. A native desktop editor with an analogy-first curriculum that works offline.",
+    "JBEditor (JEditor for short) — the IDE that teaches you to code by analogy while you build real projects. A native desktop editor with an analogy-first curriculum that works offline.",
 };
 
 export default function RootLayout({

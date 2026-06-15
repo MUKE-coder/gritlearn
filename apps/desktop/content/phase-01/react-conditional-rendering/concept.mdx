@@ -1,0 +1,358 @@
+## Conditional rendering
+
+Almost every interactive UI shows different things based on state. Loading → spinner. Logged in → user menu, otherwise → sign-in button. Error → red banner. Empty list → "Nothing yet, add one!" There's no special syntax in React for this — you use plain JavaScript expressions: ternaries, `&&` short-circuits, early returns. Once you know the patterns, your components read like sentences.
+
+<Analogy>
+Conditional rendering is **a control panel with lights for each mode**.
+
+Picture a dashboard with a row of indicator lights: GREEN (running), AMBER (warning), RED (error). At any moment, *one* of them is lit — never all three, never none. The dashboard's job is to look at the current state and decide which light to show.
+
+A React component does the same. State changes — request just started, response came back, an error happened — and the component re-renders with the right "light" lit. You write the logic that maps state to UI:
+
+```jsx
+function Status({ state }) {
+  if (state === "loading") return <Spinner />;
+  if (state === "error")   return <ErrorBanner />;
+  return <Result />;
+}
+```
+
+Three patterns dominate React code: the **ternary** (`? :`) for "pick one of two," the **`&&` short-circuit** for "render this only if," and **early returns** for "this whole component renders differently when X." Picking the right pattern for the situation is mostly about readability.
+</Analogy>
+
+<Illustration
+  alt="Diagram showing three conditional rendering patterns - ternary, &&, and early return"
+  caption="Three patterns, one idea. Pick the cleanest expression for what you're trying to say."
+>
+
+```
+   TERNARY                          &&  SHORT-CIRCUIT
+   ───────                          ──────────────
+   { isAdmin                        { isLoggedIn && <UserMenu /> }
+       ? <AdminPanel />
+       : <UserPanel />              EARLY RETURN
+   }                                ─────────────
+                                    function Profile({ user }) {
+                                      if (!user) return <LoginPrompt />;
+                                      return <UserCard user={user} />;
+                                    }
+```
+
+</Illustration>
+
+### Pattern 1: ternary — pick one of two
+
+```jsx
+return <p>{isAdmin ? "Admin view" : "User view"}</p>;
+```
+
+Use a ternary when there are **exactly two** outputs and both branches are short. Keep it on multiple lines for readability when the branches involve JSX:
+
+```jsx
+return (
+  <div>
+    {isLoading
+      ? <Spinner />
+      : <ResultList items={items} />
+    }
+  </div>
+);
+```
+
+**Don't nest ternaries.** `a ? b : c ? d : e` is unreadable after one level. Switch to `if/else` or an early return when you'd need a second ternary.
+
+### Pattern 2: `&&` short-circuit — render only if
+
+```jsx
+return (
+  <>
+    {hasNewMessages && <Notification count={count} />}
+  </>
+);
+```
+
+`condition && JSX` renders the JSX *only when condition is truthy*. If `condition` is falsy, the expression evaluates to the falsy value and React renders nothing.
+
+A subtle bug:
+
+```jsx
+{items.length && <List items={items} />}
+// When items.length is 0, React literally renders the number 0!
+```
+
+When the left side is `0`, the expression evaluates to `0`, and React renders the *literal string "0"* on the page. The fix: cast to boolean.
+
+```jsx
+{items.length > 0 && <List items={items} />}
+// or
+{Boolean(items.length) && <List items={items} />}
+```
+
+The cleanest rule: only use `&&` when the left side is **definitely a boolean**. If it's a number or string that could be 0/"", use a ternary or comparison.
+
+### Pattern 3: early return — different shape entirely
+
+When the rendered structure changes dramatically based on a condition — not just "show a spinner inside the card" but "the whole component is a totally different thing" — use an early return:
+
+```jsx
+function ProductPage({ product }) {
+  if (!product)        return <NotFound />;
+  if (product.deleted) return <DeletedNotice />;
+
+  return (
+    <article>
+      <h1>{product.name}</h1>
+      <p>{product.description}</p>
+      ...
+    </article>
+  );
+}
+```
+
+Each `return` exits the function immediately. The main `return` at the bottom handles the happy path — no indentation, no `if (success) { ... }` wrapper around everything.
+
+This pattern is the same **guard clauses** from the JS conditionals lesson, applied to components. The happy path stays clean; edge cases are dispatched up top.
+
+### Pattern 4: variable assignment — when both options need setup
+
+When each branch needs preparation, assign to a variable and use it in the JSX:
+
+```jsx
+function Counter({ count }) {
+  let label;
+  let className;
+  if (count > 10) {
+    label = "Lots";
+    className = "danger";
+  } else if (count > 5) {
+    label = "Some";
+    className = "warning";
+  } else {
+    label = "Few";
+    className = "ok";
+  }
+
+  return <span className={className}>{label}</span>;
+}
+```
+
+The component reads top-to-bottom: compute the values, then return the JSX once. Avoids stuffing branching logic into the markup.
+
+### Showing/hiding with CSS instead
+
+For elements that need to be **in the DOM but invisible** — preserving state, animations, or layout — render them and toggle a class:
+
+```jsx
+<div className={open ? "" : "hidden"}>...</div>
+```
+
+The component mounts once; toggling `open` just adds/removes the CSS class. For *truly* unmounted, conditional rendering removes it from the DOM entirely:
+
+```jsx
+{open && <div>...</div>}
+```
+
+Tradeoff: conditional rendering frees memory but resets state and animations when re-mounted. CSS hiding keeps state but the component still runs effects and consumes memory. Default to conditional rendering; use CSS hiding when you specifically need to preserve state across show/hide.
+
+### Loading / error / empty / data — the four states
+
+A pattern you'll write a hundred times: a component that fetches data has four possible UI states. Render each one:
+
+```jsx
+function UserList() {
+  const [users, setUsers] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/users")
+      .then((res) => res.json())
+      .then(setUsers)
+      .catch(setError);
+  }, []);
+
+  if (error)                return <ErrorBanner message={error.message} />;
+  if (users === null)       return <Spinner />;          // still loading
+  if (users.length === 0)   return <EmptyState />;
+  return <List users={users} />;
+}
+```
+
+Read top-to-bottom: handle each non-happy case up top with an early return; the bottom is the happy path. The ordering matters — once you've checked for an error, you don't need to handle `error` cases in the rest of the function.
+
+This four-state pattern is so common that data-fetching libraries like TanStack Query give you `{ isLoading, isError, data }` flags out of the box. Same shape; less boilerplate.
+
+### Don't render falsy values to the page
+
+```jsx
+{user.name}      // OK — string
+{user.age}       // OK — number  
+{user.active}    // ⚠ boolean — React renders nothing
+{user.profile}   // ⚠ object — React throws if not React-renderable
+```
+
+React renders:
+
+- **Strings** and **numbers** as text.
+- **Arrays of elements** as siblings.
+- **Components** and **JSX** as elements.
+- **`null`**, **`undefined`**, **`false`**, **`true`** as nothing (safe but invisible).
+- **Objects** and other types — React throws.
+
+If you ever see "Objects are not valid as a React child," somewhere you embedded a plain object into JSX. Render its fields, not the object.
+
+<ExampleProject
+  src="three-patterns"
+  title="Three conditional patterns, side by side"
+  description="A toggle component implemented three times — once with ternary, once with &&, once with early return. Same UI; compare the source. Includes the famous '0 renders literally' bug with an explanation."
+/>
+
+<ExampleProject
+  src="fetch-states"
+  title="Loading / error / empty / data — done right"
+  description="A user list component that exercises all four states. Buttons let you trigger each state manually. Each render path is annotated. The pattern you'll write a hundred times."
+/>
+
+<Exercise
+  title="Build a status pill component"
+  starter={`Create a Pill component that takes a status prop:
+"ok" | "warning" | "error" | "loading".
+
+The pill should render with:
+  - A different background color and label for each status.
+  - An optional icon prefix for each.
+
+Use ONE early return for "loading" (which renders a tiny
+spinner instead of the pill).
+
+For the other three, use a switch (or a lookup object) to pick
+the label and class. Do NOT use three nested ternaries.
+
+Render the Pill five times on the page to demonstrate each
+status (and one with the optional icon).`}
+>
+
+- The "loading" case uses an **early return** (no `if (status === "loading") return X; else return Y` — the else is implicit).
+- The other three statuses use a **lookup object** or a **switch**, not a chain of ternaries.
+- A `default` (or fallback) handles unknown statuses without crashing.
+- The component returns null for falsy children edge cases (or uses a sensible default).
+- Optional icon renders conditionally: `{icon && <span>{icon}</span>}`.
+- Five demo pills on the page show each status visually.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between a ternary and `&&` for conditional rendering?
+
+**A:**
+
+- **Ternary** (`condition ? a : b`) — picks **one of two outputs**. Use when you have *both* an "if" and an "else" branch.
+
+```jsx
+{isAdmin ? <AdminPanel /> : <UserPanel />}
+```
+
+- **`&&` short-circuit** (`condition && JSX`) — renders the JSX **only when condition is truthy**. Use when there's nothing to render in the "else" case.
+
+```jsx
+{hasNewMessages && <NotificationBell />}
+```
+
+Don't use `&&` for an "or" choice — `cond && A || B` is hard to read. Use a ternary. Don't use a ternary with `null` as the second branch (`cond ? <Banner /> : null`) — that's exactly what `&&` is for; the ternary is wasted syntax.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does `{items.length && <List items={items} />}` render "0" on the page when the list is empty?
+
+**A:** Because `&&` returns one of its **operands** — not necessarily a boolean. When the left side is falsy, `&&` returns *the left side*:
+
+```js
+0 && anything   // → 0
+"" && anything  // → ""
+null && X       // → null
+true && <X />   // → <X />
+```
+
+When `items.length` is `0`, the whole expression evaluates to `0`. React renders `0` as the literal text "0" on the page (numbers are valid React children).
+
+Fix it by ensuring the left side is a boolean:
+
+```jsx
+{items.length > 0 && <List items={items} />}
+{Boolean(items.length) && <List items={items} />}
+{!!items.length && <List items={items} />}
+```
+
+Or use a ternary:
+
+```jsx
+{items.length ? <List items={items} /> : null}
+```
+
+Same idea: only use `&&` when the left side is a real boolean. If it's a number or string that can be `0` or `""`, switch syntax.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you use an early return inside a component?
+
+**A:** When the **shape of the rendered UI changes dramatically** based on a condition — not just "show a spinner inside the card" but "the whole component is something totally different." Common cases:
+
+- **Loading state** before data exists: `if (loading) return <Spinner />;`
+- **Error state**: `if (error) return <ErrorBanner />;`
+- **Not found / unauthorized**: `if (!user) return <Login />;`
+- **Edge cases** at the top: `if (!props.data) return null;`
+
+The pattern is the same **guard clauses** you saw in plain JavaScript:
+
+```jsx
+function ProductPage({ product }) {
+  if (!product)        return <NotFound />;
+  if (product.deleted) return <DeletedNotice />;
+
+  // Happy path — no indentation
+  return (
+    <article>
+      <h1>{product.name}</h1>
+      ...
+    </article>
+  );
+}
+```
+
+Benefits:
+
+1. **Readable**: the happy path is unindented at the bottom.
+2. **Each special case is local**: paired with the condition that triggered it.
+3. **Easy to extend**: adding a new precondition is one line at the top.
+
+For *small* conditional differences inside the same overall structure (a label that changes, a button that hides), use a ternary or `&&` inline. For *structural* differences, use early returns.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between conditionally rendering an element vs hiding it with CSS?
+
+**A:**
+
+- **Conditional rendering**: `{open && <Modal />}` — the modal is **not in the DOM** when `open` is false. Mounting/unmounting tears down DOM nodes, runs cleanup effects, resets internal state, restarts animations.
+- **CSS hide**: `<Modal className={open ? "" : "hidden"} />` — the modal is **always in the DOM**, just invisible. State, animations, scroll position, and effects all persist.
+
+When to pick each:
+
+| Need | Choose |
+|---|---|
+| Save memory / DOM size for huge expensive components | Conditional |
+| Reset form state every time the modal opens | Conditional |
+| Preserve scroll position or animation state | CSS hide |
+| Preserve input contents between toggles | CSS hide |
+| Avoid running effects unnecessarily | Conditional |
+| Avoid layout shift when hiding | CSS hide (often `visibility: hidden` instead of `display: none`) |
+
+The default for most cases is **conditional rendering** — it's the cleaner mental model and React's runtime handles it well. Reach for CSS hiding when you specifically need to preserve internal state across show/hide cycles.
+
+</InterviewQuestion>

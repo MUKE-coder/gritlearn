@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Index vs id keys — the bug live</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+      .pane { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .pane.bad  { border-color: #ef4444; }
+      .pane.good { border-color: #10b981; }
+      .pane h2 { margin: 0 0 6px; font-family: ui-monospace, monospace; font-size: 13px; }
+      .pane.bad h2  { color: #b91c1c; }
+      .pane.good h2 { color: #047857; }
+      ul { list-style: none; padding: 0; margin: 8px 0 0; }
+      li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: white; border: 1px solid #e5e7eb; border-radius: 6px; margin: 4px 0; }
+      input[type=checkbox] { margin: 0; }
+      .controls { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+      .controls button { padding: 6px 10px; background: #4763e4; color: white; border: 0; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: ui-monospace, monospace; }
+      .note { padding: 10px 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; margin-top: 18px; font-size: 13px; color: #92400e; }
+      @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>Index vs id keys — see the bug</h1>
+    <p>Check the boxes in both lists. Then click "add at top." Watch the left list's checkmarks shift; the right list keeps them on the right todos.</p>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      const SEED = [
+        { id: 1, text: "Buy milk" },
+        { id: 2, text: "Finish CSS lesson" },
+        { id: 3, text: "Call mom" },
+        { id: 4, text: "Walk the dog" },
+      ];
+
+      function App() {
+        const [todos, setTodos] = useState(SEED);
+        let nextId = 999;
+
+        const addTop = () => {
+          nextId++;
+          setTodos([{ id: nextId, text: `Inserted ${nextId}` }, ...todos]);
+        };
+
+        const reset = () => setTodos(SEED);
+
+        return (
+          <>
+            <div className="controls">
+              <button onClick={addTop}>+ add at top</button>
+              <button onClick={reset}>reset</button>
+            </div>
+
+            <div className="row">
+              <div className="pane bad">
+                <h2>✗ key={'{index}'} — state bleeds</h2>
+                <ul>
+                  {todos.map((todo, index) => (
+                    <li key={index}>
+                      <input type="checkbox" />
+                      <span>{todo.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="pane good">
+                <h2>✓ key={'{todo.id}'} — state stays with the right item</h2>
+                <ul>
+                  {todos.map((todo) => (
+                    <li key={todo.id}>
+                      <input type="checkbox" />
+                      <span>{todo.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="note">
+              Try: check "Buy milk" and "Walk the dog" on BOTH lists. Now click "add at top" once. The LEFT list's checkmarks shift to the wrong todos. The right list keeps the marks on Buy milk and Walk the dog where they belong.
+            </div>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

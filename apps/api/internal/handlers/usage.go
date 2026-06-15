@@ -1,4 +1,4 @@
-// Admin usage handler — aggregates the GritLearn-specific metrics the
+// Admin usage handler — aggregates the JEditor-specific metrics the
 // admin dashboard renders. Kept narrow on purpose: one endpoint, one
 // response shape, computed in a single DB round (where possible) so
 // the admin landing page doesn't fire a request waterfall.

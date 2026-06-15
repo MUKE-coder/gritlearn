@@ -1,6 +1,6 @@
 "use client";
 
-// Admin dashboard widget for GritLearn-specific metrics. Reads from
+// Admin dashboard widget for JEditor-specific metrics. Reads from
 // /api/admin/usage/summary (single round-trip, computed server-side) and
 // renders the four headline numbers + a top-concepts list.
 
@@ -18,7 +18,7 @@ interface UsageSummary {
   most_completed_concepts: { concept_slug: string; count: number }[];
 }
 
-export function GritLearnMetrics() {
+export function JEditorMetrics() {
   const { data, isLoading, error } = useQuery<UsageSummary>({
     queryKey: ["admin", "usage", "summary"],
     queryFn: async () => {
@@ -31,7 +31,7 @@ export function GritLearnMetrics() {
   return (
     <section className="space-y-4">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold text-foreground">GritLearn usage</h2>
+        <h2 className="text-lg font-semibold text-foreground">JEditor usage</h2>
         <Link
           href="/resources/progresses"
           className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-accent"

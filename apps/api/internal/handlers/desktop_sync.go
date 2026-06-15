@@ -12,7 +12,7 @@
 // scaffold's generic POST /api/progresses, so the upsert semantics don't
 // leak into the admin-facing CRUD surface. The scaffold's generic
 // handlers in sync.go (push/pull for the outbox engine) are unrelated —
-// GritLearn doesn't use that engine.
+// JEditor doesn't use that engine.
 
 package handlers
 

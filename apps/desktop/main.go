@@ -19,7 +19,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "gritlearn",
+		Title:     "JEditor",
 		Width:     1280,
 		Height:    800,
 		MinWidth:  1000,
@@ -55,8 +55,8 @@ func main() {
 			Appearance:           mac.NSAppearanceNameDarkAqua,
 			WebviewIsTransparent: true,
 			About: &mac.AboutInfo{
-				Title:   "gritlearn",
-				Message: "Built with Grit",
+				Title:   "JEditor",
+				Message: "JBEditor — Built with Grit",
 			},
 		},
 		Linux: &linux.Options{

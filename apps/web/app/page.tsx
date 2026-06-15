@@ -44,8 +44,8 @@ export default function HomePage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-balance text-[17px] leading-relaxed text-text-secondary">
-            GritLearn is a native desktop code editor with an analogy-first
-            curriculum baked in. Every concept opens with a real-world story,
+            JEditor (full name JBEditor) is a native desktop code editor with an
+            analogy-first curriculum baked in. Every concept opens with a real-world story,
             then a runnable example, then a project of your own. It works
             offline, so you can keep going on flaky internet — or none at all.
           </p>
@@ -78,7 +78,7 @@ export default function HomePage() {
               <div className="h-2.5 w-2.5 rounded-full bg-warning/60" />
               <div className="h-2.5 w-2.5 rounded-full bg-success/60" />
               <span className="ml-2 font-mono text-[11px] text-text-muted">
-                how-the-web-works.mdx — gritlearn
+                how-the-web-works.mdx — jeditor
               </span>
             </div>
             <div className="px-5 py-4 font-mono text-[13px] leading-relaxed space-y-1.5">
@@ -121,7 +121,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl px-6 py-20">
           <div className="text-center">
             <h2 className="text-[32px] font-bold tracking-tight">
-              Most courses tell. GritLearn shows.
+              Most courses tell. JEditor shows.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-text-secondary">
               Four things every concept ships with — every time.
@@ -197,7 +197,7 @@ export default function HomePage() {
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-text-secondary leading-relaxed">
             Browser-based learning platforms break the moment you lose
-            connection. GritLearn does the opposite: signup is the only step
+            connection. JEditor does the opposite: signup is the only step
             that touches the network. After that, the curriculum, the editor,
             and your progress all live on your laptop. The app reconciles with
             our server whenever it next sees one — quietly, in the background.
@@ -210,7 +210,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl px-6 py-20">
           <div className="text-center">
             <h2 className="text-[32px] font-bold tracking-tight">
-              Download GritLearn
+              Download JEditor
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-text-secondary">
               v1.0 — free during beta. Pick the build for your machine.

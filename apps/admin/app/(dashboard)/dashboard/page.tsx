@@ -4,7 +4,7 @@ import { useMe } from "@/hooks/use-auth";
 import { resources } from "@/resources";
 import { StatsCard } from "@/components/widgets/stats-card";
 import { WidgetGrid } from "@/components/widgets/widget-grid";
-import { GritLearnMetrics } from "@/components/gritlearn-metrics";
+import { JEditorMetrics } from "@/components/gritlearn-metrics";
 import { getIcon } from "@/lib/icons";
 
 export default function AdminDashboard() {
@@ -30,11 +30,11 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      {/* GritLearn-specific dashboard metrics — total signups, active users,
+      {/* JEditor-specific dashboard metrics — total signups, active users,
           completed concepts, and the top-completed leaderboard. */}
-      <GritLearnMetrics />
+      <JEditorMetrics />
 
-      {/* Scaffold per-resource widgets (kept below the GritLearn block). */}
+      {/* Scaffold per-resource widgets (kept below the JEditor block). */}
       {allWidgets.length > 0 ? (
         <WidgetGrid widgets={allWidgets} />
       ) : (

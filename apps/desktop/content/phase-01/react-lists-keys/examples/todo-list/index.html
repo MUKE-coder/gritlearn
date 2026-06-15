@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A real todo list with proper keys</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 540px; margin: 30px auto; padding: 0 20px; line-height: 1.6; color: #111; }
+      .panel { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+      .add { display: flex; gap: 8px; margin-bottom: 14px; }
+      input { flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+      input:focus { outline: 2px solid #4763e4; border-color: #4763e4; }
+      .add button { padding: 10px 16px; background: #4763e4; color: white; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+      ul { list-style: none; padding: 0; margin: 0; }
+      li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; margin: 6px 0; }
+      li.done span { color: #9ca3af; text-decoration: line-through; }
+      li .text { flex: 1; }
+      li .iconbtn { padding: 4px 8px; font-size: 12px; background: transparent; color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; }
+      li .iconbtn:hover { background: #f3f4f6; }
+      li .iconbtn.del:hover { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    </style>
+  </head>
+  <body>
+    <h1>Todo list — stable ids</h1>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      function App() {
+        const [todos, setTodos] = useState([
+          { id: crypto.randomUUID(), text: "Read the lists & keys lesson",  done: true  },
+          { id: crypto.randomUUID(), text: "Build a todo list with real ids", done: false },
+        ]);
+        const [draft, setDraft] = useState("");
+
+        const add = () => {
+          if (!draft.trim()) return;
+          setTodos([{ id: crypto.randomUUID(), text: draft.trim(), done: false }, ...todos]);
+          setDraft("");
+        };
+        const toggle = (id) => setTodos(todos.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+        const del    = (id) => setTodos(todos.filter((t) => t.id !== id));
+        const move   = (id, dir) => {
+          const i = todos.findIndex((t) => t.id === id);
+          const j = i + dir;
+          if (j < 0 || j >= todos.length) return;
+          const copy = [...todos];
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+          setTodos(copy);
+        };
+
+        return (
+          <div className="panel">
+            <div className="add">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+                placeholder="add a todo..."
+              />
+              <button onClick={add}>add</button>
+            </div>
+            <ul>
+              {todos.map((t) => (
+                <li key={t.id} className={t.done ? "done" : ""}>
+                  <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} />
+                  <span className="text">{t.text}</span>
+                  <button className="iconbtn" onClick={() => move(t.id, -1)}>↑</button>
+                  <button className="iconbtn" onClick={() => move(t.id,  1)}>↓</button>
+                  <button className="iconbtn del" onClick={() => del(t.id)}>✕</button>
+                </li>
+              ))}
+            </ul>
+            <p style={{fontSize: 12, color: '#6b7280', marginTop: 12}}>
+              Add, delete, reorder, check things off. Every operation keeps state on the right todo — because every key is a stable UUID.
+            </p>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

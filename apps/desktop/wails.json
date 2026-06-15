@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "gritlearn",
-  "outputfilename": "gritlearn",
+  "outputfilename": "jeditor",
   "frontend:install": "pnpm install",
   "frontend:build": "pnpm build",
   "frontend:dev:watcher": "pnpm dev",
@@ -11,9 +11,9 @@
     "email": ""
   },
   "info": {
-    "productName": "gritlearn",
+    "productName": "JEditor",
     "productVersion": "0.1.0",
     "copyright": "",
-    "comments": "Built with Grit"
+    "comments": "JBEditor — Built with Grit"
   }
 }

@@ -1,0 +1,286 @@
+## Rendering lists and keys
+
+You saw `.map(...)` in the JSX intro — every React app has lists of things. Now we go deeper on the `key` prop, why it matters, and the subtle bugs that come from getting it wrong. Keys are React's "name tag" system for elements in a list. Get them right and React efficiently updates the DOM when the list changes. Get them wrong and you'll spend hours debugging weird state-bleeding between items.
+
+<Analogy>
+Keys are **name tags at a conference**.
+
+Picture a conference where 200 people are sitting in rows of folding chairs. Every attendee wears a name tag — JANE DOE, BRIAN KIM, AISHA NAKATO. When the staff rearranges the chairs between sessions and people shuffle around, the *name tags* let the staff know who's still here, who left, and who's new. Without name tags, the staff would have to guess by row+seat number — and the moment seats get reassigned, every guess becomes wrong.
+
+React does the same thing when re-rendering a list. When the data changes — items added, removed, reordered, filtered — React compares the new list to the previous one to figure out the minimum DOM updates. **Keys are the name tags.** If every item has a stable unique key, React matches them perfectly across renders: items that survived keep their DOM nodes (and their state); removed items get unmounted; new items get mounted.
+
+If you use the array **index** as a key (the no-tag fallback), React matches by *position*. Item at index 0 last render is item at index 0 this render — *regardless of whether it's actually the same data*. When items reorder or get inserted in the middle, every name tag is wrong, the DOM state bleeds onto the wrong items, and bugs you can't reproduce on demand start happening.
+
+Stable keys are cheap to do right and impossible to debug if done wrong. Use real ids.
+</Analogy>
+
+<Illustration
+  alt="Diagram of React reconciling a list across renders, matching items by key versus by index"
+  caption="With unique keys, React matches items across renders correctly. With array indexes, position-based matching causes state to bleed when items reorder."
+>
+
+```
+   Previous render          Next render             What React does
+
+   [todo:1, todo:2,         [todo:2, todo:1,        With KEY by id:
+    todo:3]                  todo:4]                 ✓ todo:1 still here (reorder)
+                                                     ✓ todo:2 still here (reorder)
+                                                     ✗ todo:3 removed
+                                                     + todo:4 mounted
+
+                                                    With KEY by INDEX:
+                                                     ✗ all three items at indices
+                                                       0,1,2 get patched in place
+                                                     ✗ todo:3's state appears on todo:4
+                                                     ✗ checkbox states drift
+```
+
+</Illustration>
+
+### The basics
+
+```jsx
+const items = ["apple", "banana", "cherry"];
+
+<ul>
+  {items.map((item) => (
+    <li key={item}>{item}</li>
+  ))}
+</ul>
+```
+
+The `key` prop goes on the element you return from `.map()` — the outermost JSX. It's a React-only prop; you can't read it inside the component (`props.key` is always undefined).
+
+### What makes a good key?
+
+The key must be:
+
+- **Unique among siblings.** Not globally unique — just unique within the same `.map()` call.
+- **Stable across renders.** The same item should have the same key every time. Random values change every render and break everything.
+- **Tied to the item's identity.** If the item has an id, use that. If it doesn't, use something that uniquely identifies it (a name, a slug, a fingerprint).
+
+```jsx
+// GOOD
+{users.map((u) => <UserRow key={u.id} user={u} />)}
+
+// GOOD — when items have natural unique identifiers
+{tags.map((t) => <Tag key={t.name} tag={t} />)}
+
+// BAD — index breaks the moment items reorder or insert in the middle
+{users.map((u, i) => <UserRow key={i} user={u} />)}
+
+// VERY BAD — fresh key every render; React thinks every item is new
+{users.map((u) => <UserRow key={Math.random()} user={u} />)}
+```
+
+### When using array index is OK
+
+The array index is acceptable **only when**:
+
+1. **The list never reorders.** Items are always appended at the end and never removed from the middle.
+2. **Items have no state of their own** — no inputs, no expanding sections, nothing that React needs to associate with a specific item.
+3. **The list is static.** It comes from a fixed source and doesn't change.
+
+If *any* of those is in doubt, use a real id. The vast majority of real lists fail at least one — todo lists reorder, search results filter, autocomplete drops items.
+
+### Getting an id when your data doesn't have one
+
+If your data lacks ids — say, you fetched an array of strings — you have a few options:
+
+1. **Use the value itself as the key**, if it's unique:
+   ```jsx
+   {fruits.map((f) => <li key={f}>{f}</li>)}
+   ```
+2. **Generate ids at the source** when you create the array:
+   ```jsx
+   const todos = items.map((text) => ({ id: crypto.randomUUID(), text }));
+   ```
+3. **Compute a deterministic hash** from the item's content (slug from a title, hash from a JSON string). Avoid this if items can have duplicate content.
+
+`crypto.randomUUID()` is the standard for generating ids in modern browsers. For older support, `Date.now() + Math.random()` works as a quick stable id when an item is created.
+
+### Conditional rendering inside a list
+
+A common pattern:
+
+```jsx
+{items.map((item) => {
+  if (item.hidden) return null;
+  return <Row key={item.id} item={item} />;
+})}
+```
+
+Returning `null` from inside a `.map()` callback renders nothing for that slot — useful for hiding items without filtering the source array. The `key` still goes on what you return when it's not null.
+
+If you'd rather filter, do it before mapping:
+
+```jsx
+{items
+  .filter((item) => !item.hidden)
+  .map((item) => <Row key={item.id} item={item} />)}
+```
+
+### Fragments and keys
+
+When a list item needs **multiple sibling elements** (not just one), use a `Fragment` with a key:
+
+```jsx
+{rows.map((row) => (
+  <React.Fragment key={row.id}>
+    <dt>{row.label}</dt>
+    <dd>{row.value}</dd>
+  </React.Fragment>
+))}
+```
+
+The shorthand `<>...</>` syntax **doesn't accept a `key` prop** — you must use the full `React.Fragment` form when you need one.
+
+### Performance: why React cares about keys
+
+When React re-renders a list, it walks the previous and new render and matches items by key. For each match:
+
+- **Both renders have the same key**: React reuses the DOM node and just updates props.
+- **Only the new render has the key**: React mounts a new component (creates DOM, runs effects).
+- **Only the old render had the key**: React unmounts the old component (removes DOM, runs cleanup).
+
+Matching by *stable* key means most items get the cheap "reuse" path. Matching by *index* means every "moved" item gets patched in place — DOM nodes survive but the data inside them flips, which is why state-bleeding bugs happen.
+
+For a 10-item list this is invisible. For a 1000-item list it can be the difference between snappy and laggy — and the state-bleeding bug is the same either way.
+
+### A common bug — and how to spot it
+
+```jsx
+// Each todo is an <li> with a checkbox the user can toggle
+function TodoList({ todos }) {
+  return (
+    <ul>
+      {todos.map((todo, i) => (
+        <li key={i}>
+          <input type="checkbox" />
+          <span>{todo.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Add a new todo at the start. Watch the checkbox states drift to the *wrong* items.
+
+The fix: `key={todo.id}` (or `key={todo.text}` if texts are unique). Now React knows each todo's identity, and the checkbox state stays with the right one.
+
+If you ever see "checkbox state moves to the wrong item when I add/remove rows," or "my input loses focus when the list reorders," or "the inserted item gets the previous item's state," check your keys first.
+
+<ExampleProject
+  src="key-importance"
+  title="Index vs id keys — see the bug live"
+  description="Two side-by-side lists with checkboxes. Left uses key={index}, right uses key={id}. Click 'add at top' and watch the left list's checkbox states migrate to the wrong items, while the right list stays correct. The most direct demo of why stable keys matter."
+/>
+
+<ExampleProject
+  src="todo-list"
+  title="A real todo list with proper keys"
+  description="A todo list that supports add, delete, reorder (move up/down), and toggle. Uses crypto.randomUUID() ids. Every operation works correctly across renders because the keys are stable. This is the production pattern."
+/>
+
+<Exercise
+  title="Build a filterable contact list"
+  starter={`Create a component with:
+
+  - An array of 8-10 contacts: { id, name, email, isFavorite }.
+  - A search input that filters by name (case-insensitive).
+  - A "favorites only" toggle.
+  - Each contact rendered as a row with name + email + a star
+    button. Clicking the star toggles isFavorite (state on the
+    parent).
+
+Use crypto.randomUUID() if you need fresh ids; otherwise use
+the ones in your initial data. Pass each contact as a prop to
+a <ContactRow> component. Use the contact's id as the key.
+
+Verify by typing in the search box: the rendered items should
+keep their state correctly even as the list filters.`}
+>
+
+- Contacts have real `id` fields, used as `key` on each row.
+- `<ContactRow>` is its own component — receives the contact and an `onToggleFavorite` callback as props.
+- Filtering is done before `.map()` (computed during render, not stored as state).
+- The favorite-toggle is a callback the parent passes down; the child doesn't mutate the contact directly.
+- No `key={index}` anywhere.
+- Star button shows different state for favorite vs not (color, filled icon, etc.).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does React want a `key` on each element in a list?
+
+**A:** Keys help React **identify which items changed, were added, or were removed** between renders. React walks the previous render and the new one, matching items by key:
+
+- Same key → reuse the existing DOM node, just update props.
+- New key → mount a new component.
+- Missing key → unmount the old component.
+
+Without unique keys, React falls back to matching by position — fine if the list never reorders, broken the moment items are inserted in the middle or filtered.
+
+The benefits are both **correctness** (state attached to a DOM node stays with the right item) and **performance** (most items get reused instead of remounted). For small static lists you might not notice; for any dynamic list, keys are essential.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When is it OK to use the array index as a key?
+
+**A:** Only when **all three** are true:
+
+1. **The list never reorders.** New items only get appended at the end; existing items don't move.
+2. **The list isn't filtered or paginated** in a way that changes which position holds which item.
+3. **Items hold no internal state** (no inputs, no expanding sections, no animations) that needs to follow the specific item across renders.
+
+Most real lists fail at least one of those. Todo lists reorder. Search results filter. Autocomplete drops items. The moment any of those happens with index keys, you get the classic "state bleeds to the wrong item" bug.
+
+The safe default: always use a real id. Generate one with `crypto.randomUUID()` when your data doesn't have one. Index keys are a tempting shortcut that costs you hours of debugging later.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why do random keys like `key={Math.random()}` cause bugs?
+
+**A:** Because `Math.random()` returns a **different value on every render**. React compares the old key list to the new one. With random keys, *every* key is "new" — React thinks every item was removed and every item was just added. Result:
+
+1. **All DOM nodes get unmounted and remounted on every render.** Catastrophic for performance.
+2. **Component state resets on every render.** Inputs lose focus, animations restart, checkboxes uncheck.
+3. **Effects re-run on every render.** `useEffect`s that should only fire on mount fire over and over.
+
+The same problem applies to any key derived from "now" (`Date.now()`, `new Date().toISOString()`). They look unique at the moment but change every render.
+
+A key must be:
+
+- **Unique** among siblings — yes.
+- **Stable** across renders — *yes*.
+
+`Math.random()` only satisfies the first. The cure: assign an id when the item is created (`crypto.randomUUID()`), then keep using it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between key matching and a Map's keys, and why does each `.map()` need its own keyspace?
+
+**A:** A React `key` only needs to be **unique among siblings in the same `.map()` call**, not globally. Two separate lists on the same page can both have a `key="1"` — they don't collide because they're in different parents.
+
+Internally, React stores the rendered children of each parent as something like a `Map<key, fiber>`. Reconciliation walks this map for each parent independently. So:
+
+```jsx
+<>
+  <ul>{users.map((u)  => <UserRow  key={u.id} ... />)}</ul>
+  <ul>{posts.map((p)  => <PostRow  key={p.id} ... />)}</ul>
+</>
+```
+
+The two `<ul>`s have separate keyspaces. A user with `id=1` doesn't collide with a post with `id=1`. The only requirement is: among the children of *this* `<ul>`, every `UserRow` has a different `key`.
+
+The same property means: **don't try to make keys globally unique by prefixing** (`"user-1"`, `"post-1"`). It's unnecessary work and obscures the data. Just use the id you have.
+
+</InterviewQuestion>

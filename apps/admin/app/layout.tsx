@@ -16,8 +16,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "gritlearn Admin",
-  description: "Admin panel — Built with Grit",
+  title: "JEditor Admin",
+  description: "JEditor admin panel — Built with Grit",
 };
 
 export default function RootLayout({
