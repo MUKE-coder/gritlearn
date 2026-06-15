@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card — React + Tailwind</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+  </head>
+  <body className="bg-gray-50 dark:bg-gray-950">
+    <div id="root" class="min-h-screen"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      function Card({ variant = "default", title, children, className = "" }) {
+        const variants = {
+          default: "border-gray-200 dark:border-gray-700",
+          primary: "border-blue-300 dark:border-blue-700 ring-1 ring-blue-200/40",
+          danger:  "border-red-300 dark:border-red-700 ring-1 ring-red-200/40",
+        };
+        return (
+          <div className={
+            "bg-white dark:bg-gray-900 border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow "
+            + variants[variant] + " " + className
+          }>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{title}</h3>
+            <div className="text-sm text-gray-600 dark:text-gray-400">{children}</div>
+          </div>
+        );
+      }
+
+      function App() {
+        const [dark, setDark] = useState(false);
+        return (
+          <div className={dark ? "dark" : ""}>
+            <div className="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white min-h-screen p-6">
+              <div className="max-w-3xl mx-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h1 className="text-2xl font-bold">A styled Card component</h1>
+                  <button
+                    onClick={() => setDark(d => !d)}
+                    className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    {dark ? "☼ light" : "☾ dark"}
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  One component, three variants, hover, dark mode, optional border tint. ~25 lines including everything.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Card title="Default">A regular card with the default border.</Card>
+                  <Card variant="primary" title="Primary">A primary card with blue accent ring.</Card>
+                  <Card variant="danger"  title="Danger">A danger card with red accent ring.</Card>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

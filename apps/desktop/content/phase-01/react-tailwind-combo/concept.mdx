@@ -1,0 +1,424 @@
+## React + Tailwind together — the modern combo
+
+You learned React. You learned Tailwind. Each is powerful on its own, but their *combination* is the dominant way modern web apps are built in 2026 — and for good reason. Tailwind solves the "what does this component look like?" question; React solves the "how does it behave?" question; together they let you ship features fast without writing a separate CSS file ever again.
+
+<Analogy>
+React + Tailwind together is **LEGO bricks where every brick already comes in the colors you need**.
+
+You've got two LEGO sets: a structural set (React) that has the shapes — wheels, walls, plates, pegs — and a paint set (Tailwind) that has tubs of every color you might want. Combining them: you don't *first* assemble the structure and *then* paint it. You pick a wall brick in the color you want and snap it into place. The shape and the color arrive in the same act.
+
+That's the developer experience of React + Tailwind. You don't write a `Button` component and a `Button.css` file. You write a `Button` component whose JSX includes the styling classes inline. Every component file is **self-contained** — the markup, the behavior, the styles, all together. Three files become one. Refactors become local. The "where do these styles live?" question goes away.
+
+The compounding effects:
+- **Locality.** Open the component file; see everything about it.
+- **Speed.** No file-switching. No naming overhead. No specificity wars.
+- **Consistency.** Tailwind constrains you to the design system's tokens; you can't accidentally use 17 shades of grey.
+- **Refactor-friendly.** Delete a component, delete its styles too — they were inline.
+
+The downside everyone notices on day one — busy JSX, classes everywhere — disappears within a week of writing it. You stop reading individual classes and start *seeing* the styling shape. By month one, vanilla CSS feels archaic.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing a React component with separate CSS file to one with inline Tailwind classes"
+  caption="Same component, two approaches. Tailwind keeps everything in one file; no naming, no separate stylesheet."
+>
+
+```
+   TRADITIONAL                       REACT + TAILWIND
+
+   Button.tsx                        Button.tsx
+   ┌─────────────────────┐           ┌──────────────────────────────────┐
+   │ import "./Button"   │           │ export function Button(...) {    │
+   │ export function     │           │   return (                       │
+   │   Button(...) {     │           │     <button className="          │
+   │   return <button    │           │       inline-flex items-center  │
+   │     className=      │           │       gap-2 px-4 py-2 rounded   │
+   │     "btn-primary">  │           │       bg-blue-600 text-white     │
+   │     ...             │           │       hover:bg-blue-700          │
+   │   </button>;        │           │       font-semibold text-sm">    │
+   │ }                   │           │       ...                        │
+   └─────────────────────┘           │   );                             │
+                                     │ }                                │
+   Button.css                        └──────────────────────────────────┘
+   ┌─────────────────────┐                  ↑
+   │ .btn-primary {      │                  one file. one place.
+   │   ...               │
+   │ }                   │
+   └─────────────────────┘
+```
+
+</Illustration>
+
+### The simplest combo
+
+```jsx
+function Button({ children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+                 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm
+                 transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+```
+
+That's a complete, reusable, fully-styled, accessible button — no CSS file, no class names to invent, no specificity to manage. Done.
+
+### Conditional classes with `clsx`
+
+Components have states — variant, size, active, disabled. The classes change based on props. Two patterns:
+
+#### Template literals (works, ugly fast)
+
+```jsx
+<button className={`px-4 py-2 rounded ${primary ? "bg-blue-600" : "bg-gray-200"} ${size === "lg" ? "text-lg" : "text-sm"}`}>
+  ...
+</button>
+```
+
+Readable for one condition; painful for three.
+
+#### `clsx` (or `classnames`) — the standard helper
+
+```jsx
+import clsx from "clsx";
+
+<button
+  className={clsx(
+    "px-4 py-2 rounded font-semibold transition-colors",
+    primary  ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-200 hover:bg-gray-300",
+    size === "lg" && "text-lg px-6 py-3",
+    disabled && "opacity-50 cursor-not-allowed",
+  )}
+>
+  ...
+</button>
+```
+
+`clsx` accepts strings, ternaries, and short-circuit `&&` expressions; truthy values get joined with spaces, falsy values get skipped. Tiny library (~200 bytes), zero dependencies. Used by basically every modern React component library.
+
+A common alias: `import { cn } from "@/lib/utils"` — `cn` (short for "classnames") is a project-local re-export of `clsx`, often combined with `tailwind-merge` to deduplicate conflicting Tailwind classes.
+
+### `tailwind-merge` — deduplicate conflicts
+
+```jsx
+// What if a parent passes className?
+function Card({ className, children }) {
+  return (
+    <div className={`p-4 bg-white border rounded ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+<Card className="p-8" />
+// className becomes "p-4 bg-white border rounded p-8"
+// Browser applies BOTH p-4 and p-8 in source order → the LATER one wins (p-8)
+// Works "by accident" — but order-dependent and fragile.
+```
+
+`tailwind-merge` resolves these conflicts intelligently:
+
+```jsx
+import { twMerge } from "tailwind-merge";
+
+function Card({ className, children }) {
+  return (
+    <div className={twMerge("p-4 bg-white border rounded", className)}>
+      {children}
+    </div>
+  );
+}
+
+<Card className="p-8" />
+// twMerge returns: "bg-white border rounded p-8"  (p-4 removed)
+```
+
+The combined idiom — `cn` doing `twMerge(clsx(...))` — is the de-facto standard in modern Tailwind-React projects:
+
+```ts
+// lib/utils.ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+Then use `cn(...)` everywhere you build dynamic classes:
+
+```jsx
+<button className={cn(
+  "px-4 py-2 rounded",
+  variant === "primary" && "bg-blue-600 text-white",
+  className,    // ← override from parent always wins
+)}>
+```
+
+### Variants with `cva`
+
+We met this in the Tailwind components lesson. In a React project it pairs perfectly:
+
+```jsx
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+const buttonStyles = cva(
+  "inline-flex items-center gap-2 rounded font-semibold transition-colors",
+  {
+    variants: {
+      variant: {
+        primary: "bg-blue-600 hover:bg-blue-700 text-white",
+        ghost:   "bg-transparent hover:bg-gray-100",
+        danger:  "bg-red-600 hover:bg-red-700 text-white",
+      },
+      size: { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-3 text-base" },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
+
+type ButtonProps = VariantProps<typeof buttonStyles> & {
+  children: React.ReactNode;
+  className?: string;
+  onClick?: () => void;
+};
+
+export function Button({ variant, size, className, children, ...rest }: ButtonProps) {
+  return (
+    <button className={cn(buttonStyles({ variant, size }), className)} {...rest}>
+      {children}
+    </button>
+  );
+}
+```
+
+Now:
+
+```jsx
+<Button>Save</Button>                              {/* default */}
+<Button variant="danger" size="lg">Delete</Button> {/* customized */}
+<Button className="w-full">Full width</Button>     {/* extended */}
+```
+
+This is the shape of every component in shadcn/ui — the most popular React-Tailwind component library. Learn this pattern and you can use, read, and write any modern Tailwind-React codebase.
+
+### Conditional rendering + conditional styles
+
+Same idea, applied together:
+
+```jsx
+function Alert({ type, message }) {
+  if (!message) return null;
+  return (
+    <div className={cn(
+      "rounded p-4 flex items-start gap-2",
+      type === "ok"      && "bg-green-50 text-green-800",
+      type === "warning" && "bg-yellow-50 text-yellow-800",
+      type === "error"   && "bg-red-50 text-red-800",
+    )}>
+      <span className="text-sm">{message}</span>
+    </div>
+  );
+}
+```
+
+Three concepts (conditional rendering, conditional classes, props-driven variants) compose into a single, readable component. No CSS file. No `.alert.alert-success` class hunting.
+
+### Dark mode in two minutes
+
+Tailwind handles dark mode with a `dark:` prefix. Combine with a top-level class toggle:
+
+```jsx
+function App() {
+  const [dark, setDark] = useState(false);
+  return (
+    <div className={cn(dark && "dark")}>
+      <div className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white p-6">
+        <button onClick={() => setDark(d => !d)}>toggle</button>
+      </div>
+    </div>
+  );
+}
+```
+
+Every `dark:` utility kicks in when the `.dark` class is on any ancestor. A single state toggle restyles the whole tree.
+
+### What you don't need anymore
+
+Once you've fully internalized React + Tailwind, you'll likely never write any of these again:
+
+- A `.css` file per component. Components own their styles.
+- A `class-name-for-this-thing` decision. Inline the utilities.
+- `BEM`, `OOCSS`, `SMACSS` — naming methodologies that existed because CSS had no other answer to scope.
+- Specificity wars. Tailwind utilities have flat specificity; rule order wins.
+- A pre-processor (Sass/Less). Tailwind is the pre-processor.
+
+You'll still write *some* CSS — global resets, a custom font load, a tricky animation that's easier in keyframes than in a class. But for everyday component styling, the Tailwind utilities + `cn()` + `cva` cover it.
+
+<ExampleProject
+  src="styled-component"
+  title="A fully-styled React Card with hover, dark mode, and props"
+  description="A Card component built end-to-end with React + Tailwind: variant prop, size prop, hover styles, dark mode, optional border. The whole component fits in 25 lines including all styling. Demonstrates the locality benefit live."
+/>
+
+<ExampleProject
+  src="cva-variants"
+  title="A Button with cva + cn — production-grade pattern"
+  description="The exact pattern used by shadcn/ui — Button with variant + size + className override, composed via cva and cn. Five demo buttons on the page show every combination. The pattern you'll write a thousand times in any modern React project."
+/>
+
+<Exercise
+  title="Build a Tag component with variants"
+  starter={`Create a Tag component that takes:
+
+  - children (the tag text)
+  - color ("blue" | "green" | "red" | "gray") — default "gray"
+  - size ("sm" | "md") — default "md"
+  - className (optional override)
+
+Render a <span> with:
+  - Rounded-full background.
+  - Padding and text size based on the size prop.
+  - Background and text color based on the color prop.
+
+Use a cva-style helper OR a cn() with conditional classes — your
+choice. Test by rendering 8 tags on the page with different combos
+and a custom className override on one.
+
+Don't reach for a separate CSS file. Don't invent class names like
+.tag-blue. Use Tailwind utilities + the helper.`}
+>
+
+- The component uses Tailwind classes directly in JSX, not a separate `.css` file.
+- A `cn()` / `clsx` / `cva` helper handles conditional classes — not template-literal soup.
+- The `color` prop maps to a Tailwind background + text color pair (e.g. `bg-blue-100 text-blue-800`).
+- The `size` prop maps to padding + font-size (e.g. `px-2 py-0.5 text-xs` vs `px-3 py-1 text-sm`).
+- The `className` prop, if provided, **overrides** matching classes from the variants (uses `twMerge` or stacks last).
+- At least 5 Tag instances on the page demonstrate different color/size combos.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's `clsx` and why is it used in React + Tailwind codebases?
+
+**A:** `clsx` is a tiny utility (~200 bytes) for **conditionally joining class names**. It accepts strings, booleans, and ternaries; truthy values get joined with spaces; falsy values are skipped.
+
+```jsx
+import clsx from "clsx";
+
+<button className={clsx(
+  "px-4 py-2 rounded",
+  primary && "bg-blue-600 text-white",
+  disabled && "opacity-50",
+)}>
+```
+
+It cleans up the template-literal soup that conditional classes otherwise produce:
+
+```jsx
+// Without clsx — readable for one condition, painful for three
+className={`px-4 py-2 rounded ${primary ? "bg-blue-600 text-white" : ""} ${disabled ? "opacity-50" : ""}`}
+```
+
+The function returns a single string of space-separated class names. Used in basically every modern React component library because conditional styling is the everyday case in Tailwind.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why combine Tailwind classes with React components instead of writing CSS files?
+
+**A:** Three concrete wins:
+
+1. **Locality.** Everything about a component — markup, styles, behavior — lives in one file. Open it; see it all.
+2. **No naming overhead.** You don't invent class names (`.btn-primary-large-with-icon`); you compose utilities.
+3. **Refactor-friendly.** Delete a component, the styles go with it — they were inline. No orphaned CSS rules.
+
+The cost is busier-looking JSX. The first time you see a button with 12 classes on it, it looks intimidating. After a week of writing them, you read them as a shape, not as individual tokens. The locality benefit outweighs the visual density.
+
+The pattern works because Tailwind's classes are **atomic** (one class = one CSS property) and **predictable** (`p-4` is always 1rem padding). Composing them is the same mental model as composing JSX elements — small named pieces snapping together.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `tailwind-merge` do, and when do you need it?
+
+**A:** `tailwind-merge` **deduplicates conflicting Tailwind classes**, keeping the *last* one according to Tailwind's class precedence.
+
+```jsx
+twMerge("p-4 bg-white", "p-8")
+// → "bg-white p-8"   (p-4 removed because p-8 conflicts)
+```
+
+You need it when a component accepts a `className` prop that callers can override:
+
+```jsx
+function Card({ className, children }) {
+  return (
+    <div className={twMerge("p-4 bg-white rounded", className)}>
+      {children}
+    </div>
+  );
+}
+
+<Card className="p-8" />  // gets 8 padding, not "4 then 8" mash
+```
+
+Without `tailwind-merge`, both classes end up in the final string, and the browser applies whichever comes later in the rendered CSS — but Tailwind's class order in the compiled stylesheet isn't stable, so the result is unpredictable.
+
+The de-facto helper combines `clsx` (conditional) and `twMerge` (deduplicate) into one function called `cn`:
+
+```ts
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+export function cn(...inputs) { return twMerge(clsx(inputs)); }
+```
+
+Use it on every component that takes a `className` prop. shadcn/ui ships this exact helper; most starter templates include it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How does the `cva` library scale a Button component with multiple variants?
+
+**A:** `cva` (class-variance-authority) lets you declare variants as a config object, then call the resulting function with the variant values:
+
+```ts
+const buttonStyles = cva(
+  "rounded font-semibold transition-colors",         // base
+  {
+    variants: {
+      variant: {
+        primary: "bg-blue-600 hover:bg-blue-700 text-white",
+        ghost:   "bg-transparent hover:bg-gray-100",
+        danger:  "bg-red-600 hover:bg-red-700 text-white",
+      },
+      size: { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm", lg: "px-6 py-3 text-base" },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
+
+buttonStyles({ variant: "danger", size: "lg" })
+// → "rounded font-semibold transition-colors bg-red-600 hover:bg-red-700 text-white px-6 py-3 text-base"
+```
+
+The wins compared to hand-rolled `clsx`:
+
+1. **Type-safe.** With TypeScript and `VariantProps<typeof buttonStyles>`, the component's props get autocompleted with the legal variant values.
+2. **No combinatorial explosion.** Three variants × three sizes = nine combos handled by a 20-line config, not a 60-line `clsx` ternary chain.
+3. **Defaults.** `defaultVariants` makes "no variant specified" produce sensible output.
+4. **shadcn/ui interop.** This is the exact pattern that library uses, so consuming third-party components feels native.
+
+When to reach for it: when a component has 3+ visual axes (variant, size, intent, state). For two variants, plain `clsx` is fine. For one variant, just inline the conditional.
+
+</InterviewQuestion>

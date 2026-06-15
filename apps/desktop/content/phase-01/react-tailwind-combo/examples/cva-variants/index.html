@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Button — cva + cn pattern</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-50 min-h-screen p-6">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // Tiny inline clsx + a deduplicate-by-last-class helper.
+      // In a real project you'd `import { clsx } from "clsx"` and
+      // `twMerge` from "tailwind-merge"; we inline here to keep the
+      // example self-contained.
+      function clsx(...args) {
+        return args.flat().filter(Boolean).join(" ");
+      }
+      // Simplified twMerge: when two padding/text-size/bg-color rules
+      // collide, the later wins. Real tailwind-merge handles every
+      // utility category.
+      function twMerge(s) {
+        const tokens = s.split(/\s+/).filter(Boolean);
+        const map = {};
+        const out = [];
+        for (const t of tokens) {
+          let bucket;
+          if (/^p[xytrbl]?-/.test(t)) bucket = "p"+t.split("-")[0].slice(1);
+          else if (/^m[xytrbl]?-/.test(t)) bucket = "m"+t.split("-")[0].slice(1);
+          else if (/^text-(xs|sm|base|lg|xl|2xl|3xl)$/.test(t)) bucket = "text-size";
+          else if (/^text-(red|blue|green|yellow|gray|purple|indigo|emerald|amber)/.test(t)) bucket = "text-color";
+          else if (/^bg-/.test(t)) bucket = "bg";
+          else bucket = t;
+          map[bucket] = t;
+        }
+        for (const t of tokens) {
+          let bucket;
+          if (/^p[xytrbl]?-/.test(t)) bucket = "p"+t.split("-")[0].slice(1);
+          else if (/^m[xytrbl]?-/.test(t)) bucket = "m"+t.split("-")[0].slice(1);
+          else if (/^text-(xs|sm|base|lg|xl|2xl|3xl)$/.test(t)) bucket = "text-size";
+          else if (/^text-(red|blue|green|yellow|gray|purple|indigo|emerald|amber)/.test(t)) bucket = "text-color";
+          else if (/^bg-/.test(t)) bucket = "bg";
+          else bucket = t;
+          if (map[bucket] === t && !out.includes(t)) out.push(t);
+        }
+        return out.join(" ");
+      }
+      function cn(...inputs) { return twMerge(clsx(inputs)); }
+
+      // ── cva replacement: a tiny inline version ──
+      function cva(base, { variants, defaultVariants }) {
+        return ({ variant, size, ...rest } = {}) => {
+          const v = variant ?? defaultVariants.variant;
+          const s = size    ?? defaultVariants.size;
+          return clsx(base, variants.variant[v], variants.size[s]);
+        };
+      }
+
+      const buttonStyles = cva(
+        "inline-flex items-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-50",
+        {
+          variants: {
+            variant: {
+              primary: "bg-blue-600 hover:bg-blue-700 text-white",
+              ghost:   "bg-transparent hover:bg-gray-100 text-gray-900 border border-gray-300",
+              danger:  "bg-red-600 hover:bg-red-700 text-white",
+            },
+            size: {
+              sm: "px-3 py-1.5 text-xs",
+              md: "px-4 py-2 text-sm",
+              lg: "px-6 py-3 text-base",
+            },
+          },
+          defaultVariants: { variant: "primary", size: "md" },
+        },
+      );
+
+      function Button({ variant, size, className, children, onClick }) {
+        return (
+          <button
+            onClick={onClick}
+            className={cn(buttonStyles({ variant, size }), className)}
+          >
+            {children}
+          </button>
+        );
+      }
+
+      function App() {
+        return (
+          <div className="max-w-2xl mx-auto">
+            <h1 className="text-2xl font-bold mb-4">Button — cva + cn pattern</h1>
+            <p className="text-sm text-gray-600 mb-6">
+              Five buttons demonstrating variant × size, plus a className override that wins over the variant's padding.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-3 items-center">
+                <Button>primary, md (default)</Button>
+                <Button size="sm">primary, sm</Button>
+                <Button size="lg">primary, lg</Button>
+              </div>
+
+              <div className="flex flex-wrap gap-3 items-center">
+                <Button variant="ghost">ghost</Button>
+                <Button variant="danger">danger</Button>
+                <Button variant="ghost" size="sm">ghost, sm</Button>
+              </div>
+
+              <div className="flex flex-wrap gap-3 items-center">
+                <Button className="px-10 py-4 text-lg w-full">
+                  primary, md — overridden via className to be huge and full-width
+                </Button>
+              </div>
+            </div>
+
+            <pre className="mt-6 bg-gray-900 text-gray-100 p-4 rounded-lg text-xs leading-relaxed overflow-x-auto">
+{`const buttonStyles = cva(
+  "inline-flex items-center gap-2 rounded-lg font-semibold transition-colors",
+  {
+    variants: {
+      variant: { primary: "...", ghost: "...", danger: "..." },
+      size:    { sm: "...", md: "...", lg: "..." },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
+
+function Button({ variant, size, className, children }) {
+  return (
+    <button className={cn(buttonStyles({ variant, size }), className)}>
+      {children}
+    </button>
+  );
+}`}
+            </pre>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

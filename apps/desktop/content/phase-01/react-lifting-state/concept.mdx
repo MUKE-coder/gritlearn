@@ -1,0 +1,334 @@
+## Lifting state up / sharing state
+
+Each component holds its own state via `useState`. That's clean for isolated widgets. The moment two components need to **see the same data** — a parent that shows a count both in a button and in a badge, a form that derives a summary from sibling inputs, a sidebar that drives what the main panel shows — you have to choose where the state lives. The standard React pattern is **lifting state up**: move the state to the **closest common ancestor** of every component that needs it, and pass it down via props.
+
+<Analogy>
+Lifting state up is **handing the TV remote to the parent so both siblings can use it**.
+
+Two kids in a living room. Each has a TV in their own bedroom upstairs with its own remote — independent setups, no sharing. Now they want to watch the same movie *together*, downstairs, on the big TV. Whose remote do they use? Neither — they each have their own, neither remote controls the big TV. The fix is obvious: one remote for the big TV, held by **the parent**. The parent decides what's on; the kids can each tap the parent to ask for a channel change.
+
+A React component tree has the same shape. Each child component might have its own state. The moment two siblings need to *share* a piece of data — say, both display the same count — you can't make them point at each other (siblings don't talk directly in React). You move the count up to their common parent. The parent owns it, passes it down to both children as props, and gives each child a callback to request changes.
+
+```jsx
+function Parent() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <Display count={count} />
+      <Button onIncrement={() => setCount(count + 1)} />
+    </>
+  );
+}
+```
+
+The parent holds the remote. Both children see the same channel. Neither child tries to control the other.
+</Analogy>
+
+<Illustration
+  alt="Diagram of state moving from a child component up to a parent so two siblings can share it"
+  caption="Two siblings can't share state directly. Move the state to their common parent; pass it down as props; siblings request changes via callback props."
+>
+
+```
+   BEFORE                              AFTER (lifted)
+
+   Parent                              Parent  [count, setCount]
+   ├─ Display       (no count)         ├─ Display    count={count}
+   └─ Button        (no count)         └─ Button     onClick={() => setCount(c + 1)}
+
+   ✗ no shared state                   ✓ parent owns state
+                                       ✓ children get it as props
+                                       ✓ children request changes via callback
+```
+
+</Illustration>
+
+### The pattern
+
+A two-step refactor:
+
+1. **Identify the common ancestor.** Find the lowest component in the tree that's an ancestor of *every* component that reads or updates the data.
+2. **Move state there.** Replace any child-local `useState` with props received from the parent, plus a callback for updates.
+
+A small example: a temperature dial whose value is shown in two places.
+
+#### Before lifting — broken
+
+```jsx
+function TemperatureControl() {
+  const [temp, setTemp] = useState(20);
+  return <input type="range" value={temp} onChange={(e) => setTemp(+e.target.value)} />;
+}
+
+function TemperatureDisplay() {
+  // No way to read the slider's state from here!
+  return <p>Current: ??°C</p>;
+}
+
+function App() {
+  return (
+    <>
+      <TemperatureControl />
+      <TemperatureDisplay />
+    </>
+  );
+}
+```
+
+`TemperatureControl` owns the state; `TemperatureDisplay` has no way to read it.
+
+#### After lifting — works
+
+```jsx
+function App() {
+  const [temp, setTemp] = useState(20);
+  return (
+    <>
+      <TemperatureControl temp={temp} onChange={setTemp} />
+      <TemperatureDisplay temp={temp} />
+    </>
+  );
+}
+
+function TemperatureControl({ temp, onChange }) {
+  return <input type="range" value={temp} onChange={(e) => onChange(+e.target.value)} />;
+}
+
+function TemperatureDisplay({ temp }) {
+  return <p>Current: {temp}°C</p>;
+}
+```
+
+Now both children get `temp` as a prop. The control component receives `onChange` so it can ask the parent to update. The state lives in *one* place; both consumers stay in sync automatically.
+
+### Where exactly does the state go?
+
+**The lowest common ancestor** of every consumer. If only two sibling components share data, their direct parent is the place. If a sibling deep in the tree also needs to read the same data, move state higher.
+
+Don't lift further than necessary. State at the top of the tree is global state — fine for theme, current user, route — but you don't want every counter declared in `App`. The principle is **as low as possible, as high as required**.
+
+### The "one-way data flow" property holds
+
+Lifted state still follows React's one-way contract:
+
+- **Data flows down** via props.
+- **Changes flow up** via callback props the parent passed down.
+
+The parent owns the source of truth. Children are mostly "rendered views of the parent's state." This makes the component tree predictable: to find who changed `temp`, you only have to look at the component that owns it. To find what's affected by a change, you trace its props downward.
+
+### Same idea with forms
+
+A form's fields are often individually controlled, but a "summary" or "preview" component sometimes wants to read all of them. Lift the state to the form parent:
+
+```jsx
+function SignupForm() {
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <form>
+      <EmailField value={email} onChange={setEmail} />
+      <PasswordField value={password} onChange={setPassword} />
+      <Preview email={email} password={password} />
+    </form>
+  );
+}
+```
+
+`Preview` sees both because both are owned by the parent. Each field still gets its own controlled input, but the *source of truth* is one level up.
+
+### When lifting gets painful: prop drilling
+
+If your data needs to reach a deeply nested grandchild — five levels down — you end up passing the prop through every intermediate component just to forward it. This is **prop drilling**, and it's a real pain to maintain.
+
+Two solutions:
+
+1. **Compose with `children`.** Often the deep child can be passed *as children* from the level that already has the state, skipping the drill:
+
+```jsx
+function Layout({ children }) {
+  return <div className="layout">{children}</div>;
+}
+
+function App() {
+  const [user, setUser] = useState(currentUser);
+  return (
+    <Layout>
+      <Sidebar user={user} />   {/* no drill — user comes from App */}
+      <Main user={user} />
+    </Layout>
+  );
+}
+```
+
+2. **React Context** for genuinely cross-cutting data — theme, current user, locale. Context lets a provider make data available to any descendant without passing through every layer:
+
+```jsx
+const UserContext = createContext(null);
+
+function App() {
+  const [user, setUser] = useState(currentUser);
+  return (
+    <UserContext.Provider value={user}>
+      <Layout>...</Layout>
+    </UserContext.Provider>
+  );
+}
+
+function DeepChild() {
+  const user = useContext(UserContext);   // anywhere in the tree
+  return <p>{user.name}</p>;
+}
+```
+
+Use Context **sparingly** — once a provider's value changes, every consumer re-renders. For truly cross-cutting data (theme, user, locale) it's perfect. For component-local state, lift-and-pass is still the answer.
+
+For large global state — caches, complex forms, multi-screen wizards — reach for a dedicated library (Zustand, Redux Toolkit, Jotai). But those are Phase 3+ topics. For Phase 1, lifting state + occasional context is the whole toolkit.
+
+### A rule of thumb
+
+When you find yourself wishing two components could share state:
+
+1. **Find their common parent.** That's where state goes.
+2. **Pass it down as a prop.**
+3. **Pass a callback for changes.**
+
+If the parent is more than ~3 levels above, consider whether one of the children should *contain* the others as `children`. If the data is genuinely global, reach for Context. Otherwise: lift, lift, lift.
+
+<ExampleProject
+  src="temperature-twins"
+  title="A dial and a display that share state"
+  description="A slider and a digital display, side by side. Move the slider — the display updates. They're siblings; the state lives in their parent. Move the dial fast and watch both stay in sync — no prop drilling, no event bus, just lifted state."
+/>
+
+<ExampleProject
+  src="parent-child-input"
+  title="Lifting an input's value to a parent"
+  description="A form with a text input and a live preview pane. The input's value is owned by the parent and passed back into the input via props. Demonstrates the controlled-input + lifted-state pattern in its cleanest form."
+/>
+
+<Exercise
+  title="Build a TaxCalculator with two siblings"
+  starter={`Create three components:
+
+  - <App>: holds the state — { subtotal: number, rate: number }.
+  - <Inputs>: renders two number inputs for subtotal and rate.
+    Receives the values + onChange callbacks as props.
+  - <Summary>: receives subtotal, rate, and calculates: tax,
+    total. Renders all four numbers.
+
+App lays them out side by side. Typing in either input updates
+the state; the Summary updates immediately.
+
+Don't use Context. Don't use a global store. Just lift the state
+to App.`}
+>
+
+- The state lives in `<App>`, not in `<Inputs>` or `<Summary>`.
+- `<Inputs>` receives `subtotal`, `rate`, `onSubtotalChange`, `onRateChange` as props.
+- `<Summary>` receives `subtotal` and `rate` (read-only) as props.
+- `<Summary>` computes tax and total during render — these aren't stored as state.
+- Typing in either input updates state in App, which re-renders both children with new props.
+- Neither child has its own `useState` for these values.
+- The pattern would work the same if `<Summary>` was 3 levels deep — as long as the value flows down via props.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why "lift state up" in React?
+
+**A:** Because two sibling components **can't share state directly** in React. State is local to the component that declares it. When you need two siblings (or a parent and a grandchild) to see the same data, you **move the state up to their closest common ancestor** and pass it down to both as props.
+
+```jsx
+function App() {
+  const [temp, setTemp] = useState(20);
+  return (
+    <>
+      <Control temp={temp} onChange={setTemp} />
+      <Display temp={temp} />
+    </>
+  );
+}
+```
+
+The parent owns the source of truth. Both children render from the same value. To change it, the child calls a callback the parent passed down — preserving React's one-way data flow.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** How does data flow between a parent and a child in React?
+
+**A:**
+
+- **Parent → child**: via **props**. The parent renders `<Child value={x} />`; the child reads `props.value`.
+- **Child → parent**: via **callback props**. The parent gives the child a function (`onSomething`), the child calls it on user action.
+
+```jsx
+function Parent() {
+  const [count, setCount] = useState(0);
+  return <Counter count={count} onIncrement={() => setCount(c => c + 1)} />;
+}
+
+function Counter({ count, onIncrement }) {
+  return <button onClick={onIncrement}>Clicked {count} times</button>;
+}
+```
+
+The child can't reach into the parent and mutate its state. It can only signal the parent via a callback. The parent decides what to do.
+
+This is **one-way data flow** — strict but predictable. To find what changes a value, look at the component that declares the state.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's "prop drilling," and what are the options to avoid it?
+
+**A:** **Prop drilling** is when you pass a prop through several intermediate components that don't use it themselves, just to reach a deep descendant that does. After a few levels, the intermediate components are cluttered with props they're forwarding, and refactoring the tree means touching every middle layer.
+
+```jsx
+<App user={user}>
+  <Layout user={user}>      {/* doesn't use user, just forwards */}
+    <Sidebar user={user}>   {/* doesn't use user, just forwards */}
+      <Profile user={user} /> {/* finally uses it */}
+    </Sidebar>
+  </Layout>
+</App>
+```
+
+Two solutions:
+
+1. **Composition with `children`.** If the deep component is rendered *by* the layer that has the data, pass it as children — the data stays local:
+
+```jsx
+function App() {
+  const [user, setUser] = useState(currentUser);
+  return <Layout><Profile user={user} /></Layout>;
+}
+```
+
+`Layout` becomes a generic container; `App` (which has the data) renders `Profile` and passes the prop directly.
+
+2. **React Context** for cross-cutting concerns (theme, current user, locale). A `<Provider>` near the top makes the value available to any descendant via `useContext`, no drilling required.
+
+For component-local state, prefer composition. For genuinely cross-cutting data, reach for Context. For large global state (think Redux territory), use a dedicated state library — but that's a Phase 3 conversation.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When should you lift state vs use Context vs reach for a state-management library?
+
+**A:**
+
+- **Lift state up** (default) — when two or more siblings or close relatives share state. Keeps the data flow explicit and traceable. Costs a few extra props.
+- **React Context** — when data is genuinely cross-cutting: theme, current user, locale, route. Anywhere in the tree might want it; prop-passing is excessive. Costs are: re-renders on every value change (every consumer re-renders), no built-in optimization.
+- **State library** (Zustand, Redux Toolkit, Jotai) — when you have global app state with many consumers, frequent updates, and you want fine-grained subscriptions (consumer X only re-renders when its slice changes). Costs are: extra dependency, extra concepts, extra setup.
+
+**Rule of thumb**: start with lifting. Refactor to Context when you've drilled 3+ levels for cross-cutting data. Reach for a library when Context's "every consumer re-renders on any change" starts hurting and you want subscriptions per-slice.
+
+The mistake to avoid: jumping straight to Redux for a counter. The mistake to also avoid: drilling props through 10 layers when Context would clean it up. Match the tool to the actual shape of the data sharing problem.
+
+</InterviewQuestion>

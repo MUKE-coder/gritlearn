@@ -1,0 +1,385 @@
+## React `useEffect` and side effects
+
+You've seen state — internal data that drives the render. But sometimes a component needs to **reach outside itself** — fetch data from a server, subscribe to a WebSocket, set a timer, read from localStorage, focus a DOM node, set the page title. These are **side effects**: actions that touch the world beyond the component's render. React's answer is the **`useEffect` hook** — the standard way to safely synchronize a component with an external system.
+
+<Analogy>
+`useEffect` is **setting an alarm when you arrive somewhere**.
+
+You walk into a hotel room. As you're settling in, you set an alarm for 7am. The alarm isn't part of you; it's a tool you arrange with the outside world. When you leave the next morning, you cancel the alarm or it'll keep ringing in the empty room.
+
+`useEffect` is the same arrangement: when a component *mounts* (settles into the page), you set things up — start a timer, subscribe to events, fetch data. When the component *unmounts* (leaves the page), you tear it down — clear the timer, unsubscribe, abort the fetch. If you skip the cleanup, the timer keeps ticking in an empty room: memory leaks, duplicate event handlers, stale callbacks updating components that no longer exist.
+
+The shape is always:
+
+```jsx
+useEffect(() => {
+  // set up
+  return () => {
+    // tear down (optional but recommended)
+  };
+}, [/* dependencies */]);
+```
+
+Three pieces: the setup function, the optional cleanup function it returns, and the dependency array that decides when to re-run.
+
+The mental shift: state is for *data your component owns*. `useEffect` is for *connecting your component to things outside* — the DOM, the network, timers, third-party libraries, localStorage. Different jobs, different tools.
+</Analogy>
+
+<Illustration
+  alt="Diagram of useEffect lifecycle: setup runs after render, cleanup runs before next setup or on unmount, deps decide when to re-run"
+  caption="useEffect runs setup after render. If deps change next render, cleanup runs first, then setup runs again. On unmount, cleanup runs one last time."
+>
+
+```
+   MOUNT       UPDATE (deps changed)        UPDATE (deps unchanged)        UNMOUNT
+   ─────       ─────────────────────         ──────────────────────         ───────
+   render      render                        render                         render
+   setup       cleanup (from previous)       (skip — deps same)             cleanup (last)
+               setup (new)
+```
+
+</Illustration>
+
+### The signature
+
+```jsx
+useEffect(setupFn, deps?)
+```
+
+Two arguments:
+
+- **`setupFn`** — runs **after** the component renders. Can return a cleanup function (or nothing).
+- **`deps`** — an array of values React checks each render. The effect re-runs *only* when one of these changes. Three meaningful shapes:
+
+| `deps` | When effect runs |
+|---|---|
+| `[]` | Once — after the first render only. (Cleanup runs on unmount.) |
+| `[a, b]` | After first render, AND whenever `a` or `b` changes between renders. |
+| *(omitted)* | After **every** render. Almost always a bug. |
+
+The dep array is the most important part of using `useEffect` correctly. Get it wrong and you get infinite loops, stale closures, or missed updates.
+
+### Pattern 1: run once on mount
+
+For one-time setup — `localStorage` read, third-party init, focus an input:
+
+```jsx
+useEffect(() => {
+  const saved = localStorage.getItem("theme");
+  if (saved) setTheme(saved);
+}, []);
+```
+
+Empty deps `[]` means "only after the first render." Doesn't run again.
+
+### Pattern 2: re-run when a value changes
+
+```jsx
+useEffect(() => {
+  document.title = `Hello, ${name}!`;
+}, [name]);
+```
+
+Whenever `name` changes between renders, the effect runs. Updates the document title.
+
+### Pattern 3: cleanup
+
+For anything you set up that needs tearing down:
+
+```jsx
+useEffect(() => {
+  const id = setInterval(() => setCount((c) => c + 1), 1000);
+  return () => clearInterval(id);
+}, []);
+```
+
+The returned function is the cleanup. React calls it **before re-running the effect** (when deps change) and **on unmount**. Cleanup makes sure timers, listeners, and subscriptions don't outlive the component.
+
+Common cleanup needs:
+
+- `clearInterval` / `clearTimeout`
+- `removeEventListener`
+- `socket.close()`
+- `abortController.abort()` for in-flight fetches
+- `subscription.unsubscribe()`
+
+If you set something up that *could* persist, return its cleanup. The cost is one extra line; the bug it prevents is a memory leak that's painful to diagnose.
+
+### Pattern 4: fetching data
+
+Probably the single most-written `useEffect`:
+
+```jsx
+function UserList() {
+  const [users, setUsers] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/users", { signal: controller.signal })
+      .then((res) => res.json())
+      .then(setUsers)
+      .catch((err) => {
+        if (err.name !== "AbortError") console.error(err);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (users === null) return <Spinner />;
+  return <List users={users} />;
+}
+```
+
+The `AbortController` cancels the request if the component unmounts before the response arrives — otherwise you'd call `setUsers` on a dead component and React would warn.
+
+In real apps you'll usually graduate to a data-fetching library (TanStack Query, SWR, Next.js's server components) that handles loading/error/cache for you. The manual `useEffect + fetch` pattern is the foundation they're built on.
+
+### The dependency array — the hardest part
+
+Rule: **every value from outside the effect that you use inside it should be in the dep array.** Otherwise the closure captures a stale version.
+
+```jsx
+function Greet({ name }) {
+  useEffect(() => {
+    console.log(`Hello, ${name}`);
+  }, []);   // ← BUG: `name` is used inside but missing from deps
+}
+```
+
+The effect captures `name` from its first render. When `name` changes, the effect *doesn't re-run* (because deps `[]`) and the log uses the old value.
+
+The fix:
+
+```jsx
+useEffect(() => {
+  console.log(`Hello, ${name}`);
+}, [name]);
+```
+
+ESLint's `react-hooks/exhaustive-deps` rule catches missing deps. **Trust it.** If the rule says "you're missing `name`," add `name`. If adding causes infinite loops, the bug is elsewhere — not in the rule. Common causes:
+
+- A function defined in the parent that gets a new reference every render → wrap in `useCallback`.
+- An object/array literal recreated every render → memo with `useMemo`, or move outside.
+- State updates inside the effect that aren't functional (`setCount(count + 1)` instead of `setCount((c) => c + 1)`).
+
+### Effects run AFTER paint
+
+`useEffect` callbacks run **after the browser paints the new frame**. This means:
+
+- The user sees the rendered UI immediately; the effect runs slightly later.
+- Effects don't block rendering. Good for UX.
+- Effects can't measure DOM and synchronously adjust before paint. For that, use `useLayoutEffect` (rare).
+
+If your effect calls `setState`, the component re-renders. If the new render has the same deps, the effect doesn't re-run.
+
+### Don't put everything in `useEffect`
+
+A new-to-React reflex: "I need to do something, must wrap in `useEffect`." Often you don't.
+
+| Need | Use |
+|---|---|
+| Compute derived state | Just a variable: `const total = a + b;` during render. NOT an effect. |
+| Reset a value when a prop changes | A *key* prop on the child component, NOT an effect. |
+| Run code on click | The click handler, NOT an effect. |
+| Send analytics on a click | The click handler, NOT an effect. |
+| Sync with an external system | **Yes** — useEffect. |
+| Subscribe to a WebSocket | **Yes** — useEffect. |
+| Set up a timer | **Yes** — useEffect. |
+| Fetch data | useEffect (or a data library). |
+
+The React docs literally call this out: **"You might not need an effect."** When in doubt: can this happen during render or in an event handler? If yes, prefer that. `useEffect` is the escape hatch for talking to *external* systems.
+
+### Common gotchas
+
+#### Strict Mode double-mounts
+
+In React's development StrictMode, effects run *twice* on mount (and cleanups run twice too). This catches missing cleanups — if your code breaks on the second mount, you forgot to clean up something. It's not a bug; it's intentional. Production effects run once.
+
+#### Async functions
+
+You can't make the `useEffect` callback itself async:
+
+```jsx
+// BUG — React expects the return to be a cleanup function, not a Promise
+useEffect(async () => {
+  const data = await fetch("/api");
+  setData(data);
+}, []);
+```
+
+The async function returns a Promise, which React treats as a (broken) cleanup. Define an async function *inside*:
+
+```jsx
+useEffect(() => {
+  async function load() {
+    const res = await fetch("/api");
+    setData(await res.json());
+  }
+  load();
+}, []);
+```
+
+#### Infinite loops
+
+```jsx
+const [user, setUser] = useState({});
+useEffect(() => {
+  setUser({ name: "Aisha" });  // ← creates a new object
+}, [user]);                     // ← user changed → re-run → setUser → user changed → ...
+```
+
+Every render creates a new object reference, which "changes" `user`, which re-runs the effect, which sets state, which re-renders. Cure: depend on stable primitives or use a functional setter (`setUser((u) => ({ ...u, name: "Aisha" }))` only when needed).
+
+<ExampleProject
+  src="data-fetcher"
+  title="A real data-fetcher with AbortController cleanup"
+  description="A user list that fetches when an id changes. Demonstrates the dependency array (re-fetches when id changes), the AbortController cleanup pattern, and the loading / error / data render states all in one."
+/>
+
+<ExampleProject
+  src="cleanup-interval"
+  title="Timer that survives mount and cleans up on unmount"
+  description="A component with a setInterval that increments a counter every second. Mount/unmount buttons let you remove the component from the DOM — when removed, the cleanup runs and the timer stops. Without cleanup, you'd see the warning 'updating state on an unmounted component'."
+/>
+
+<Exercise
+  title="Build a window-resize tracker"
+  starter={`Create a component that displays the current width × height of
+the browser window, updating live as the user resizes.
+
+Use:
+  - useState to hold an object: { w: number, h: number }.
+  - useEffect with an empty dep array.
+  - Inside the effect, subscribe to window.resize with
+    addEventListener. The handler updates state.
+  - Return a cleanup function that calls removeEventListener.
+
+Show the dimensions in big text on the page. Resize the browser
+window — the numbers should update in real time.
+
+Bonus: subscribe to window.matchMedia("(prefers-color-scheme: dark)")
+events and show whether the OS is in dark mode. Same pattern —
+addEventListener on the MediaQueryList, removeEventListener in
+the cleanup.`}
+>
+
+- The `useEffect` returns a cleanup function that removes the listener.
+- The dep array is `[]` — the listener is set up once on mount.
+- The handler uses the functional state form (or a fresh object spread) so it doesn't mutate.
+- Removing the component from the DOM (or hot-reloading) doesn't leak a listener.
+- The state shape is an object with `w` and `h` (or two separate `useState` hooks).
+- Resizing the window updates the displayed numbers immediately.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What is `useEffect` for?
+
+**A:** `useEffect` lets a function component perform **side effects** — actions that touch the world outside the component's render: data fetching, timers, event subscriptions, DOM manipulation, localStorage, third-party library integration.
+
+The hook takes a setup function and an optional dependency array:
+
+```jsx
+useEffect(() => {
+  // setup: runs after render
+  return () => {
+    // cleanup: runs before next setup, or on unmount
+  };
+}, [/* deps */]);
+```
+
+Three common shapes:
+
+- `useEffect(fn, [])` — run once on mount, cleanup on unmount.
+- `useEffect(fn, [value])` — re-run whenever `value` changes; cleanup runs first.
+- `useEffect(fn)` — run after every render. Rarely correct.
+
+The mental model: state is data your component owns; `useEffect` is the bridge to external systems your component reaches out to.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why do you sometimes return a function from a `useEffect`?
+
+**A:** That function is the **cleanup**. React calls it:
+
+1. **Before re-running the effect** when dependencies change (clean up old subscription before starting new one).
+2. **When the component unmounts** (the component is leaving the page; tidy up).
+
+Anything you set up that has a continuing existence — a timer, an event listener, a WebSocket connection, an in-flight fetch — needs a cleanup. Without it:
+
+- Timers keep firing after the component is gone.
+- Event listeners pile up on every mount.
+- State updates target a component that doesn't exist anymore (React warns).
+
+```jsx
+useEffect(() => {
+  const id = setInterval(tick, 1000);
+  return () => clearInterval(id);     // ← cleanup
+}, []);
+```
+
+Rule of thumb: if your effect calls `set*`/`add*`/`subscribe`/`open`, your cleanup should call the matching `clear*`/`remove*`/`unsubscribe`/`close`.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the dependency array, and what happens if you omit a value you use inside the effect?
+
+**A:** The dep array is a list of values React **compares against the previous render's values**. If any are different, the effect re-runs (with cleanup first). Same → React skips the effect.
+
+```jsx
+useEffect(() => {
+  fetch(`/api/users/${id}`).then(setUser);
+}, [id]);   // re-fetch whenever id changes
+```
+
+If you **omit a value you use inside**, the effect's closure captures the value from when it last ran — which is now stale. You see "old" data in console.logs, state updates that use yesterday's value, etc.
+
+```jsx
+useEffect(() => {
+  console.log(name);
+}, []);   // BUG: name used inside, missing from deps
+// On first render name="Aisha", logs "Aisha".
+// Parent re-renders with name="Brian" — but the effect doesn't re-run; the next time anything triggers it, it still logs "Aisha".
+```
+
+The cure: **list every external value used inside**. ESLint's `react-hooks/exhaustive-deps` rule catches this and is correct virtually always. If adding a dep causes an infinite loop, that's a *different* bug (typically a function or object literal recreated each render — fix with `useCallback`/`useMemo`).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** "You might not need an effect." When is `useEffect` the wrong tool?
+
+**A:** Three patterns where `useEffect` is overkill or wrong:
+
+1. **Derived state.** If a value is computed from props or state, compute it in the render — don't use an effect to mirror it into another piece of state.
+
+```jsx
+// WRONG — extra render, extra state
+const [doubled, setDoubled] = useState(0);
+useEffect(() => setDoubled(count * 2), [count]);
+
+// RIGHT — just compute in render
+const doubled = count * 2;
+```
+
+2. **Code that runs on user events.** If the work should happen *because the user clicked*, do it in the click handler. Don't update state and let an effect react to it.
+
+```jsx
+// WRONG
+useEffect(() => {
+  if (justClickedSubmit) sendAnalytics();
+}, [justClickedSubmit]);
+
+// RIGHT — call sendAnalytics() in the click handler directly
+```
+
+3. **Resetting state when a prop changes.** Pass a `key` prop to remount the child instead of writing an effect that resets state on prop change. React's key-based reconciliation handles this for free.
+
+The rule: `useEffect` is for **syncing with external systems** (DOM that's not in your control, the network, timers, third-party libraries, browser APIs). For anything **purely React-internal** — derived values, user events, prop-driven reset — there's a simpler tool.
+
+</InterviewQuestion>
