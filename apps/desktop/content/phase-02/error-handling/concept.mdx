@@ -1,0 +1,506 @@
+## Error handling (try / catch)
+
+Things go wrong. A `fetch` returns a 500. A JSON parse hits malformed data. A user types text where you expected a number. The question is never "will errors happen?" — it's "where do I catch them, and what do I do about each?" JavaScript gives you three tools: `throw` to raise an error, `try`/`catch` to handle it locally, and `finally` to clean up regardless. Use them well and your bugs become messages; use them badly and your app crashes silently or prints stack traces to confused users.
+
+<Analogy>
+Error handling is **a hospital triage desk**.
+
+A hospital has one front door. Through it walks a steady stream of problems — a broken arm, a chest pain, a fever, a stubbed toe. The triage nurse's job isn't to *prevent* any of them; it's to **classify each one and route it to the right room**. Broken arm goes to orthopedics. Chest pain goes immediately to cardiology. Stubbed toe waits in the lobby. The hospital functions because every problem has a known destination — not because problems never arrive.
+
+`try`/`catch` is JavaScript's triage desk. Inside the `try` block, your code runs normally — like a doctor doing the work. The instant something throws, the engine jumps to the `catch` block — like an alarm bell ringing at the triage desk. In the `catch`, you classify and route: was this a network problem? Show a "we'll retry" banner. Validation? Show the user what to fix. Unexpected? Log it and show a generic message.
+
+Three rules the triage desk follows that translate directly:
+
+1. **Catch at the right level.** The triage desk is at the *front door*, not in every operating room. You catch errors at the boundary where you can do something meaningful about them — the page's submit handler, the API client's wrapper — not inside every five-line utility.
+2. **Don't catch what you can't handle.** If a doctor genuinely can't treat a stab wound, they call a real surgeon — they don't "catch and pretend it's fine." A `try`/`catch` that swallows the error and continues silently is the same anti-pattern as the doctor.
+3. **Always close out.** Whether the patient was treated or transferred, the chart gets closed. `finally` is the closing-the-chart block — it runs whether or not the `try` succeeded, so connections, file handles, timers, and "loading" spinners get cleaned up either way.
+
+The biggest mental shift: errors are **values that flow through your code**, not invisible catastrophes that break it. You design where they originate (`throw`), where they're handled (`catch`), and what happens regardless (`finally`). Treat the error path with the same care as the success path, and your app degrades gracefully instead of crashing.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a try/catch/finally block with the engine's jump-on-throw behavior"
+  caption="Throw inside try → engine jumps to catch. Finally runs no matter what."
+>
+
+```
+   try {
+     const json = JSON.parse(input);  ─┐
+     const data = validate(json);      │  any throw here
+     save(data);                       │  ┐ JUMPS to catch
+   }                                   │  │
+   catch (err) {                       │  │
+     console.error(err);               │←─┘
+     ui.showBanner(err.message);
+   }
+   finally {
+     hideSpinner();                    ←── runs whether try succeeded or threw
+   }
+
+   ↓ after this block, code continues
+   console.log("done");
+```
+
+</Illustration>
+
+### `throw` — raising an error
+
+You raise an error with `throw`:
+
+```js
+function divide(a, b) {
+  if (b === 0) throw new Error("Cannot divide by zero");
+  return a / b;
+}
+```
+
+You can throw anything (`throw "oops"`, `throw 42`), but **always throw an `Error` object** or a subclass — they carry a stack trace and a `.message` field that the rest of the language understands. `throw "string"` works but loses the stack.
+
+### `try` / `catch` — handling locally
+
+```js
+try {
+  const result = divide(10, 0);
+  console.log(result);
+} catch (err) {
+  console.error("Math failed:", err.message);
+}
+```
+
+The flow:
+1. Engine runs each line in `try` in order.
+2. The instant a line throws, the engine **stops executing the rest of try** and jumps to the `catch` block.
+3. The thrown value is bound to whatever name you put in parentheses (`err` above).
+4. After `catch` runs, execution continues after the whole `try`/`catch`/`finally`.
+
+If nothing throws, the `catch` block is skipped entirely.
+
+### `finally` — runs regardless
+
+```js
+let connection;
+try {
+  connection = openDatabase();
+  return connection.query("SELECT 1");
+} catch (err) {
+  console.error("DB failed:", err.message);
+  return null;
+} finally {
+  if (connection) connection.close();
+}
+```
+
+`finally` runs whether the `try` succeeded or threw — even if there's a `return` in either block. Use it for cleanup that *must* happen: closing connections, hiding loading spinners, removing event listeners.
+
+A quirk worth knowing: a `return` inside `finally` *overrides* the return value from `try` or `catch`. Almost always a bug; modern linters warn.
+
+### Error classes — give your errors meaning
+
+The base `Error` class is fine for ad-hoc errors. For structured handling, subclass:
+
+```js
+class ValidationError extends Error {
+  constructor(field, message) {
+    super(message);
+    this.name = "ValidationError";
+    this.field = field;
+  }
+}
+
+class NetworkError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = "NetworkError";
+    this.status = status;
+  }
+}
+```
+
+Now your `catch` can route based on type:
+
+```js
+try {
+  await submitForm(data);
+} catch (err) {
+  if (err instanceof ValidationError) {
+    showFieldError(err.field, err.message);
+  } else if (err instanceof NetworkError) {
+    if (err.status >= 500) showRetryBanner();
+    else showError(err.message);
+  } else {
+    console.error(err);
+    showGenericError();
+  }
+}
+```
+
+The error class is the routing label. The triage desk decides where to send it.
+
+### `try` / `catch` with `async`/`await`
+
+For Promises, `await` makes errors `throw`-able the same way:
+
+```js
+async function loadUser(id) {
+  try {
+    const res = await fetch(`/api/users/${id}`);
+    if (!res.ok) throw new NetworkError(res.status, "User fetch failed");
+    return await res.json();
+  } catch (err) {
+    if (err instanceof NetworkError) showError(err.message);
+    throw err;   // re-throw if you can't fully handle it
+  }
+}
+```
+
+Without `await`, Promises require `.catch()`:
+
+```js
+fetch(...)
+  .then(res => res.json())
+  .catch(err => showError(err.message));
+```
+
+`async`/`await` is the modern default. The `.catch()` chain is only useful in specific functional pipelines.
+
+### `fetch` doesn't throw on HTTP errors — a trap
+
+This is the single most surprising behavior in JavaScript's networking:
+
+```js
+const res = await fetch("/missing");
+console.log(res.status);   // 404 — the request "succeeded"
+```
+
+`fetch` rejects (throws when awaited) only on **network failures** — DNS, CORS, the user pulling the wifi. A 404 or 500 from the server is, as far as `fetch` is concerned, a successful HTTP response. You have to check `res.ok` (true for 2xx) yourself:
+
+```js
+const res = await fetch("/api/users");
+if (!res.ok) throw new NetworkError(res.status, "User fetch failed");
+const data = await res.json();
+```
+
+Every fetch-wrapper utility (axios, ky, your own `apiClient`) wraps this so you can throw on 4xx/5xx like you'd expect. Without that wrapper, you have to remember the check every single time. Forget once → silent failure.
+
+### Re-throwing
+
+When you can't fully handle an error in `catch`, re-throw it so a higher layer can:
+
+```js
+try {
+  await criticalOp();
+} catch (err) {
+  log.error(err);          // log it
+  throw err;               // pass it up the stack
+}
+```
+
+This is the "I see it but I'm not the right place to fix it" pattern. Common at every layer: the API client logs and re-throws; the page-level handler logs and shows a banner; the global error boundary catches the rest.
+
+### React error boundaries
+
+In React, runtime errors during render crash the whole tree by default. Error boundaries catch them at a component level:
+
+```jsx
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(err) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(err, info) {
+    console.error("Render error:", err, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <p>Something broke. Try refreshing.</p>;
+    }
+    return this.props.children;
+  }
+}
+
+<ErrorBoundary>
+  <ProfilePage />
+</ErrorBoundary>
+```
+
+Wraps a subtree. If anything inside throws during render, the boundary shows the fallback instead of a white screen.
+
+There's no hook for this yet — it's still a class API. Or use a library like `react-error-boundary` that gives you a hook-friendly wrapper.
+
+### What NOT to do — anti-patterns
+
+The three most common bad patterns:
+
+1. **Swallow and continue.**
+
+   ```js
+   try { doRiskyThing(); }
+   catch (err) {}    // silently ignore
+   ```
+
+   If you can't handle it, don't catch it. If you catch it, at least log it. A swallowed error is a bug that won't surface until production, when a customer can't sign in and you have no record of why.
+
+2. **Catch too broadly.**
+
+   ```js
+   try {
+     loadData();
+     parse();
+     save();
+   } catch (err) {
+     showError("Something went wrong");
+   }
+   ```
+
+   You can't tell *which* step failed. Either catch narrowly per step, or check the error type inside catch and respond differently. Generic "something went wrong" with no detail trains users to ignore your error messages.
+
+3. **Throw strings.**
+
+   ```js
+   throw "user not found";   // ← no stack trace
+   ```
+
+   Always `throw new Error(...)` or a subclass. The stack trace is what makes errors debuggable.
+
+### Result-type pattern — error as data
+
+Some teams avoid throwing and instead return a tagged result:
+
+```ts
+type Result<T> =
+  | { ok: true;  value: T }
+  | { ok: false; error: string };
+
+async function loadUser(id): Promise<Result<User>> {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) return { ok: false, error: "Network error" };
+  return { ok: true, value: await res.json() };
+}
+
+const r = await loadUser(1);
+if (r.ok) renderUser(r.value);
+else showError(r.error);
+```
+
+You've seen this in the TypeScript concepts as a discriminated union. The win: errors are part of the function's type signature; the caller can't "forget" to handle them. The cost: more verbose than throwing. Pick the style per codebase; mixing both is the worst of both worlds.
+
+Rust's `Result<T, E>` and Go's `value, err :=` are the same idea, baked into the language. JavaScript leaves the choice to you.
+
+<ExampleProject
+  src="try-catch-finally"
+  title="try / catch / finally lifecycle — watch the order of operations"
+  description="A page with three demo buttons (success, throw, throw + finally) that run a try/catch/finally block and log every step. Lets you see exactly which lines run in each case and how finally fires after a return or throw."
+/>
+
+<ExampleProject
+  src="result-pattern"
+  title="The Result<T> pattern — error as a value, no throwing"
+  description="A small lookup function returns Result<User> instead of throwing. The caller is forced to check `.ok` before using `.value`. Demonstrates the discriminated-union approach to error handling that some teams prefer over try/catch."
+/>
+
+<Exercise
+  title="Wrap fetch into a safe apiClient that throws meaningfully"
+  starter={`Write a function apiClient(url, opts) that:
+
+  1. Calls fetch(url, opts).
+  2. If the network call itself fails (no response), throws a
+     NetworkError with the original message.
+  3. If the response is 4xx, throws a ClientError with the status code
+     and the response body (parsed as JSON if possible, else text).
+  4. If the response is 5xx, throws a ServerError with status + body.
+  5. If 2xx, parses the body as JSON and returns it. If the JSON parse
+     fails, throws a ParseError.
+
+Then write a calling function that:
+
+  - Uses await + try/catch to call apiClient.
+  - Branches in catch on the error class (instanceof checks):
+      NetworkError → "Couldn't reach the server. Try again."
+      ClientError  → show the body's "message" field if available
+      ServerError  → "We're having trouble. Retry in a moment."
+      ParseError   → "The server sent something we couldn't read."
+  - Uses finally to hide a loading spinner.
+
+Define the three error classes as subclasses of Error with a name and
+any extra fields they need. Use them; don't just throw strings.`}
+>
+
+- Three error classes exist: `NetworkError`, `ClientError`, `ServerError` (and optionally `ParseError`), each subclassing `Error` with a `.name`.
+- `apiClient` calls `fetch` inside a `try`, catches a network failure, and re-throws as `NetworkError`.
+- `apiClient` checks `res.ok` (or `res.status`) and throws the right class for 4xx and 5xx, attaching the status and the parsed body.
+- `apiClient` parses JSON inside its own try; a parse failure throws `ParseError`.
+- A caller uses `await apiClient(...)` inside a `try`, with `instanceof` branches in the `catch` for each error class.
+- The `finally` block runs and hides the spinner whether the call succeeded or threw.
+- Errors thrown are `Error` instances (not strings), and the messages are usable in a UI.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's the difference between `try` / `catch` and a `Promise` `.catch()`?
+
+**A:** **They handle errors at different stages of code flow, and modern code uses `try`/`catch` with `await` to unify them.**
+
+```js
+// Promise-style — the .catch attaches to the promise chain
+fetch("/api/users")
+  .then(res => res.json())
+  .catch(err => showError(err));
+
+// async/await — the awaited promise can throw, caught by try/catch
+async function load() {
+  try {
+    const res = await fetch("/api/users");
+    return await res.json();
+  } catch (err) {
+    showError(err);
+  }
+}
+```
+
+Both end up handling the same errors. The differences:
+
+1. **Synchronous errors fall outside `.catch`.** `JSON.parse("bad json")` inside a `.then()` callback rejects the promise and `.catch` runs. Outside a `.then`, you need `try`/`catch`. With `async`/`await`, every line is inside an async function and `try`/`catch` covers both sync and async errors uniformly.
+
+2. **Readability.** `try`/`catch` blocks reads top-down like sync code. `.then().catch()` chains read as a pipeline, which is fine for short cases but gets hard to follow with multiple awaits and branching.
+
+3. **Control flow.** Inside `try`/`catch`, an early `return` works normally. With `.then`, you have to chain through and the structure gets twisted.
+
+The modern default in app code: `async`/`await` + `try`/`catch`. `.then()`/`.catch()` is appropriate in pipeline-style code (Promise chains where each step is a transform) and in fire-and-forget side-effects (`save().catch(log)`).
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why does this code not catch the 404?
+
+```js
+try {
+  const res = await fetch("/api/missing");
+  return res;
+} catch (err) {
+  console.log("caught:", err);
+}
+```
+
+**A:** **Because `fetch` doesn't reject on HTTP error statuses — only on *network* failures (DNS resolution, CORS rejection, network unreachable, the request was aborted).** A 404 is a successful HTTP response from `fetch`'s perspective: the request went out, the server responded, the response just happened to be "not found."
+
+You have to check `res.ok` (true for 2xx) yourself:
+
+```js
+try {
+  const res = await fetch("/api/missing");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+} catch (err) {
+  console.log("caught:", err);
+}
+```
+
+Now the 404 throws explicitly and the `catch` runs.
+
+Three reasons this is the way it is:
+
+1. **Some 4xx responses are useful data.** `409 Conflict` from a "try to claim this username" endpoint is a legitimate response your app probably wants to read, not throw on. Forcing `fetch` to throw would make every caller wrap in try/catch even when they expected the status.
+
+2. **Body access.** Even on 4xx/5xx, you usually want to read the body (to show the server's error message). If `fetch` threw before giving you the response object, you couldn't.
+
+3. **Other languages and SDKs differ.** `axios` and `ky` throw on 4xx/5xx by default. Build a thin wrapper around `fetch` that does the same, and you stop forgetting the `res.ok` check in every call site.
+
+The fix: never use raw `fetch` for more than one or two calls. Wrap it. Make the wrapper throw on non-2xx. Use the wrapper everywhere.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What does `finally` do, and when would you use it?
+
+**A:** **`finally` runs after the `try` block, whether the `try` succeeded, threw, or returned. It's where cleanup goes — connections, spinners, timers, anything that must happen no matter the outcome.**
+
+```js
+function load() {
+  showSpinner();
+  try {
+    const data = riskyFetch();
+    return data;                  // returns from try
+  } catch (err) {
+    showError(err);
+    return null;
+  } finally {
+    hideSpinner();                 // ← runs in BOTH success and error paths
+  }
+}
+```
+
+Three things worth knowing:
+
+1. **`finally` runs after `return` from `try` or `catch`.** Even though `return data;` looks like it ends the function, JavaScript runs `finally` first, *then* returns. That's the whole point — cleanup happens before the function exits.
+
+2. **`return` inside `finally` overrides earlier returns.** Almost always a bug:
+
+   ```js
+   function odd() {
+     try { return 1; }
+     finally { return 2; }     // function returns 2, the 1 is lost
+   }
+   ```
+
+   Modern linters warn. Avoid.
+
+3. **An error thrown inside `finally` overrides the one being handled.** If `try` threw error A and `finally` throws error B, the caller sees B and A is lost. Keep `finally` defensive — wrap risky cleanup in its own try.
+
+Typical uses:
+- **Hide loading spinners** so they don't get stuck when an error happens.
+- **Close database connections / file handles** so resources aren't leaked.
+- **Remove event listeners** that were attached for one operation.
+- **Stop timers** (`clearTimeout`, `clearInterval`) that should not outlive the function.
+
+Modern frameworks reduce the need for it — React's `useEffect` cleanup return value handles spinners; the AbortController API handles fetch cancellation. But for plain Node / utility code, `finally` is still the cleanest way to guarantee cleanup.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When would you use the `Result<T>` pattern instead of throwing?
+
+**A:** **When you want errors to be part of the function's type signature, so callers can't forget to handle them.**
+
+```ts
+type Result<T> =
+  | { ok: true;  value: T }
+  | { ok: false; error: string };
+
+async function loadUser(id: number): Promise<Result<User>> {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+  return { ok: true, value: await res.json() };
+}
+
+const r = await loadUser(1);
+if (r.ok) renderUser(r.value);
+else showError(r.error);
+```
+
+What the pattern gives you:
+
+- **TypeScript enforces handling.** The compiler won't let you access `r.value` until you've narrowed via `if (r.ok)`. Forget to check, and you don't compile. Forgetting to catch a thrown error compiles fine and crashes at runtime.
+- **Easier composition.** `pipe`-style code threads `Result`s naturally; throwing breaks function composition because the flow is interrupted out-of-band.
+- **No surprise async throws.** A throwing async function looks the same in the type system as a non-throwing one — you have to read the body to know which errors it might throw. A `Result` makes it explicit.
+
+What the pattern costs:
+
+- **More verbose call sites.** Every read needs an `if (r.ok)` narrow. `try`/`catch` lets you write the happy path top-down.
+- **Doesn't replace throwing entirely.** Genuine bugs (null dereference, out-of-bounds) still throw. You end up with two error-handling mechanisms.
+- **Ecosystem friction.** JavaScript libraries throw. Wrapping every call in a `Result`-returning shim is real work.
+
+Rust and Go bake `Result` / `(value, err)` into the language because they decided the trade is worth it. JavaScript leaves the choice to you. Most production codebases use throwing + try/catch for app code, and reach for `Result` when:
+- Building a library (the API contract is loud and clear).
+- Modelling expected-but-not-exceptional outcomes (form validation, lookup misses).
+- Working in a heavily-typed code section where the compiler benefits outweigh the verbosity.
+
+Either approach can work. Mixing them per-function in the same codebase is what hurts — pick a default at the team level.
+
+</InterviewQuestion>

@@ -1,0 +1,432 @@
+## Higher-order functions
+
+A higher-order function is a function that takes another function as an argument, or returns one. The name sounds academic; the everyday reality isn't. Every `.map()`, every `.filter()`, every `setTimeout`, every `addEventListener`, every React hook — they're all higher-order functions. Once you see "functions as values" as natural, half of JavaScript's standard library starts to feel like one coherent idea instead of a hundred unrelated APIs.
+
+<Analogy>
+A higher-order function is **a power tool with swappable bits**.
+
+Imagine a drill. The drill itself has one job: spin something at high speed. You don't buy a different drill for every task — you buy *bits* and snap them in. Phillips bit for cabinet screws. Hex bit for the IKEA wrench. Hole saw for a door knob. Same drill body, different bits, totally different jobs.
+
+Higher-order functions are drills. They handle the **rhythm of the work** — "do this thing to every item in the array," "do this thing once per second," "do this thing when the user clicks." The bit you snap in is your function — the **what** that the higher-order function applies. The drill doesn't know or care what the bit does; it just spins it at the right place at the right time.
+
+```js
+// .map is the drill. The arrow function is the bit.
+[1, 2, 3].map(n => n * 2);          // → [2, 4, 6]
+
+// setTimeout is the drill. The arrow is the bit.
+setTimeout(() => console.log("hi"), 100);
+
+// addEventListener is the drill. The arrow is the bit.
+button.addEventListener("click", e => console.log("clicked"));
+```
+
+Three things this shape gives you that imperative loops don't:
+
+1. **Compact intent.** `nums.map(double)` reads as "double every number" — the *what* is obvious. The equivalent `for` loop spends three lines on bookkeeping (`let i = 0; i < nums.length; i++`) and one line on the actual work.
+2. **Composability.** A small bit (a function) can be reused with many drills (HOFs). The same `double` function works with `.map`, `.forEach`, `.reduce`. The drill metaphor breaks here — your software bit can fit any compatible drill.
+3. **Decoupling.** The drill (`.map`) doesn't know if the bit (`double`) is pure or side-effecting, fast or slow, simple or complex. As long as it accepts a value and returns one, the drill spins it. New behaviors require zero changes to the drill — just a new bit.
+
+The other half of "higher-order function" — functions that *return* other functions — is the factory pattern from the Closures concept. `makeCounter()` returns a function bundled with state; `multiply(2)` returns a `double` function bundled with the captured `2`. Both consume nothing fancy: regular function calls. Both produce powerful tools because the *output* is a function tailored to a specific job.
+
+If you write modern JavaScript, you write higher-order functions all day. The naming is the only thing scary about them.
+</Analogy>
+
+<Illustration
+  alt="Diagram of a higher-order function accepting a callback and applying it to a sequence"
+  caption=".map / .filter / .reduce share one shape: drive the iteration; let you supply the bit."
+>
+
+```
+   .map((n) => n * 2)            .filter((n) => n > 2)         .reduce((sum, n) => sum + n, 0)
+   ──────────────────            ──────────────────            ──────────────────────────────
+   [ 1, 2, 3 ]                   [ 1, 2, 3 ]                   [ 1, 2, 3 ]
+       │                             │                             │
+       │ apply bit                   │ keep if true                │ accumulate
+       ▼                             ▼                             ▼
+   [ 2, 4, 6 ]                   [ 3 ]                         6
+
+   In every case:
+   ── the array drives iteration (the drill)
+   ── your function is the bit (drops in, drops out)
+   ── output is a new array OR a single value — no mutation
+```
+
+</Illustration>
+
+### Functions as values
+
+In JavaScript, functions are values. You can store them in variables, pass them as arguments, return them, put them in arrays:
+
+```js
+const greet = (name) => "Hi, " + name;
+
+const fns = [greet];
+fns[0]("Ada");        // "Hi, Ada"
+
+const log = greet;
+log("Lin");           // "Hi, Lin"
+
+function applyTo(name, fn) {
+  return fn(name);
+}
+applyTo("Ada", greet);   // "Hi, Ada"
+```
+
+That last function — `applyTo` — is a higher-order function. It accepts another function as a parameter and calls it. Pattern: parameter named after the role it plays (`fn`, `callback`, `handler`, `predicate`, `reducer`).
+
+### The array trio — `map`, `filter`, `reduce`
+
+These three are the daily payoff. Almost any data transformation you'll do on the frontend is a composition of them.
+
+**`.map`** transforms each item:
+
+```js
+const cents = [99, 250, 7500];
+const dollars = cents.map(c => c / 100);
+// → [0.99, 2.50, 75.00]
+```
+
+Input length = output length. The shape of each item changes; the count doesn't.
+
+**`.filter`** keeps items that pass a predicate:
+
+```js
+const users = [
+  { name: "Ada", active: true },
+  { name: "Lin", active: false },
+  { name: "Sam", active: true },
+];
+const active = users.filter(u => u.active);
+// → [{name: "Ada", ...}, {name: "Sam", ...}]
+```
+
+Input length ≥ output length. The shape doesn't change; some items are dropped.
+
+**`.reduce`** combines into a single value:
+
+```js
+const total = [99, 250, 7500].reduce((sum, n) => sum + n, 0);
+// → 7849
+```
+
+Input is many; output is one (or one of anything — array, object, string). The second argument (`0`) is the starting value of the accumulator. Take a beat with `.reduce`; it's the most powerful and the most "hmm" of the three.
+
+### Chaining them
+
+The trio composes:
+
+```js
+const orders = [
+  { item: "Mug",      qty: 2, price: 12_000 },
+  { item: "Notebook", qty: 1, price: 25_000 },
+  { item: "Pen",      qty: 5, price:  2_500 },
+];
+
+const totalUgx = orders
+  .filter(o => o.qty > 0)
+  .map(o => o.qty * o.price)
+  .reduce((sum, n) => sum + n, 0);
+// → 61500
+```
+
+Read it top-down: filter to in-stock orders → multiply qty × price for each → sum the line totals. The equivalent `for` loop has the same logic buried among `let i`, `if`, and bookkeeping `total +=`.
+
+Three rules to keep the chain readable:
+- One transformation per `.map` step. Don't compute three things in one callback.
+- Filter early when possible — smaller arrays, faster downstream steps.
+- If the chain grows past 4-5 steps, extract a named function or split into intermediate `const`s.
+
+### Other HOFs you'll use weekly
+
+- **`.forEach((item) => ...)`** — like `.map` but for side effects. Returns `undefined`. Use when you want to *do something* per item, not transform.
+- **`.find((item) => predicate)`** — returns the first item that passes the predicate, or `undefined`. Like `.filter()[0]` but stops searching when it finds one.
+- **`.some((item) => predicate)`** — returns `true` if any item passes.
+- **`.every((item) => predicate)`** — returns `true` if all items pass.
+- **`.sort((a, b) => a - b)`** — sorts in place. The callback returns negative / 0 / positive to mean a-before-b / equal / b-before-a.
+- **`.flatMap((item) => array)`** — `.map` then flatten one level. Useful when each item expands into multiple outputs.
+
+`setTimeout`, `setInterval`, `addEventListener`, `Array.from`, `Promise.then`, every React hook — all HOFs. Same shape: "give me a function; I'll call it at the right time."
+
+### Returning a function — factories
+
+The second half of higher-order functions: functions that *return* functions. You've seen this in the Closures concept.
+
+```js
+function makeMultiplier(factor) {
+  return (n) => n * factor;
+}
+
+const double = makeMultiplier(2);
+const triple = makeMultiplier(3);
+
+double(7);   // 14
+triple(7);   // 21
+```
+
+Use this when you have a function that's "almost right" — same shape, but a parameter is fixed. The factory bakes the fixed parameter in and returns the specialized version.
+
+The Phase-1 example was less obvious: every React hook is a factory. `useState(0)` returns a `[count, setCount]` tuple where `setCount` is a function closing over which state slot to update. Every render, the factory runs again and gives you a fresh function bundled with this render's state.
+
+### Currying — chaining factories
+
+A function that takes multiple arguments can be rewritten as a chain of single-argument functions:
+
+```js
+// Original
+const add = (a, b) => a + b;
+
+// Curried
+const addCurried = (a) => (b) => a + b;
+
+const add5 = addCurried(5);
+add5(3);   // 8
+addCurried(10)(20);   // 30
+```
+
+Sometimes useful (clean partial application), often overkill (most JS code doesn't need it). Recognize it; reach for it sparingly.
+
+### `compose` and `pipe` — building pipelines
+
+When you have a chain of "input → output" functions and want to wire them together, the helpers are `compose` (right-to-left) and `pipe` (left-to-right):
+
+```js
+const pipe = (...fns) => (x) => fns.reduce((acc, f) => f(acc), x);
+
+const trim   = (s) => s.trim();
+const lower  = (s) => s.toLowerCase();
+const dashes = (s) => s.replace(/\s+/g, "-");
+
+const slug = pipe(trim, lower, dashes);
+slug("  Hello World  ");   // "hello-world"
+```
+
+`pipe(a, b, c)(x)` runs `c(b(a(x)))`. Reads in the order it runs. Lodash, Ramda, fp-ts all ship versions; you can hand-roll one in five lines.
+
+### Higher-order *components* in React
+
+The pattern carries over. A higher-order component (HOC) is a function that takes a component and returns a new component with extra behavior:
+
+```jsx
+function withLogger(Component) {
+  return function Wrapped(props) {
+    useEffect(() => { console.log(Component.name, "mounted"); }, []);
+    return <Component {...props} />;
+  };
+}
+
+const LoggedButton = withLogger(Button);
+```
+
+This pattern's mostly been replaced by custom hooks in modern React (they're easier to compose), but it's still everywhere in older codebases — `withRouter`, `withTranslation`, Redux's `connect()` are all HOCs. Same idea as `pipe`, applied at the component level.
+
+### Higher-order functions in tests
+
+Test runners like Vitest and Jest are higher-order all the way down:
+
+```js
+describe("Counter", () => {
+  it("increments", () => {
+    expect(counter.increment()).toBe(1);
+  });
+});
+```
+
+`describe` and `it` both take a function. So does `beforeEach`, `afterEach`, `test.each`. The runner orchestrates *when* to call your functions; you provide *what* each should do. Same drill-and-bit shape, scaled up to test suites.
+
+### Performance — when imperative wins
+
+For 99% of frontend work, the array trio is the right choice. Readability beats nanoseconds. The exception: tight inner loops over very large arrays (10k+ items) in performance-critical code. There, a `for` loop sometimes wins by ~20% because:
+- No allocation of a new array per `.map`.
+- No callback function call overhead per item.
+
+Don't pre-optimize. Write `.map`/`.filter`/`.reduce` first. Profile. If the chain shows up as a hotspot, *then* rewrite that one chain as a loop. In ten years of frontend code, you'll do this twice.
+
+<ExampleProject
+  src="array-trio"
+  title="map, filter, reduce on the same dataset"
+  description="A sample list of orders with quantity, price, and a 'in stock' flag. Three buttons run the three operations on the same input and show the output. The chained version at the bottom shows them combining into one pipeline."
+/>
+
+<ExampleProject
+  src="compose-pipe"
+  title="Build a pipe() helper and a slug pipeline"
+  description="A hand-rolled pipe() helper in 5 lines, used to compose trim → lowercase → replace-spaces into a string-to-slug pipeline. Type into the input; watch the slug update live. Demonstrates building your own HOF, not just consuming one."
+/>
+
+<Exercise
+  title="Build groupBy() — your own HOF"
+  starter={`Write a function groupBy(array, fn) that:
+
+  1. Takes an array of items and a function fn that returns a key per item.
+  2. Returns an object whose keys are the return values of fn and whose
+     values are arrays of items that produced that key.
+
+Example usage:
+  const users = [
+    { name: "Ada", role: "ADMIN" },
+    { name: "Lin", role: "USER" },
+    { name: "Sam", role: "USER" },
+    { name: "Pat", role: "ADMIN" },
+  ];
+
+  groupBy(users, (u) => u.role)
+  // → { ADMIN: [Ada, Pat], USER: [Lin, Sam] }
+
+Build it three different ways:
+
+  1. With a for loop (the imperative baseline).
+  2. With .reduce() (the higher-order way).
+  3. (Bonus) With Object.groupBy if your runtime supports it (Node 21+,
+     modern browsers). Compare the three implementations.
+
+Test it on at least two different keying functions on the same array.`}
+>
+
+- `groupBy(array, fn)` is implemented at least twice — once with a `for` loop, once with `.reduce`.
+- Both implementations produce the same output for the same input.
+- The output is an **object** (not a Map, unless explicitly chosen) with keys produced by `fn` and array values.
+- The function is tested with at least one example similar to the spec (grouping users by role).
+- It's also tested with a *second* keying function on the same data (e.g. group by name's first letter) to demonstrate the HOF is generic.
+- The reduce version uses the accumulator pattern: `array.reduce((acc, item) => { ... return acc; }, {})`.
+- The function doesn't mutate the input array.
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a higher-order function?
+
+**A:** **A function that takes another function as an argument, returns a function, or both.** That's the entire definition. The category is huge once you notice it.
+
+Examples by direction:
+
+- **Takes a function:** `.map((n) => n*2)`, `.filter(...)`, `setTimeout(callback, 100)`, `addEventListener("click", fn)`, every React hook.
+- **Returns a function:** `makeCounter()` returns the counter functions, `multiply(2)` returns a `double` function bundled with the 2, `useState(0)` returns a setter closed over the state slot.
+- **Both:** `compose(f, g, h)` takes functions and returns a new function. `pipe(...)` same idea.
+
+The reason "higher-order" matters: it lets you write generic mechanisms once and parameterize the behavior. `.map` is one mechanism that handles "transform every item"; you supply the transformation. The mechanism doesn't care if you're doubling numbers, capitalizing strings, or fetching user data — it just calls your function and collects the results. New behaviors require zero changes to the mechanism; just a different callback.
+
+If you write modern JavaScript, you write higher-order functions hundreds of times a day without noticing. The fancy name describes a habit you already have.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** When would you reach for `.reduce` instead of `.map` or `.filter`?
+
+**A:** **When the result is *one thing* (or a different shape), not an array of the same length or a subset.**
+
+```js
+const cart = [
+  { item: "Mug", price: 12_000 },
+  { item: "Pen", price:  2_500 },
+];
+
+// .map: same length, transformed shape. Wrong tool for "total."
+cart.map(c => c.price);              // → [12000, 2500]
+
+// .reduce: one number out of many items. Right tool.
+cart.reduce((sum, c) => sum + c.price, 0);   // → 14500
+```
+
+The mental check: ask "what's the output shape?"
+
+- **Array of the same length, transformed?** → `.map`.
+- **Array, but some items dropped?** → `.filter`.
+- **One value, or a value of a different shape?** → `.reduce`.
+
+`.reduce` is the workhorse for: sums, counts, max/min, building lookup objects (`groupBy`, `keyBy`), flattening, building strings. Anytime the destination is a single accumulator that the input contributes to one item at a time, it's the right tool.
+
+The accumulator pattern always looks the same:
+
+```js
+array.reduce((acc, item) => {
+  // mutate acc OR return new acc
+  return acc;
+}, initialValue);
+```
+
+The second argument (`initialValue`) is crucial — for sums it's `0`, for products it's `1`, for building objects it's `{}`, for arrays it's `[]`. Forgetting it makes `reduce` treat the first array item as the accumulator, which is rarely what you want.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** Why is `.map` preferred over a `for` loop in most modern code?
+
+**A:** **Because intent is encoded in the operation name, and there's no bookkeeping noise.**
+
+```js
+// Imperative — bookkeeping mixed with intent
+const doubled = [];
+for (let i = 0; i < nums.length; i++) {
+  doubled.push(nums[i] * 2);
+}
+
+// Functional — intent only
+const doubled = nums.map(n => n * 2);
+```
+
+Three concrete wins:
+
+1. **Reading speed.** A reader sees `.map` and knows "transform every item." They don't have to trace the loop bounds to verify you're not off-by-one. The shape of the result is also immediate: same length as input.
+
+2. **Fewer bugs.** Index-based loops are where off-by-one bugs, accidental mutation of the source array, and "forgot to push to the right list" hide. `.map` allocates the output array internally and you can't fat-finger the bookkeeping.
+
+3. **Composability.** `.map(...).filter(...).reduce(...)` reads as a pipeline. A loop equivalent would need either intermediate arrays or a single loop that does three things at once — both less readable.
+
+The trade-off:
+
+- **Imperative wins** in tight performance-critical loops (~10k+ items, hot path) because there's no callback function-call overhead and no intermediate array allocation per `.map` step. Profile first, rewrite if it's actually a hotspot.
+- **Imperative wins** when the loop needs to early-exit (`break`) on a condition. `.find`/`.some` handle the common case, but if the logic doesn't fit those shapes, `for` is cleaner than a `.reduce` with a "found" flag.
+
+For 99% of frontend code: `.map`/`.filter`/`.reduce`. Write readable code first; optimize when measurement justifies it.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** How would you implement `pipe(...fns)` from scratch?
+
+**A:** **Use `.reduce` to thread the value through each function in order.**
+
+```js
+const pipe = (...fns) => (initial) =>
+  fns.reduce((acc, fn) => fn(acc), initial);
+```
+
+How it reads:
+
+1. `pipe` takes any number of functions (rest parameters → `fns` is an array of them).
+2. It returns a new function that takes the initial value.
+3. That new function `.reduce`s over `fns`, threading the accumulator (`acc`) through each function in order.
+
+In use:
+
+```js
+const trim  = (s) => s.trim();
+const lower = (s) => s.toLowerCase();
+const dash  = (s) => s.replace(/\s+/g, "-");
+
+const slug = pipe(trim, lower, dash);
+slug("  Hello World  ");   // "hello-world"
+```
+
+The opposite — `compose` — runs right-to-left:
+
+```js
+const compose = (...fns) => (initial) =>
+  fns.reduceRight((acc, fn) => fn(acc), initial);
+
+// compose(dash, lower, trim) is equivalent to pipe(trim, lower, dash).
+```
+
+`pipe` reads "do A then B then C," matching the order of arguments. `compose` matches math notation `(f ∘ g)(x) = f(g(x))` — useful in functional libraries, awkward in everyday code. Most JS libraries (Ramda, fp-ts, Lodash's `flow`) prefer `pipe`.
+
+Why bother building it yourself? Three reasons:
+
+1. It's five lines — no dependency needed for one usage.
+2. It demonstrates that "advanced functional helpers" are just `.reduce` in disguise.
+3. The mental model — "thread a value through a list of transforms" — generalizes to middleware (Express, Redux), async pipelines (`promise.then().then()`), and React's component trees. Same idea everywhere.
+
+</InterviewQuestion>

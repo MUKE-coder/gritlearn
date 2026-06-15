@@ -1,0 +1,72 @@
+<!--
+  Result<T> pattern — error as data instead of thrown.
+  Three lookups (one success, one not-found, one server-error)
+  return a tagged Result; the caller branches on .ok before
+  using .value.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Result&lt;T&gt; pattern</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      pre { background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .row {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+        margin-top: 0.65rem; align-items: center;
+      }
+      .row pre { margin: 0; font-size: 0.82rem; }
+      .out {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.55;
+      }
+      .ok  { color: #7fff5b; }
+      .bad { color: #f87171; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Result&lt;User&gt; — error as data, not exception</h1>
+
+<pre>type Result&lt;T&gt; =
+  | { ok: true;  value: T }
+  | { ok: false; error: string };
+
+function lookupUser(id) {
+  if (id === 0) return { ok: false, error: "Server unavailable" };
+  if (id === 99) return { ok: false, error: "Not found" };
+  return { ok: true, value: { id, name: "User " + id } };
+}
+
+function renderUser(r) {
+  if (r.ok) return "→ " + r.value.name;
+  return "✗ " + r.error;
+}</pre>
+
+      <h2>Three calls:</h2>
+      <div class="row"><pre>lookupUser(1)</pre>  <div class="out" id="r1"></div></div>
+      <div class="row"><pre>lookupUser(0)</pre>  <div class="out" id="r2"></div></div>
+      <div class="row"><pre>lookupUser(99)</pre> <div class="out" id="r3"></div></div>
+
+      <h2>Compiler-equivalent: TypeScript forces you to check <code>r.ok</code> before touching <code>r.value</code>.</h2>
+      <p>The pattern moves errors into the function's type signature — callers can't forget to handle them.</p>
+
+    <script>
+      function lookupUser(id) {
+        if (id === 0) return { ok: false, error: "Server unavailable" };
+        if (id === 99) return { ok: false, error: "Not found" };
+        return { ok: true, value: { id, name: "User " + id } };
+      }
+      function renderUser(r) {
+        return r.ok
+          ? "<span class=\"ok\">→ " + r.value.name + "</span>"
+          : "<span class=\"bad\">✗ " + r.error + "</span>";
+      }
+      document.getElementById("r1").innerHTML = renderUser(lookupUser(1));
+      document.getElementById("r2").innerHTML = renderUser(lookupUser(0));
+      document.getElementById("r3").innerHTML = renderUser(lookupUser(99));
+    </script>
+  </body>
+</html>

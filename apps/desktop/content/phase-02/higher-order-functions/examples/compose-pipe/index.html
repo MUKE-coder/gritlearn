@@ -1,0 +1,80 @@
+<!--
+  A hand-rolled pipe() in 5 lines, composing trim → lower → dashes
+  into a string-to-slug pipeline. Type into the input; the slug
+  updates live.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>pipe() — composing string transforms</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 600px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      pre { background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      input[type="text"] {
+        width: 100%; padding: 0.6rem 0.85rem; border: 1px solid #d4d4d8;
+        border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; margin-top: 1rem;
+      }
+      .row {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.95rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.9rem; margin-top: 0.4rem; line-height: 1.55;
+      }
+      .label { color: #71717a; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; }
+      .accent { color: #7fff5b; }
+    </style>
+  </head>
+  <body>
+    <h1>pipe() — string → slug in 5 lines</h1>
+<pre>const pipe = (...fns) =&gt; (x) =&gt; fns.reduce((acc, f) =&gt; f(acc), x);
+
+const trim   = (s) =&gt; s.trim();
+const lower  = (s) =&gt; s.toLowerCase();
+const dashes = (s) =&gt; s.replace(/\s+/g, "-");
+
+const slug = pipe(trim, lower, dashes);</pre>
+
+    <input id="input" type="text" placeholder="type a title, e.g. '  Hello World  '" value="  Why React Wins in 2026  " />
+
+    <div>
+      <span class="label">$ input</span>
+      <div class="row" id="r-input"></div>
+    </div>
+    <div>
+      <span class="label">$ trim(input)</span>
+      <div class="row" id="r-trim"></div>
+    </div>
+    <div>
+      <span class="label">$ lower(...)</span>
+      <div class="row" id="r-lower"></div>
+    </div>
+    <div>
+      <span class="label">$ dashes(...) <span class="accent">← final slug</span></span>
+      <div class="row accent" id="r-dashes"></div>
+    </div>
+
+    <script>
+      const pipe = (...fns) => (x) => fns.reduce((acc, f) => f(acc), x);
+      const trim   = (s) => s.trim();
+      const lower  = (s) => s.toLowerCase();
+      const dashes = (s) => s.replace(/\s+/g, "-");
+      const slug = pipe(trim, lower, dashes);
+
+      const input = document.getElementById("input");
+      const rInput  = document.getElementById("r-input");
+      const rTrim   = document.getElementById("r-trim");
+      const rLower  = document.getElementById("r-lower");
+      const rDashes = document.getElementById("r-dashes");
+
+      function render() {
+        const v = input.value;
+        rInput.textContent  = JSON.stringify(v);
+        rTrim.textContent   = JSON.stringify(trim(v));
+        rLower.textContent  = JSON.stringify(lower(trim(v)));
+        rDashes.textContent = JSON.stringify(slug(v));
+      }
+      input.addEventListener("input", render);
+      render();
+    </script>
+  </body>
+</html>

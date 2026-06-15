@@ -1,0 +1,106 @@
+<!--
+  Two "components" share a parent's user object. Editing the nested
+  address in one component appears to change it in the other — because
+  the shallow {...user} spread didn't copy the nested object.
+  The right-side panel shows the deep-spread fix.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The shallow-copy trap</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 760px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .col.bad { border-color: #dc2626; }
+      .col.good { border-color: #15803d; }
+      input { width: 100%; padding: 0.45rem 0.65rem; border: 1px solid #d4d4d8; border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
+      .label { display: block; font-size: 0.8rem; color: #555; margin-top: 0.5rem; }
+      pre { background: #0a0a0d; color: #ededee; padding: 0.6rem 0.8rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.8rem; margin-top: 0.7rem; line-height: 1.5; }
+      .accent { color: #7fff5b; } .bad-c { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <h1>Shallow copy = shared inner objects</h1>
+    <p>Each panel has its own state copy. Type into <em>either</em> city field on the left and watch the parent's state mutate. The right side does the spread at each level — the bug disappears.</p>
+
+    <div class="grid">
+      <div class="col bad">
+        <h2>❌ shallow copy — leaks</h2>
+        <input id="bad-name" type="text" />
+        <span class="label">city</span>
+        <input id="bad-city" type="text" />
+        <pre id="bad-out"></pre>
+      </div>
+
+      <div class="col good">
+        <h2>✓ spread at each level</h2>
+        <input id="good-name" type="text" />
+        <span class="label">city</span>
+        <input id="good-city" type="text" />
+        <pre id="good-out"></pre>
+      </div>
+    </div>
+
+    <script>
+      // BAD: only the top-level user object is copied. user.address is
+      // STILL the same reference as the parent's address.
+      function bad() {
+        const parent = { name: "Ada", address: { city: "Kampala" } };
+        const copy = { ...parent };
+
+        const nameEl = document.getElementById("bad-name");
+        const cityEl = document.getElementById("bad-city");
+        const out    = document.getElementById("bad-out");
+        nameEl.value = copy.name;
+        cityEl.value = copy.address.city;
+
+        function render() {
+          out.innerHTML =
+            "<span class=\"bad-c\">parent</span>  = " + JSON.stringify(parent) + "\n" +
+            "<span class=\"accent\">copy  </span>  = " + JSON.stringify(copy) + "\n\n" +
+            (parent.address === copy.address
+              ? "<span class=\"bad-c\">parent.address === copy.address  ← shared!</span>"
+              : "<span class=\"accent\">parent.address !== copy.address</span>");
+        }
+        nameEl.addEventListener("input", () => { copy.name = nameEl.value; render(); });
+        cityEl.addEventListener("input", () => { copy.address.city = cityEl.value; render(); });
+        render();
+      }
+
+      // GOOD: spread at every level we want to mutate.
+      function good() {
+        const parent = { name: "Ada", address: { city: "Kampala" } };
+        let copy = { ...parent, address: { ...parent.address } };
+
+        const nameEl = document.getElementById("good-name");
+        const cityEl = document.getElementById("good-city");
+        const out    = document.getElementById("good-out");
+        nameEl.value = copy.name;
+        cityEl.value = copy.address.city;
+
+        function render() {
+          out.innerHTML =
+            "<span class=\"accent\">parent</span>  = " + JSON.stringify(parent) + "\n" +
+            "<span class=\"accent\">copy  </span>  = " + JSON.stringify(copy) + "\n\n" +
+            "<span class=\"accent\">parent.address !== copy.address  ← independent</span>";
+        }
+        nameEl.addEventListener("input", () => {
+          copy = { ...copy, name: nameEl.value };
+          render();
+        });
+        cityEl.addEventListener("input", () => {
+          copy = { ...copy, address: { ...copy.address, city: cityEl.value } };
+          render();
+        });
+        render();
+      }
+
+      bad();
+      good();
+    </script>
+  </body>
+</html>

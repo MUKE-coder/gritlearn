@@ -1,0 +1,432 @@
+## Immutability and pure functions
+
+The single most useful habit you can build to write predictable JavaScript: **never modify the data you were given; return new data instead**. The principle goes by two names — *immutability* (the data is read-only) and *purity* (the function only depends on its inputs and only produces outputs). React refuses to re-render unless you follow it; Redux requires it; every modern library encourages it. Once you internalize "new array, new object, new value" as the default move, half the bugs in your codebase disappear.
+
+<Analogy>
+Immutability is **writing in pen on a fresh sheet of paper for every edit, instead of erasing the original**.
+
+You're working on a contract. The first draft is on a sheet of paper. Your boss asks for a change. Two ways to make the edit:
+
+- **Erase and write over.** Quick, but you've destroyed the original. If you later need to see what was there before, it's gone. If two people are editing the same sheet at the same time, one of you will overwrite the other and nobody will notice until much later.
+- **Photocopy, write the change on the copy, hand the boss the copy.** Slightly more paper, but the original is intact. The original draft can still be referenced. If two people each take a copy and edit independently, you can compare versions and merge intentionally.
+
+JavaScript's mutable defaults (`array.push`, `obj.x = 5`, `array[i] = 0`) are the "erase and write over" option. Immutable updates (`[...array, item]`, `{ ...obj, x: 5 }`, `array.map((v, i) => i === target ? newVal : v)`) are the photocopy option.
+
+Why the photocopy approach wins in practice:
+
+1. **Change detection becomes a reference compare.** React's "did this prop change?" check is `oldProps === newProps` — a single CPU instruction. If you mutate the original object and pass it back, the reference is the same; React thinks nothing changed; the UI doesn't update. If you return a *new* object, the reference is different; React knows to re-render.
+2. **No spooky action at a distance.** A function that gets handed an array and modifies it changes the caller's data too — even if the caller never expected that. The bug shows up in a totally unrelated part of the code, hours later. Immutable functions can't do this.
+3. **Time-travel debugging.** Redux DevTools lets you replay every state transition because each state is a snapshot, not an overwrite. The same is true for Git, for undo stacks, for everything that benefits from history.
+4. **Concurrency is sane.** Two functions can both read the same object safely because neither will modify it. Mutable defaults are why JavaScript has so few concurrency primitives — they'd be hopelessly racy.
+
+A **pure function** is the function-level expression of immutability: it doesn't read or write anything outside its arguments and return value. Same input → same output, every time, no side effects. Pure functions are testable (no setup), cacheable (memoize), composable (compose / pipe), and parallelizable (no shared state to race on). They're not always possible (HTTP calls, file writes, DOM updates all have side effects), but you keep purity at the *core* of your logic and isolate effects at the *edges*.
+</Analogy>
+
+<Illustration
+  alt="Diagram comparing mutating a shared array to returning a new array, and the resulting bug surface"
+  caption="Mutation changes the caller's data invisibly; a new array leaves the original alone."
+>
+
+```
+   MUTATION (in-place)                       IMMUTABLE UPDATE
+
+   const arr = [1, 2, 3];                    const arr = [1, 2, 3];
+   appendFour(arr);                          const arr2 = appendFour(arr);
+   //         ↑                               //                    ↑
+   //         caller's array is now [1,2,3,4] caller's `arr` is STILL [1,2,3].
+   //         even though appendFour          The new array is what was returned.
+   //         "looked like" pure code.
+                                              function appendFour(a) {
+   function appendFour(a) {                     return [...a, 4];
+     a.push(4);              ← mutation       }
+   }
+```
+
+</Illustration>
+
+### Mutation vs. new value
+
+The everyday operations have a mutating form and an immutable form:
+
+```js
+// Arrays
+const arr = [1, 2, 3];
+arr.push(4);                  // mutates  → [1, 2, 3, 4]
+const next = [...arr, 4];     // immutable → new array, original untouched
+
+arr.sort();                   // mutates IN PLACE
+const sorted = [...arr].sort();   // immutable: copy first, sort the copy
+
+arr.splice(0, 1);             // mutates (removes first item)
+const tail = arr.slice(1);    // immutable: new array without the first item
+
+// Objects
+const user = { name: "Ada" };
+user.name = "Lin";             // mutates
+const next = { ...user, name: "Lin" };   // immutable → new object
+
+// Removing a key
+const { secret, ...withoutSecret } = user;   // immutable removal
+```
+
+The pattern is the same across both: **read the existing value, build a new one, return the new one**.
+
+### The spread operator — your everyday tool
+
+`...` is the workhorse for immutable updates. Read it as "take everything from this collection, then add/override these specific bits."
+
+```js
+// Add an item to an array
+const next = [...current, newItem];
+
+// Remove by index
+const next = [...current.slice(0, i), ...current.slice(i + 1)];
+
+// Update by index — preserve order, swap one item
+const next = current.map((item, idx) => idx === i ? newItem : item);
+
+// Add or override an object field
+const next = { ...current, count: current.count + 1 };
+
+// Merge two objects (right wins on conflict)
+const next = { ...defaults, ...overrides };
+```
+
+After a few weeks, these forms are autopilot. The mental shift: stop thinking "modify the thing"; start thinking "build the next version of the thing."
+
+### Pure functions — the related concept
+
+A function is **pure** if:
+
+1. **It depends only on its arguments.** No reading from globals, no reading from `Date.now()`, no reading the DOM, no module-level state that changes between calls.
+2. **It produces no side effects.** No assignment to globals, no `console.log`, no `fetch`, no DOM updates, no mutation of its arguments.
+
+```js
+// Pure — same input always gives same output
+function add(a, b) { return a + b; }
+function formatPrice(cents) { return "$" + (cents / 100).toFixed(2); }
+function fullName(user) { return user.first + " " + user.last; }
+
+// Impure — reads time, mutates, or has side effects
+function timestamp() { return Date.now(); }            // reads outside state
+function pushTo(arr, val) { arr.push(val); }            // mutates argument
+function save(data) { localStorage.setItem("x", data); } // side effect
+```
+
+The everyday rhythm:
+- **Pure functions at the core.** Calculations, transformations, formatters, validators. Test them in isolation with `expect(fn(input)).toBe(output)`.
+- **Impure functions at the edges.** API calls, DOM updates, console logs. Keep them as thin as possible — fetch the data, parse it, hand it to pure functions for shaping.
+
+This is the same shape as React's hooks (impure: `useEffect`, `useState`) wrapped around pure render functions. The impure parts are corralled; the pure parts are everywhere else.
+
+### Why React needs immutability
+
+React's "should I re-render?" check is a **referential** comparison:
+
+```js
+// Internal logic, simplified
+if (oldProps === newProps) return;   // bail out, no work needed
+// otherwise, run the render
+```
+
+When you do `setState(prev => prev.push(item))`, you mutate the array in place. The reference is the *same* array — React sees `oldState === newState` and assumes nothing changed. The UI doesn't update.
+
+When you do `setState(prev => [...prev, item])`, you create a *new* array. The reference is different. React notices and re-renders.
+
+This is why the React docs say "never mutate state directly." The library's correctness depends on it. The same logic powers `useMemo`'s caching, `React.memo`'s prop comparison, and Redux's reducer model.
+
+### Common gotchas — shallow copy is shallow
+
+`{...obj}` and `[...arr]` are **shallow** copies. Nested objects are still shared:
+
+```js
+const user = {
+  name: "Ada",
+  address: { city: "Kampala" },
+};
+
+const copy = { ...user };
+copy.address.city = "Berlin";   // mutates user.address.city too!
+```
+
+To update a nested field immutably, spread at each level:
+
+```js
+const next = {
+  ...user,
+  address: { ...user.address, city: "Berlin" },
+};
+```
+
+Two levels deep is fine to write by hand. Past that, the ergonomics get rough — which is why Immer exists.
+
+### Immer — immutability with mutation syntax
+
+Immer (used by Redux Toolkit and Zustand) lets you "mutate" a draft and get a new immutable object out:
+
+```js
+import { produce } from "immer";
+
+const next = produce(user, draft => {
+  draft.address.city = "Berlin";   // looks like mutation; produce returns a new object
+});
+```
+
+Under the hood, Immer tracks which properties the draft touched and rebuilds only the parts of the tree that changed. Deep updates become readable; the result is still a new reference.
+
+Use Immer for deeply-nested state. For shallow state (most cases), plain spread is fine.
+
+### `Object.freeze` — runtime immutability
+
+If you want JavaScript to actually enforce "don't mutate this," `Object.freeze`:
+
+```js
+const config = Object.freeze({ apiUrl: "/api" });
+config.apiUrl = "/other";   // silently fails (strict mode: throws)
+```
+
+Freeze is shallow too — same nesting trap as spread copies. There's a `deepFreeze` recipe (recurse + freeze each level), but in practice freeze is rare; convention + linting (`no-param-reassign`, ESLint) catches mutations earlier.
+
+### Pure functions in tests
+
+Pure functions are the easiest code in the world to test:
+
+```js
+function fullName(user) {
+  return user.first + " " + user.last;
+}
+
+test("fullName", () => {
+  expect(fullName({ first: "Ada", last: "Lovelace" })).toBe("Ada Lovelace");
+});
+```
+
+No setup, no teardown, no mocks. Same input → same output. Run the test a million times; same result every time. Compare with testing impure code:
+
+```js
+function timestamp() { return Date.now(); }
+test("timestamp", () => {
+  // What do you even assert? You'd have to freeze time, mock Date,
+  // accept some tolerance — lots of ceremony for one function.
+});
+```
+
+The takeaway: keep your business logic in pure functions, and your test suite gets fast, deterministic, and trustworthy almost for free.
+
+### When mutation IS the right answer
+
+Three legitimate cases:
+
+1. **Local state inside a function.** A `const arr = []; for (...) arr.push(x); return arr` is fine — nobody else has a reference to `arr`. Mutation is hidden inside the function and the output is what the caller sees.
+2. **Building up a large object before publishing.** Same logic. You're constructing something; nobody else sees the in-progress version.
+3. **Performance-critical hot loops on huge arrays.** Rare. Profile before optimizing. Even Redux Toolkit's Immer is fast enough for most cases.
+
+The rule: **don't mutate data you received.** Data you constructed locally is yours to mutate until you return it.
+
+<ExampleProject
+  src="mutation-bugs"
+  title="The shallow-copy trap — mutating a 'copy' that wasn't deep"
+  description="Two child components share a parent's user object. Editing the address in one component appears to change it in both — because the components mutated a shallow copy that still pointed at the same nested object. Side-by-side fix shows the spread-at-each-level pattern."
+/>
+
+<ExampleProject
+  src="pure-vs-impure"
+  title="Same task — pure and impure implementations"
+  description="A formatter that turns cents into a UGX string. The impure version reads currency from a module-level let; the pure version takes it as an argument. The test panel shows how trivial the pure version is to test and how the impure version needs setup/teardown."
+/>
+
+<Exercise
+  title="Build immutable update helpers for a TODO list state"
+  starter={`Start with the state shape:
+
+  const state = {
+    nextId: 4,
+    items: [
+      { id: 1, text: "Read scope",     done: true  },
+      { id: 2, text: "Read closures",  done: true  },
+      { id: 3, text: "Read this",      done: false },
+    ],
+  };
+
+Write four helper functions, each PURE (no mutation, no side effects):
+
+  1. addItem(state, text)        — returns a new state with the new item
+                                   appended and nextId bumped.
+  2. toggleItem(state, id)       — returns a new state with the matching
+                                   item's done flag flipped.
+  3. removeItem(state, id)       — returns a new state with the matching
+                                   item filtered out.
+  4. clearCompleted(state)       — returns a new state without any
+                                   item where done === true.
+
+Constraints:
+  - Pure: each helper takes the current state, returns the next state.
+  - No mutation: the original state must be untouched after each call.
+  - Use spread, .map, .filter — no arr.push / arr.splice / obj.x = ...
+  - Test by chaining them: const s2 = addItem(state, "Read hoisting");
+    const s3 = toggleItem(s2, 3); const s4 = removeItem(s3, 1);
+    Confirm 'state' is unchanged the whole time.`}
+>
+
+- Four functions exist with the signatures from the brief.
+- Each function returns a **new** state object (different reference than the input).
+- After calling any of the helpers, the original `state` is unchanged (verified by a referential equality check OR by deep-comparing to the original).
+- The functions don't use `.push`, `.splice`, `.sort()`, or `=` assignments to mutate fields. The spread operator, `.map`, and `.filter` do the work.
+- `toggleItem` and `removeItem` correctly handle the case where `id` doesn't match any item (return the state unchanged or with no rows removed; do not throw).
+- The chain test in the brief is run, and the original `state` matches its initial value at every step.
+- Bonus check: the **items** array reference also changes for each helper that modifies items (so React would re-render).
+
+</Exercise>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** What's a "pure function"?
+
+**A:** **A function whose output depends only on its input arguments, and which produces no side effects.** Same input → same output, every time. Calling it doesn't change anything outside the function.
+
+```js
+// Pure
+function add(a, b)         { return a + b; }
+function fullName(user)    { return user.first + " " + user.last; }
+function double(arr)       { return arr.map(n => n * 2); }   // returns NEW array
+
+// Impure — reasons annotated
+function now()             { return Date.now(); }            // reads external state (clock)
+function rand()            { return Math.random(); }          // reads external state (RNG)
+function push(arr, x)      { arr.push(x); }                   // mutates input
+function save(data)        { localStorage.setItem("x", data); }   // side effect
+function log(x)            { console.log(x); return x; }     // side effect (writes to console)
+```
+
+Three concrete properties of pure functions:
+
+1. **Testable.** `expect(fn(input)).toBe(output)`. No mocks, no setup. The function under test is the whole test.
+2. **Memoizable.** Same input → same output means you can cache the result. Memo wrappers (`useMemo`, lodash's `memoize`) only work safely on pure functions.
+3. **Composable.** Pure functions chain together cleanly (`pipe`, `compose`) because the output of one is just data — no hidden state to corrupt the next.
+
+In practice, you can't be 100% pure (your app needs to fetch, write to DOM, etc.). The pattern: keep **pure** at the core of your logic, push **impure** to the edges. That's the same pattern React's render → effects model uses, and it's the same pattern functional programmers have lived by for decades.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Beginner">
+
+**Q:** Why doesn't this React component re-render when I push a new item?
+
+```jsx
+const [items, setItems] = useState([1, 2, 3]);
+const add = () => {
+  items.push(4);
+  setItems(items);
+};
+```
+
+**A:** **Because `items.push(4)` mutates the array in place — the reference is the *same* array — and React's "should I re-render?" check uses reference equality. It sees the old and new state are `===` equal and bails out.**
+
+React's internal logic (simplified):
+
+```js
+if (oldState === newState) return;   // nothing to do, no re-render
+```
+
+`items` before the push is the same array as `items` after the push — `push` modifies it in place. So `setItems(items)` is telling React "the new state is *this* array" — but it's the same array reference, so React skips the render.
+
+The fix: return a *new* array:
+
+```jsx
+const add = () => {
+  setItems([...items, 4]);     // ← new array, new reference
+};
+```
+
+Or, even better, use the functional form to avoid stale closure issues:
+
+```jsx
+const add = () => {
+  setItems(current => [...current, 4]);   // ← always fresh, always new
+};
+```
+
+This is *the* reason React's docs hammer "never mutate state directly." It's not stylistic — the library's correctness depends on it. Same rule applies to nested objects:
+
+```jsx
+// Wrong — mutates user, same reference
+user.address.city = "Berlin";
+setUser(user);
+
+// Right — new object at each level you touched
+setUser(u => ({ ...u, address: { ...u.address, city: "Berlin" } }));
+```
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** What's the difference between a deep copy and a shallow copy?
+
+**A:** **A shallow copy duplicates the top level only; nested objects are still shared by reference. A deep copy duplicates the entire object tree, recursively, so nothing is shared with the original.**
+
+```js
+const user = { name: "Ada", address: { city: "Kampala" } };
+
+// Shallow copy
+const shallow = { ...user };
+shallow.name = "Lin";              // ✓ does NOT affect user.name
+shallow.address.city = "Berlin";    // ✗ ALSO changes user.address.city
+                                     //   because shallow.address === user.address
+
+// Deep copy (modern)
+const deep = structuredClone(user);
+deep.address.city = "Berlin";       // ✓ user.address.city is still "Kampala"
+```
+
+Shallow copies are usually what you want — they're fast, and most state shapes are not deeply nested. Common shallow-copy mechanisms:
+
+- `{ ...obj }` / `[...arr]`
+- `Object.assign({}, obj)`
+- `Array.from(arr)`, `arr.slice()`
+
+Deep copies are needed when you have **truly nested** state and want a fully-independent snapshot:
+
+- `structuredClone(obj)` — modern, handles Date, Map, Set, etc. Browser + Node 17+.
+- `JSON.parse(JSON.stringify(obj))` — old trick; only handles JSON-safe data (no functions, no Date, no `undefined`). Avoid in modern code.
+- Immer's `produce(...)` — gives mutation-style syntax that returns a new object with structural sharing (only the changed branches are new; unchanged branches are reused).
+
+The everyday rule:
+
+- **Shallow copy + spread-at-each-level** when you know your state shape (Redux reducers, React state).
+- **`structuredClone` or Immer** when you're working with arbitrary nested data and don't want to write the spreads.
+- **Never `JSON.parse(JSON.stringify)`** in new code; it silently drops things and is slower than `structuredClone`.
+
+The most common bug: assuming `{...obj}` does a deep copy. It doesn't. Two minutes later, mutating `obj.address.city` changes both objects and you spend an hour debugging.
+
+</InterviewQuestion>
+
+<InterviewQuestion difficulty="Intermediate">
+
+**Q:** When IS it OK to mutate?
+
+**A:** **When the data is local to the function — i.e. nobody outside has a reference to it.**
+
+Three legitimate cases:
+
+1. **Building up a value to return.** You declare an array inside the function, loop, push to it, return it. Nobody else can have a reference to that array because it didn't exist before your function ran. Mutation is hidden.
+
+   ```js
+   function double(arr) {
+     const out = [];               // local — only this function has a ref
+     for (const n of arr) out.push(n * 2);   // mutate freely
+     return out;                    // hand it off
+   }
+   ```
+
+   The function is still pure from the caller's perspective: same input → same output, the input array is untouched.
+
+2. **Performance-critical hot loops on huge arrays.** Rare in frontend code; common in game engines, video processing, big data viz. The cost: you give up React's referential equality wins and have to be careful about who else has the reference.
+
+3. **Inside Immer's `produce` block.** You write mutation-style code and Immer rebuilds an immutable new state from your "draft" mutations. The mutation is intentional and contained.
+
+The rule is **the boundary**. Mutation hidden inside a function (no reference escapes) is fine. Mutation visible to callers (modifying a passed-in array or object) is what causes bugs.
+
+A useful test: would the function pass the "I have no idea who else might have a reference to this" sniff test? If the data was passed *in*, somebody else has a reference and you don't get to mutate. If the data was *constructed* inside, you can mutate until you return it.
+
+</InterviewQuestion>

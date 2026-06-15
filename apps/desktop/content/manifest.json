@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "phases": [
     {
       "id": "phase-01",
@@ -65,9 +65,9 @@
         { "slug": "phase-02/hoisting", "title": "Hoisting", "available": true },
         { "slug": "phase-02/this-keyword", "title": "`this` keyword and context", "available": true },
         { "slug": "phase-02/js-modules", "title": "JS modules", "available": true },
-        { "slug": "phase-02/higher-order-functions", "title": "Higher-order functions", "available": false },
-        { "slug": "phase-02/immutability", "title": "Immutability and pure functions", "available": false },
-        { "slug": "phase-02/error-handling", "title": "Error handling (try/catch)", "available": false },
+        { "slug": "phase-02/higher-order-functions", "title": "Higher-order functions", "available": true },
+        { "slug": "phase-02/immutability", "title": "Immutability and pure functions", "available": true },
+        { "slug": "phase-02/error-handling", "title": "Error handling (try/catch)", "available": true },
         { "slug": "phase-02/debugging-devtools", "title": "Debugging with browser devtools", "available": false },
         { "slug": "phase-02/clean-code", "title": "Clean code naming and structure", "available": false },
         { "slug": "phase-02/version-control", "title": "What version control is", "available": false },

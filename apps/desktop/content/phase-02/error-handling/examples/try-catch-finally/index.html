@@ -1,0 +1,94 @@
+<!--
+  Three buttons run a try/catch/finally block in different scenarios:
+  success, throw, throw with finally. Each click logs every step so
+  you see the order: which lines ran, whether catch fired, whether
+  finally fired regardless.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>try / catch / finally lifecycle</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      pre { background: #fff; border: 1px solid #e4e4e7; padding: 0.55rem 0.75rem; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0 0.5rem; }
+      button {
+        padding: 0.45rem 0.9rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+      }
+      button:hover { background: #f4f4f5; }
+      .out {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.6;
+      }
+      .ok    { color: #7fff5b; }
+      .bad   { color: #f87171; }
+      .muted { color: #71717a; }
+      .info  { color: #38bdf8; }
+    </style>
+  </head>
+  <body>
+    <h1>try / catch / finally — order of operations</h1>
+<pre>function run(mode) {
+  log("→ enter try");
+  try {
+    if (mode === "throw")    throw new Error("Math failed");
+    if (mode === "throwFin") throw new Error("Cleanup test");
+    log("✓ try succeeded");
+    return "OK";
+  } catch (err) {
+    log("[catch] " + err.message);
+    return "ERR";
+  } finally {
+    log("• finally — cleanup runs no matter what");
+  }
+}</pre>
+
+    <div class="btns">
+      <button data-mode="ok">success</button>
+      <button data-mode="throw">throw → catch</button>
+      <button data-mode="throwFin">throw → catch → finally</button>
+      <button data-mode="clear">clear</button>
+    </div>
+
+    <div class="out" id="out"><span class="muted">click a button…</span></div>
+
+    <script>
+      const out = document.getElementById("out");
+      function log(msg, cls) {
+        out.innerHTML += `<div class="${cls || ""}">${msg}</div>`;
+      }
+      function clear() { out.innerHTML = ""; }
+
+      function run(mode) {
+        log("─── run(\"" + mode + "\") ───", "info");
+        log("→ enter try", "muted");
+        try {
+          if (mode === "throw" || mode === "throwFin") {
+            log("✗ about to throw…", "bad");
+            throw new Error(mode === "throw" ? "Math failed" : "Cleanup test");
+          }
+          log("✓ try succeeded", "ok");
+          return "OK";
+        } catch (err) {
+          log("[catch] " + err.message, "bad");
+          return "ERR";
+        } finally {
+          log("• finally — runs no matter what", "ok");
+        }
+      }
+
+      document.querySelectorAll("button[data-mode]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const m = b.dataset.mode;
+          if (m === "clear") return clear();
+          const result = run(m);
+          log("returned: " + result, "muted");
+          log("&nbsp;");
+        });
+      });
+    </script>
+  </body>
+</html>
