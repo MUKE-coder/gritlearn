@@ -1,0 +1,193 @@
+<!--
+  A single-screen overview of every artifact needed to wire Prisma into
+  a Next.js project. Five tabs: terminal, .env, schema.prisma, lib/db.ts,
+  the calling page. Each one annotated. Helps the student see the whole
+  shape before they type a single command.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Prisma setup — five files, one screen</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .tabs { display: flex; gap: 0.4rem; margin: 1rem 0 0.6rem; flex-wrap: wrap; }
+      .tab {
+        padding: 0.4rem 0.85rem; border: 1px solid #d4d4d8; background: #fff;
+        cursor: pointer; font-size: 0.83rem; border-radius: 6px;
+        font-family: ui-monospace, monospace;
+      }
+      .tab.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; min-height: 24rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.82rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword  { color: #38bdf8; }
+      .string   { color: #7fff5b; }
+      .number   { color: #fbbf24; }
+      .comment  { color: #71717a; font-style: italic; }
+      .type     { color: #c084fc; }
+      .annot    {
+        margin-top: 0.7rem; font-size: 0.83rem; padding: 0.6rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      .file-tag {
+        display: inline-block; font-family: ui-monospace, monospace; font-size: 0.72rem;
+        color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>From empty project to first typed query</h1>
+    <p>Six commands. Five files. Click each tab to see what shows up where.</p>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="terminal">1 — Terminal</button>
+      <button class="tab" data-tab="env">2 — .env</button>
+      <button class="tab" data-tab="schema">3 — schema.prisma</button>
+      <button class="tab" data-tab="db">4 — lib/db.ts</button>
+      <button class="tab" data-tab="page">5 — page.tsx</button>
+    </div>
+
+    <div class="panel" id="panel"></div>
+
+    <script>
+      const tabs = {
+        terminal: {
+          tag: "Terminal — from project root",
+          code:
+`<span class="comment"># 1. Get a Postgres URL (Neon, Supabase, Railway — free tier).</span>
+<span class="comment">#    Sign up, create a project, copy the connection string.</span>
+
+<span class="comment"># 2. Install Prisma + the runtime client.</span>
+npm i -D prisma
+npm i @prisma/client
+
+<span class="comment"># 3. Scaffold prisma/schema.prisma + .env.</span>
+npx prisma init
+
+<span class="comment"># 4. Paste the URL into .env (see next tab), then edit schema.prisma.</span>
+
+<span class="comment"># 5. Apply the schema to the database + generate the typed client.</span>
+npx prisma migrate dev --name init
+
+<span class="comment"># 6. (optional) Visual editor for your data.</span>
+npx prisma studio</span>`,
+          note: "The whole setup is six commands. Steps 1–3 are once-per-project; steps 4–5 repeat every time you change the schema. Step 6 (studio) is your replacement for psql + pgAdmin.",
+        },
+        env: {
+          tag: ".env  (created by prisma init, gitignored)",
+          code:
+`<span class="comment"># Prisma reads this. The runtime client uses DATABASE_URL;</span>
+<span class="comment"># prisma migrate uses DIRECT_URL in cloud setups (skip in dev).</span>
+
+DATABASE_URL=<span class="string">"postgresql://neondb_owner:<password>@ep-cool-thunder-123.us-east-1.aws.neon.tech/myapp?sslmode=require&pgbouncer=true"</span>
+<span class="comment"># Optional — for migrations against a pooler-fronted Postgres.</span>
+DIRECT_URL=<span class="string">"postgresql://neondb_owner:<password>@ep-cool-thunder-123.us-east-1.aws.neon.tech/myapp?sslmode=require"</span>`,
+          note: "The connection string carries username, password, host, port, database name, and SSL mode. URL-encode any special characters in the password (@, /, : need encoding). Never commit .env — Prisma init adds it to .gitignore for you.",
+        },
+        schema: {
+          tag: "prisma/schema.prisma",
+          code:
+`<span class="keyword">generator</span> client {
+  provider = <span class="string">"prisma-client-js"</span>
+}
+
+<span class="keyword">datasource</span> db {
+  provider  = <span class="string">"postgresql"</span>
+  url       = <span class="keyword">env</span>(<span class="string">"DATABASE_URL"</span>)
+  directUrl = <span class="keyword">env</span>(<span class="string">"DIRECT_URL"</span>)   <span class="comment">// optional</span>
+}
+
+<span class="keyword">model</span> <span class="type">User</span> {
+  id        <span class="type">Int</span>      @id @default(autoincrement())
+  email     <span class="type">String</span>   @unique
+  name      <span class="type">String</span>
+  createdAt <span class="type">DateTime</span> @default(now())
+
+  posts     <span class="type">Post</span>[]
+}
+
+<span class="keyword">model</span> <span class="type">Post</span> {
+  id          <span class="type">Int</span>       @id @default(autoincrement())
+  title       <span class="type">String</span>
+  body        <span class="type">String</span>?
+  publishedAt <span class="type">DateTime</span>?
+  createdAt   <span class="type">DateTime</span>  @default(now())
+
+  authorId    <span class="type">Int</span>
+  author      <span class="type">User</span>      @relation(fields: [authorId], references: [id], onDelete: <span class="type">Cascade</span>)
+}`,
+          note: "Two models = two tables. The 'posts Post[]' field on User is virtual (no column on users); it's there so post.author and user.posts both work in code. The @relation block creates the actual foreign-key column (authorId → users.id).",
+        },
+        db: {
+          tag: "lib/db.ts  (your single import for all server code)",
+          code:
+`<span class="keyword">import</span> { PrismaClient } <span class="keyword">from</span> <span class="string">"@prisma/client"</span>;
+
+<span class="comment">// Hot-reload-safe singleton. Without this, every save in dev would</span>
+<span class="comment">// spawn a new PrismaClient + new Postgres connections until the</span>
+<span class="comment">// pool exhausted.</span>
+<span class="keyword">const</span> globalForPrisma = globalThis <span class="keyword">as unknown as</span> {
+  prisma: PrismaClient | <span class="keyword">undefined</span>;
+};
+
+<span class="keyword">export const</span> db = globalForPrisma.prisma ?? <span class="keyword">new</span> PrismaClient();
+
+<span class="keyword">if</span> (process.env.<span class="type">NODE_ENV</span> !== <span class="string">"production"</span>) globalForPrisma.prisma = db;`,
+          note: "Import this from server components, route handlers, server actions — anywhere on the server. NEVER import from a client component; Next.js will throw a build error reminding you. The singleton pattern is one of those things you copy/paste every project and never look at again.",
+        },
+        page: {
+          tag: "app/page.tsx  (server component — your first query)",
+          code:
+`<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">export default async function</span> HomePage() {
+  <span class="keyword">const</span> recentUsers = <span class="keyword">await</span> db.user.findMany({
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+    take: <span class="number">10</span>,
+    include: { posts: <span class="keyword">true</span> },
+  });
+
+  <span class="keyword">return</span> (
+    &lt;<span class="type">main</span>&gt;
+      &lt;<span class="type">h1</span>&gt;Recent users&lt;/<span class="type">h1</span>&gt;
+      &lt;<span class="type">ul</span>&gt;
+        {recentUsers.map((u) =&gt; (
+          &lt;<span class="type">li</span> key={u.id}&gt;
+            {u.name} — {u.posts.length} post{u.posts.length === 1 ? <span class="string">""</span> : <span class="string">"s"</span>}
+          &lt;/<span class="type">li</span>&gt;
+        ))}
+      &lt;/<span class="type">ul</span>&gt;
+    &lt;/<span class="type">main</span>&gt;
+  );
+}`,
+          note: "u.posts autocompletes because the schema declared 'posts Post[]'. Add a column to User in schema.prisma → run migrate dev → that column appears in autocompletion on the next save. The schema file is the source of truth; everything else stays in sync automatically.",
+        },
+      };
+
+      function show(key) {
+        const t = tabs[key];
+        document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === key));
+        document.getElementById("panel").innerHTML = `
+          <div class="file-tag">${t.tag}</div>
+          <pre>${t.code}</pre>
+          <div class="annot">${t.note}</div>
+        `;
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button.tab");
+        if (!b) return;
+        show(b.dataset.tab);
+      });
+
+      show("terminal");
+    </script>
+  </body>
+</html>

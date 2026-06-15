@@ -1,0 +1,230 @@
+<!--
+  Side-by-side view of the four Prisma verbs: Prisma TypeScript call,
+  the SQL Prisma would generate, and the typed result. Tabs let the
+  student flip between findMany / create / update / delete to see the
+  same shape with different actions.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The four verbs — Prisma + SQL + result</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1020px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .tabs { display: flex; gap: 0.4rem; margin: 1rem 0 0.7rem; flex-wrap: wrap; }
+      .tabs button {
+        padding: 0.45rem 0.95rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.83rem; font-weight: 600;
+      }
+      .tabs button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0; overflow-x: auto; min-height: 14rem;
+      }
+      .keyword  { color: #38bdf8; }
+      .string   { color: #7fff5b; }
+      .number   { color: #fbbf24; }
+      .type     { color: #c084fc; }
+      .comment  { color: #71717a; font-style: italic; }
+      .result-box {
+        margin-top: 1rem; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.9rem; background: #fff;
+      }
+      .result-box h2 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .pill {
+        display: inline-block; font-size: 0.72rem; padding: 1px 7px; border-radius: 999px;
+        background: #ecfdf5; color: #166534; font-family: ui-monospace, monospace;
+        margin-bottom: 0.6rem;
+      }
+      table {
+        width: 100%; border-collapse: collapse; font-size: 0.81rem;
+        font-family: ui-monospace, monospace;
+      }
+      th, td {
+        border: 1px solid #e4e4e7; padding: 0.32rem 0.55rem; text-align: left;
+      }
+      th { background: #f4f4f5; font-weight: 600; }
+      .annot {
+        margin-top: 0.7rem; font-size: 0.84rem; padding: 0.65rem 0.85rem;
+        background: #fef3c7; color: #92400e; border-left: 3px solid #f59e0b;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>One grammar, four verbs</h1>
+    <p>Each tab is a different Prisma operation against the same <code>Post</code> model. Left: the call you write. Right: the SQL Prisma sends. Bottom: the typed result.</p>
+
+    <div class="tabs" id="tabs">
+      <button data-id="read" class="active">READ — findMany</button>
+      <button data-id="create">CREATE — create</button>
+      <button data-id="update">UPDATE — update</button>
+      <button data-id="delete">DELETE — delete</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>TypeScript — what you write</h2>
+        <pre id="ts"></pre>
+      </div>
+      <div class="col">
+        <h2>SQL — what Prisma sends</h2>
+        <pre id="sql"></pre>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <h2>Result <span class="pill" id="rt"></span></h2>
+      <div id="result"></div>
+      <div class="annot" id="note"></div>
+    </div>
+
+    <script>
+      const verbs = {
+        read: {
+          rt: "Promise<Post[]>",
+          ts:
+`<span class="keyword">const</span> recent = <span class="keyword">await</span> db.<span class="type">post</span>.findMany({
+  where:   { publishedAt: { <span class="keyword">not</span>: <span class="keyword">null</span> } },
+  orderBy: { createdAt: <span class="string">"desc"</span> },
+  take:    <span class="number">3</span>,
+  select: {
+    id: <span class="keyword">true</span>,
+    title: <span class="keyword">true</span>,
+    publishedAt: <span class="keyword">true</span>,
+    author: { select: { name: <span class="keyword">true</span> } },
+  },
+});</span>`,
+          sql:
+`<span class="keyword">SELECT</span>
+  p.id, p.title, p.published_at,
+  u.name <span class="keyword">AS</span> author_name
+<span class="keyword">FROM</span>     Post p
+<span class="keyword">JOIN</span>     User u <span class="keyword">ON</span> u.id = p.author_id
+<span class="keyword">WHERE</span>    p.published_at <span class="keyword">IS NOT NULL</span>
+<span class="keyword">ORDER BY</span> p.created_at <span class="keyword">DESC</span>
+<span class="keyword">LIMIT</span>    <span class="number">3</span>;</span>`,
+          rows: [
+            { id: 105, title: "Why I write SQL by hand", publishedAt: "2026-06-09T07:20:00Z", author: { name: "Lia Hernández" } },
+            { id: 103, title: "What I learned shipping at NyHouse", publishedAt: "2026-06-01T09:10:00Z", author: { name: "Ben Okonkwo" } },
+            { id: 101, title: "React server components, finally", publishedAt: "2026-05-12T11:00:00Z", author: { name: "Ava Cole" } },
+          ],
+          note: "The 'select' block determines the return shape. recent[0].title autocompletes; recent[0].body errors because body wasn't selected. Nested select on 'author' makes recent[0].author.name typed too.",
+        },
+        create: {
+          rt: "Promise<Post>",
+          ts:
+`<span class="keyword">const</span> post = <span class="keyword">await</span> db.<span class="type">post</span>.create({
+  data: {
+    title: <span class="string">"My first post"</span>,
+    body:  <span class="string">"Hello world"</span>,
+    authorId: <span class="number">4</span>,
+  },
+});</span>`,
+          sql:
+`<span class="keyword">INSERT INTO</span> Post (title, body, author_id, created_at)
+<span class="keyword">VALUES</span>     (<span class="string">'My first post'</span>, <span class="string">'Hello world'</span>, <span class="number">4</span>, <span class="keyword">NOW</span>())
+<span class="keyword">RETURNING</span>  *;</span>`,
+          rows: [
+            { id: 108, title: "My first post", body: "Hello world", publishedAt: null, createdAt: "2026-06-16T13:25:10Z", authorId: 4 },
+          ],
+          note: "create returns the inserted row as a typed Post. Auto-generated fields (id from serial, createdAt from DEFAULT now()) come back filled. A unique constraint violation throws Prisma.PrismaClientKnownRequestError with code P2002 — wrap in try/catch when you need to handle 'already exists' gracefully.",
+        },
+        update: {
+          rt: "Promise<Post>",
+          ts:
+`<span class="keyword">const</span> updated = <span class="keyword">await</span> db.<span class="type">post</span>.update({
+  where: { id: <span class="number">102</span> },
+  data:  {
+    title: <span class="string">"Hooks I no longer use (revised)"</span>,
+    publishedAt: <span class="keyword">new</span> <span class="type">Date</span>(),
+  },
+});</span>`,
+          sql:
+`<span class="keyword">UPDATE</span>    Post
+<span class="keyword">SET</span>       title = <span class="string">'Hooks I no longer use (revised)'</span>,
+          published_at = <span class="keyword">NOW</span>()
+<span class="keyword">WHERE</span>     id = <span class="number">102</span>
+<span class="keyword">RETURNING</span> *;</span>`,
+          rows: [
+            { id: 102, title: "Hooks I no longer use (revised)", body: "...", publishedAt: "2026-06-16T13:27:51Z", createdAt: "2026-05-20T14:01:00Z", authorId: 1 },
+          ],
+          note: "update returns the row after the change. If id 102 doesn't exist, Prisma throws P2025. Use updateMany when 'zero rows affected' is acceptable, or check first with findUnique. For inc/dec, use { stock: { decrement: 1 } } — atomic, safe under concurrent writes.",
+        },
+        delete: {
+          rt: "Promise<Post>",
+          ts:
+`<span class="keyword">const</span> removed = <span class="keyword">await</span> db.<span class="type">post</span>.delete({
+  where: { id: <span class="number">107</span> },
+});
+
+<span class="comment">// — or bulk —</span>
+
+<span class="keyword">const</span> { count } = <span class="keyword">await</span> db.<span class="type">post</span>.deleteMany({
+  where: { publishedAt: <span class="keyword">null</span>, createdAt: { lt: cutoff } },
+});</span>`,
+          sql:
+`<span class="keyword">DELETE FROM</span> Post
+<span class="keyword">WHERE</span>       id = <span class="number">107</span>
+<span class="keyword">RETURNING</span>   *;
+
+<span class="comment">-- bulk:</span>
+<span class="keyword">DELETE FROM</span> Post
+<span class="keyword">WHERE</span>       published_at <span class="keyword">IS NULL</span>
+  <span class="keyword">AND</span>       created_at &lt; <span class="string">'2026-05-01'</span>;</span>`,
+          rows: [
+            { id: 107, title: "Drafting in public", body: "WIP", publishedAt: null, createdAt: "2026-06-13T18:55:00Z", authorId: 4 },
+          ],
+          note: "delete returns the deleted row (handy for confirmations / audit logs). When the schema has onDelete: Cascade on related models (Comments), Postgres cleans up the children automatically — no application code needed.",
+        },
+      };
+
+      function show(id) {
+        const v = verbs[id];
+        document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+        document.getElementById("ts").innerHTML = v.ts;
+        document.getElementById("sql").innerHTML = v.sql;
+        document.getElementById("rt").textContent = v.rt;
+        document.getElementById("note").textContent = v.note;
+        const cols = id === "read"
+          ? ["id", "title", "publishedAt", "author.name"]
+          : ["id", "title", "body", "publishedAt", "createdAt", "authorId"];
+        const head = cols.map(c => `<th>${c}</th>`).join("");
+        const body = v.rows.map(r => {
+          const cells = cols.map(c => {
+            let v;
+            if (c.includes(".")) {
+              const [a, b] = c.split(".");
+              v = r[a] ? r[a][b] : null;
+            } else {
+              v = r[c];
+            }
+            return `<td>${v === null || v === undefined ? '<span style="color:#a1a1aa;font-style:italic">NULL</span>' : v}</td>`;
+          }).join("");
+          return `<tr>${cells}</tr>`;
+        }).join("");
+        document.getElementById("result").innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        show(b.dataset.id);
+      });
+
+      show("read");
+    </script>
+  </body>
+</html>

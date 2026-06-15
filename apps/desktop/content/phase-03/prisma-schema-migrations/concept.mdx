@@ -1,0 +1,362 @@
+## Prisma schema and migrations
+
+Your schema is not a one-time artifact. The instant your app has its first user, the database has *data* — and from that moment on, every change to the schema has to bring the existing data along without losing or corrupting any of it. Add a column? The 100,000 existing rows need a value. Rename a column? Every query that used the old name will fail until the code is updated *in sync*. Drop a table? The code that referenced it has to land in the same release.
+
+This concept is about the workflow Prisma gives you for evolving the schema without breaking what's live. It's the same workflow whether you're alone on a side project (where "production" is your laptop) or on a team of 40 (where production has paying customers).
+
+<Analogy>
+Schema migrations are **how you renovate a house while people are living in it.**
+
+The schema file is the architect's blueprint. Change it on paper and nothing physical happens yet. Then you write a work order — the SQL statements that take the house from its current state to the new state. The work order is dated, filed away, and the contractors carry it out. After the work is done, the new blueprint and the new house match.
+
+Three things make this workflow safe:
+
+1. **Every change is a discrete, dated work order.** You don't edit yesterday's order to add today's change — you write today's order separately. The folder of work orders is the renovation history, in chronological order. Six months from now, an empty plot of land + the full folder = the same house you have today. This is what `prisma/migrations/` is.
+
+2. **You can rehearse before you do it.** Run the work order on a copy of the house first (your local dev database). Verify nothing fell down. Then run the same order on the real house (production). Local dev = the rehearsal stage; the same SQL runs in both.
+
+3. **Some changes need temporary scaffolding.** Renaming a load-bearing wall isn't safe in one step — you build temporary supports, do the rename in stages, remove the scaffolding. Likewise, renaming a column with live traffic needs a few migrations (add new column, dual-write, backfill, switch reads, drop old column). The migration system lets you do this; the *discipline* to actually do it is on you.
+
+Prisma's CLI is the workflow:
+
+- **`prisma migrate dev`** — for local. "I edited the schema; figure out what SQL change that is, write the migration file, run it on my dev DB, regenerate the client."
+- **`prisma migrate deploy`** — for production. "Apply any pending migration files I haven't run here yet." Idempotent — running it twice is the same as running it once.
+- **`prisma db push`** — prototyping shortcut. Pushes the schema to the database without writing a migration file. Use for solo experiments; never on a project that has real users.
+</Analogy>
+
+### The migration folder
+
+After your first migration:
+
+```
+prisma/
+├── schema.prisma                              ← edited by hand
+└── migrations/
+    ├── migration_lock.toml                    ← records which DB engine
+    └── 20260616143022_init/
+        └── migration.sql                      ← generated SQL
+```
+
+The folder name is `YYYYMMDDHHMMSS_<name>`. Sorted lexicographically = sorted chronologically. The `migration.sql` file is the actual SQL Prisma would run; you can open it and read what's about to hit your database.
+
+Open the file. For an `init` migration of the schema from the previous concept:
+
+```sql
+-- CreateTable
+CREATE TABLE "User" (
+  "id"        SERIAL NOT NULL,
+  "email"     TEXT NOT NULL,
+  "name"      TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Post" (
+  "id"          SERIAL NOT NULL,
+  "title"       TEXT NOT NULL,
+  "body"        TEXT,
+  "publishedAt" TIMESTAMP(3),
+  "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "authorId"    INTEGER NOT NULL,
+  CONSTRAINT "Post_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- AddForeignKey
+ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey"
+  FOREIGN KEY ("authorId") REFERENCES "User"("id")
+  ON DELETE CASCADE ON UPDATE CASCADE;
+```
+
+This is just SQL — what you would have written by hand. Read every migration before you commit it. If something looks wrong, you fix it in the SQL file (Prisma respects manual edits) or you adjust the schema and regenerate.
+
+### The development loop
+
+Daily workflow when you're building features:
+
+```bash
+# 1. Edit prisma/schema.prisma — add a column, a model, an index.
+
+# 2. Generate + apply a migration. Prisma asks you for a name.
+npx prisma migrate dev --name add_post_tags
+
+# 3. Use the new shape in your code. Types auto-update.
+```
+
+What `migrate dev` does, step by step:
+
+1. **Diffs** your schema file against the migration history.
+2. **Generates** a new SQL file in `prisma/migrations/<timestamp>_<name>/`.
+3. **Applies** the SQL to your local database.
+4. **Re-generates** the typed Prisma client.
+5. **Runs your seed script** (if you have one — `prisma/seed.ts`).
+
+If your schema change is a "data loss" change (dropping a column with data, narrowing a column type), Prisma stops and asks "are you sure?" before applying. In dev, you'll often answer yes; in production, you'll write a multi-step migration instead.
+
+### Common schema changes — and what they migrate to
+
+**Add a column (the easy case):**
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  bio       String?            // ← new
+  createdAt DateTime @default(now())
+}
+```
+
+Migration SQL:
+
+```sql
+ALTER TABLE "User" ADD COLUMN "bio" TEXT;
+```
+
+`String?` (nullable) = `TEXT` without `NOT NULL`. Safe on a non-empty table because existing rows get `NULL`.
+
+**Add a required column to a table with data:**
+
+```prisma
+model User {
+  // ...
+  status String  // not nullable — what about existing users?
+}
+```
+
+`prisma migrate dev` will detect this and either:
+- Fail and ask you to provide a default in the schema (`status String @default("active")`), or
+- Stop and tell you that existing rows have no value, so you need to choose.
+
+In dev you'll add `@default("active")` and rerun. In production with real data, you'd do it in two migrations: add nullable, backfill, switch to NOT NULL.
+
+**Rename a column:**
+
+This is the dangerous one. Prisma's auto-generator can't tell the difference between "rename" and "drop + add" — it'll do the latter, deleting your data. The safe path: edit the migration file by hand.
+
+```sql
+-- Generated (BAD — drops the data):
+ALTER TABLE "User" DROP COLUMN "name";
+ALTER TABLE "User" ADD COLUMN "fullName" TEXT NOT NULL;
+
+-- What you want:
+ALTER TABLE "User" RENAME COLUMN "name" TO "fullName";
+```
+
+After editing, run `npx prisma migrate dev` again — Prisma sees the migration as applied (the schema matches), and you're done.
+
+**Add a relation:**
+
+```prisma
+model Post {
+  // ... existing fields
+  tags Tag[]
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+}
+```
+
+A many-to-many relation. Prisma's migration generates an implicit join table (`_PostToTag`). You don't have to write the join table yourself; Prisma + Postgres handle it.
+
+For most app modelling, the implicit join table is fine. If you need extra columns on the join row (e.g. `tagged_at`, `tagged_by_user_id`), declare an explicit join model:
+
+```prisma
+model PostTag {
+  postId    Int
+  tagId     Int
+  taggedAt  DateTime @default(now())
+
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag       Tag  @relation(fields: [tagId],  references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])      // composite primary key
+}
+```
+
+Now `PostTag` is its own model with its own columns. You'll have to update `Post.tags` and `Tag.posts` to point at `PostTag` instead.
+
+**Add an index:**
+
+```prisma
+model Post {
+  // ...
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+}
+```
+
+Migration:
+
+```sql
+CREATE INDEX "Post_authorId_idx" ON "Post"("authorId");
+```
+
+Rule of thumb: index any foreign key, any column you frequently filter or sort by. Prisma doesn't auto-create indexes for foreign keys; you do it with `@@index`.
+
+### The production workflow
+
+Deployment is different:
+
+- **`prisma migrate dev` is for local only.** It creates migrations.
+- **`prisma migrate deploy` is for production.** It only applies migrations.
+
+In your CI / deploy pipeline:
+
+```yaml
+# .github/workflows/deploy.yml (snippet)
+- run: npx prisma migrate deploy
+- run: npm run build
+- run: ./start.sh
+```
+
+`migrate deploy` is **idempotent** — if a migration has already been applied, it's skipped. If a new migration is in the folder, it runs. Safe to invoke on every deploy.
+
+The constraint: in production, you only run migrations from files that already exist in the repo. You never generate new migrations against production. The flow is always:
+
+1. Edit schema on your branch.
+2. Run `migrate dev` locally → migration file lands in git.
+3. PR → review → merge.
+4. Deploy → `migrate deploy` applies the file.
+
+### Schema drift — what to avoid
+
+"Schema drift" is when the database doesn't match what the migrations say it should. Common causes:
+
+- Someone edited the database directly through `psql` (added a column by hand).
+- A migration file was edited after being applied somewhere.
+- Two branches added migrations with the same timestamp and one was applied while the other was renamed.
+
+Prisma detects drift on `migrate dev` and refuses to apply more migrations. The fix:
+
+- **In dev:** `npx prisma migrate reset` — wipes your local DB and replays all migrations from scratch. Safe in dev (you lose dev data); never run in production.
+- **In production:** You don't reset. You inspect, then write a corrective migration that brings reality back in line with what the migrations say.
+
+The discipline is: change the database **only through migrations**. No `psql` ALTER statements in production. If you really need to fix something by hand, write a migration that does the same thing and apply it through the normal flow.
+
+### Seeding — known starting data
+
+For development and end-to-end tests, you want known sample data — a couple of users, a few posts, a few orders. Write a seed script:
+
+```ts
+// prisma/seed.ts
+import { PrismaClient } from "@prisma/client";
+const db = new PrismaClient();
+
+async function main() {
+  await db.user.upsert({
+    where: { email: "ava@studio.io" },
+    update: {},
+    create: { email: "ava@studio.io", name: "Ava Cole" },
+  });
+  await db.user.upsert({
+    where: { email: "ben@nyhouse.co" },
+    update: {},
+    create: { email: "ben@nyhouse.co", name: "Ben Okonkwo" },
+  });
+  console.log("Seeded");
+}
+main().finally(() => db.$disconnect());
+```
+
+In `package.json`:
+
+```json
+"prisma": {
+  "seed": "tsx prisma/seed.ts"
+}
+```
+
+Now `npx prisma db seed` runs it. `prisma migrate reset` also runs it automatically — so your local DB is always in a known state after a reset.
+
+**`upsert`** is key here: insert if missing, do nothing if present. Running the seed twice doesn't create duplicates. The general pattern for seeds: each row uses `upsert` keyed on a unique field.
+
+### Anti-patterns to skip
+
+- **`prisma db push` against a non-empty database.** It bypasses migrations. You lose history; you lose the ability to replay schema changes in production. Use `migrate dev` instead.
+
+- **Editing an already-applied migration.** The migration is the history; rewriting history is how things get inconsistent across environments. If you need to fix a migration, write a new one that undoes the bad bit and replaces it.
+
+- **Running `migrate dev` on production.** This generates a new migration file. You don't want a file generated against prod — you want to deploy the file from the repo.
+
+- **Hand-editing the database via `psql`.** Even one ALTER TABLE that doesn't have a matching migration introduces drift. If you absolutely have to (hotfix at 3am), write the corresponding migration in the same change.
+
+### Why this discipline matters
+
+A team of three people running this loop without discipline for six months ends up with a database whose shape nobody quite remembers. You can't reproduce production locally; you can't tell which columns are "supposed" to be there. New hires spend their first week guessing.
+
+A team running this loop *with* discipline can:
+
+- Replay a six-month database history from a fresh Postgres in 10 seconds.
+- Spin up a new staging environment from scratch with one command.
+- Read the git log of `prisma/migrations/` to see exactly how the schema evolved.
+
+The discipline costs nothing once internalised. It's why every senior shop runs the same migration workflow.
+
+<ExampleProject
+  src="migration-flow"
+  title="A schema change, walked through end to end"
+  description="Three states of the schema file: initial, after-edit, and the generated migration.sql. Lets you toggle to see exactly what SQL Prisma writes when you add a column, then add an index, then add a relation."
+/>
+
+<Exercise
+  title="Evolve a schema across three migrations"
+  starter={`Continue from the project you set up in the previous concept (User
+and Post models). Make three schema changes, one migration each.
+
+  Migration 1 — Add a 'bio' column to User.
+
+    1. Open prisma/schema.prisma. Add to the User model:
+         bio  String?
+       (nullable so existing rows don't need a value)
+    2. npx prisma migrate dev --name add_user_bio
+    3. Open the generated migration.sql. What SQL did Prisma write?
+    4. In your app/page.tsx, render the bio:
+         <li>{u.name} — {u.bio ?? "no bio yet"}</li>
+       The 'bio' field autocompleted because the client was
+       regenerated.
+
+  Migration 2 — Index posts by author.
+
+    1. Add to the Post model:
+         @@index([authorId])
+    2. npx prisma migrate dev --name index_post_author
+    3. Read the migration — should be a CREATE INDEX statement.
+    4. (No code change needed. The index just makes queries that
+       filter by authorId faster.)
+
+  Migration 3 — Add a Comments model.
+
+    1. Add a new model:
+         model Comment {
+           id        Int      @id @default(autoincrement())
+           body      String
+           createdAt DateTime @default(now())
+
+           postId    Int
+           post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+           userId    Int
+           user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+         }
+    2. The User and Post models need 'comments Comment[]' added.
+    3. npx prisma migrate dev --name add_comments
+    4. Read the migration. Two new constraints + one CreateTable.
+
+After all three: open Prisma Studio (npx prisma studio). You should
+see four models now — User, Post, Comment, plus any join tables. Add
+a few comments via the UI; refresh your /page; verify u.posts and
+u.comments work.
+
+Read the contents of prisma/migrations/. Three folders, in time order,
+that capture the entire history of the database shape. That's the
+migration discipline in action.`}
+/>

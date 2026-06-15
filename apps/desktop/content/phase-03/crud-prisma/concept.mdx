@@ -1,0 +1,553 @@
+## CRUD with Prisma
+
+The schema is in place, the migrations have run, the client is generated. Now the queries you write 100× a day: **C**reate, **R**ead, **U**pdate, **D**elete. Prisma's API for each is small, consistent, and fully typed. Once you've internalised the shape, every model in your schema gets the same vocabulary for free.
+
+This concept is reference-shaped — the verbs you'll keep coming back to. Keep this open in another tab the first month you use Prisma.
+
+<Analogy>
+Prisma's query API is **a single grammar with four interchangeable verbs.**
+
+Every operation against every model uses the same handful of options:
+
+```ts
+db.<model>.<verb>({
+  where:   { /* which rows */ },
+  data:    { /* values to write */ },
+  select:  { /* shape to return */ },
+  include: { /* relations to join */ },
+  orderBy: { /* sort */ },
+  take:    n,            // LIMIT
+  skip:    n,            // OFFSET
+});
+```
+
+Pick the model, pick the verb, fill in the relevant options. The verbs:
+
+- **`findUnique` / `findFirst` / `findMany`** — read. One by ID, one by other condition, many.
+- **`create` / `createMany`** — insert. One, or many.
+- **`update` / `updateMany`** — change. One by ID, many by condition.
+- **`delete` / `deleteMany`** — remove. One by ID, many by condition.
+- **`upsert`** — find-or-create. Insert if missing, update if present.
+- **`count`** — count rows matching a condition.
+- **`aggregate`** / **`groupBy`** — sum, avg, min, max, count, with grouping.
+
+That's the entire surface area for 95% of an app. The other 5% drops to `$queryRaw` for SQL Prisma can't express; we covered that in `postgres-prisma`.
+
+Two properties to internalise:
+
+1. **The grammar is uniform across models.** Once you know `findMany` on `User`, you know `findMany` on `Post`, on `Order`, on every model. The same options accept the same shapes.
+
+2. **Every call returns a typed Promise.** `await db.user.findMany()` is `Promise<User[]>`. Add a `select` and the return type narrows to exactly the fields you selected — autocomplete only suggests those, the rest become errors. The compiler is the strictest reviewer you'll get.
+</Analogy>
+
+### Read — `findUnique`, `findFirst`, `findMany`
+
+**`findUnique`** — look up exactly one row by a unique field (the primary key or any column marked `@unique`).
+
+```ts
+const user = await db.user.findUnique({ where: { id: 4 } });
+// user: User | null
+
+const byEmail = await db.user.findUnique({
+  where: { email: "ava@studio.io" },
+});
+```
+
+Returns `null` if nothing matched. Use this when you have an ID and expect either one row or nothing.
+
+**`findFirst`** — first match for an arbitrary condition.
+
+```ts
+const newest = await db.post.findFirst({
+  where: { published_at: { not: null } },
+  orderBy: { createdAt: "desc" },
+});
+```
+
+Like `findUnique`, returns `null` if nothing matched. Use for "find the most recent X" or "find the first row matching Y."
+
+**`findMany`** — list, paginate, search. The workhorse.
+
+```ts
+const recentPublished = await db.post.findMany({
+  where: { publishedAt: { not: null } },
+  orderBy: { createdAt: "desc" },
+  take: 20,
+  skip: 0,
+});
+```
+
+Returns `Post[]`. Empty array if nothing matched (never `null`).
+
+### `where` — the filter
+
+The most expressive option. Maps to SQL `WHERE`. Examples:
+
+```ts
+// Equality
+where: { id: 4 }
+where: { email: "ava@studio.io" }
+
+// Comparison operators
+where: { price: { gt: 1000 } }                  // >
+where: { price: { gte: 1000 } }                 // >=
+where: { price: { lt: 5000 } }                  // <
+where: { price: { lte: 5000 } }                 // <=
+
+// Ranges
+where: { createdAt: { gte: new Date("2026-01-01"), lt: new Date("2026-07-01") } }
+
+// IN
+where: { status: { in: ["paid", "shipped"] } }
+
+// Pattern matching (case-insensitive)
+where: { title: { contains: "react", mode: "insensitive" } }
+where: { email: { startsWith: "ava@" } }
+where: { email: { endsWith: "@studio.io" } }
+
+// Nullability
+where: { publishedAt: { not: null } }
+where: { bio: null }
+
+// Boolean combinators
+where: {
+  AND: [
+    { stock: { gt: 0 } },
+    { price: { lte: 5000 } },
+  ],
+}
+where: {
+  OR: [
+    { status: "paid" },
+    { status: "shipped" },
+  ],
+}
+where: { NOT: { status: "cancelled" } }
+
+// Filter by relation field
+where: { author: { name: "Ava Cole" } }                 // posts whose author is Ava
+where: { posts: { some: { publishedAt: { not: null } } } }  // users with at least one published post
+where: { posts: { none: { publishedAt: null } } }       // users where every post is published
+```
+
+The `some` / `every` / `none` operators on relations are unique to Prisma — they map to `EXISTS`/`NOT EXISTS` subqueries in SQL. Powerful.
+
+### `select` and `include` — shape the result
+
+By default, `findMany` returns all scalar columns of the model — no relations. Two options narrow or expand the shape.
+
+**`select`** — pick specific columns; everything not in the select disappears from the return type.
+
+```ts
+const slim = await db.user.findMany({
+  select: { id: true, name: true, email: true },
+});
+// slim: { id: number; name: string; email: string }[]
+```
+
+Smaller queries, smaller responses, smaller bundles. Use `select` whenever you don't need every column.
+
+**`include`** — keep all scalars, additionally fetch related models.
+
+```ts
+const usersWithPosts = await db.user.findMany({
+  include: {
+    posts: true,
+  },
+});
+// each user gains a `posts: Post[]` field
+```
+
+**Combining `select` with relations** — `select` nested:
+
+```ts
+const feedItems = await db.post.findMany({
+  where: { publishedAt: { not: null } },
+  select: {
+    id: true,
+    title: true,
+    publishedAt: true,
+    author: {
+      select: { id: true, name: true },
+    },
+  },
+  orderBy: { publishedAt: "desc" },
+  take: 20,
+});
+```
+
+`feedItems[0].author.name` is fully typed; `feedItems[0].body` is a TypeScript error because you didn't select it. The shape of the response = the shape of the `select` block, mirrored exactly. Hover anywhere; the types match.
+
+### Create — `create`, `createMany`
+
+**`create`** — insert one row, return it.
+
+```ts
+const user = await db.user.create({
+  data: {
+    email: "ava@studio.io",
+    name: "Ava Cole",
+  },
+});
+// user: User — fully typed, includes the auto-generated id + createdAt
+```
+
+If `email` violates the `UNIQUE` constraint, Prisma throws a `P2002` error. Wrap in try/catch when you need to handle "already exists" gracefully:
+
+```ts
+import { Prisma } from "@prisma/client";
+
+try {
+  await db.user.create({ data: { email: input.email, name: input.name } });
+} catch (e) {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    return { error: "An account with that email already exists" };
+  }
+  throw e;
+}
+```
+
+**Create with nested relations** — create a user and their first post in one call:
+
+```ts
+const userWithPost = await db.user.create({
+  data: {
+    email: "kai@studio.io",
+    name: "Kai Sato",
+    posts: {
+      create: { title: "Hello world", body: "First post." },
+    },
+  },
+  include: { posts: true },
+});
+```
+
+Two `INSERT`s under the hood, wrapped in a transaction. Either both succeed or neither does.
+
+**`createMany`** — bulk insert.
+
+```ts
+await db.user.createMany({
+  data: [
+    { email: "a@x.com", name: "A" },
+    { email: "b@x.com", name: "B" },
+    { email: "c@x.com", name: "C" },
+  ],
+  skipDuplicates: true,   // ignore rows that would violate UNIQUE
+});
+```
+
+`createMany` doesn't return the inserted rows (because it's optimised for throughput). If you need the inserted IDs, loop with `create`, or do a follow-up `findMany`.
+
+### Update — `update`, `updateMany`, `upsert`
+
+**`update`** — change one row by a unique field.
+
+```ts
+const updated = await db.user.update({
+  where: { id: 4 },
+  data:  { bio: "Updated bio" },
+});
+```
+
+If the row doesn't exist, Prisma throws a `P2025` (not found) error. Use `updateMany` if "zero rows updated" is acceptable.
+
+**Multi-field update:**
+
+```ts
+await db.user.update({
+  where: { id: 4 },
+  data: {
+    name: "Kai S. Sato",
+    bio:  "Designer, NYC",
+  },
+});
+```
+
+**Atomic increments / decrements:**
+
+```ts
+await db.product.update({
+  where: { id: 7 },
+  data:  { stock: { decrement: 1 } },
+});
+```
+
+`{ decrement: 1 }` translates to `SET stock = stock - 1` — a single atomic SQL statement that's safe under concurrent updates. The naive `data: { stock: existing.stock - 1 }` has a race (read-then-write split) and can lose decrements; the atomic form fixes it.
+
+**`updateMany`** — change all rows matching a condition. Returns a `{ count: number }`.
+
+```ts
+const result = await db.post.updateMany({
+  where: { publishedAt: null, createdAt: { lt: cutoff } },
+  data:  { archived: true },
+});
+// result.count = how many rows were touched
+```
+
+**`upsert`** — insert if missing, update if present.
+
+```ts
+await db.user.upsert({
+  where:  { email: "ava@studio.io" },
+  update: { name: "Ava Cole" },
+  create: { email: "ava@studio.io", name: "Ava Cole" },
+});
+```
+
+`update` = what to change if a matching row exists; `create` = what to insert if not. Common in seed scripts and idempotent endpoints.
+
+### Delete — `delete`, `deleteMany`
+
+```ts
+await db.user.delete({ where: { id: 4 } });
+// Throws P2025 if id 4 doesn't exist
+
+await db.post.deleteMany({
+  where: { publishedAt: null, createdAt: { lt: cutoff } },
+});
+// { count: number } of rows deleted
+```
+
+When the model has `onDelete: Cascade` on relations (in the schema), the related rows are deleted automatically by Postgres. No application code needed.
+
+### Aggregates — count, sum, avg, min, max
+
+```ts
+const userCount = await db.user.count();
+const recentSignups = await db.user.count({
+  where: { createdAt: { gte: new Date("2026-06-01") } },
+});
+
+const stats = await db.order.aggregate({
+  where: { status: "paid" },
+  _sum: { total: true },
+  _avg: { total: true },
+  _max: { total: true },
+  _min: { total: true },
+  _count: true,
+});
+// stats._sum.total — number | null
+// stats._avg.total — number | null
+// stats._count    — number
+```
+
+`groupBy` — aggregate per category:
+
+```ts
+const perUser = await db.post.groupBy({
+  by: ["authorId"],
+  _count: { _all: true },
+  where:  { publishedAt: { not: null } },
+  orderBy: { _count: { authorId: "desc" } },
+  take: 10,
+});
+// perUser: { authorId: number; _count: { _all: number } }[]
+```
+
+This is the SQL `GROUP BY ... HAVING` shape, in TypeScript.
+
+### Transactions — all or nothing
+
+For multi-step operations where partial success is unacceptable (transferring funds, creating an order + its items):
+
+```ts
+await db.$transaction(async (tx) => {
+  const order = await tx.order.create({
+    data: { customerId: 1, total: 4500, status: "pending" },
+  });
+
+  await tx.orderItem.createMany({
+    data: [
+      { orderId: order.id, productId: 7,  quantity: 2, unitPrice: 1500 },
+      { orderId: order.id, productId: 12, quantity: 1, unitPrice: 1500 },
+    ],
+  });
+
+  await tx.product.update({
+    where: { id: 7  },
+    data:  { stock: { decrement: 2 } },
+  });
+  await tx.product.update({
+    where: { id: 12 },
+    data:  { stock: { decrement: 1 } },
+  });
+});
+```
+
+The `tx` parameter is a Prisma client scoped to the transaction. Any thrown error rolls everything back; without an error, everything commits at the end.
+
+For batch operations without inter-step dependencies, you can pass an array directly:
+
+```ts
+const [user, posts] = await db.$transaction([
+  db.user.findUnique({ where: { id: 4 } }),
+  db.post.findMany({ where: { authorId: 4 } }),
+]);
+```
+
+Both queries run; result is an array in the same order.
+
+### Pagination — the two patterns
+
+**Offset pagination** (simple, slows on deep pages):
+
+```ts
+const PAGE_SIZE = 20;
+const posts = await db.post.findMany({
+  orderBy: { createdAt: "desc" },
+  take:    PAGE_SIZE,
+  skip:    (pageNumber - 1) * PAGE_SIZE,
+});
+```
+
+Easy. Page 1 to 10, fast. Page 1000 of a million-row table, slow — Postgres still has to scan the skipped rows.
+
+**Cursor pagination** (fast at any depth):
+
+```ts
+const FIRST_PAGE = await db.post.findMany({
+  orderBy: { createdAt: "desc" },
+  take: 20,
+});
+
+// To get the next page, pass the last post's createdAt as the cursor:
+const NEXT = await db.post.findMany({
+  where:   { createdAt: { lt: lastCreatedAt } },
+  orderBy: { createdAt: "desc" },
+  take: 20,
+});
+```
+
+You're effectively saying "give me posts older than the one I just saw." Stays fast at any depth. Use this for infinite-scroll feeds.
+
+### The data-access layer
+
+Don't sprinkle Prisma calls all over your route handlers and server components. Group related queries into one file per model:
+
+```ts
+// lib/queries/posts.ts
+import { db } from "@/lib/db";
+
+export async function getRecentPosts(limit = 20) {
+  return db.post.findMany({
+    where: { publishedAt: { not: null } },
+    orderBy: { publishedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      title: true,
+      publishedAt: true,
+      author: { select: { id: true, name: true } },
+    },
+  });
+}
+
+export async function getPost(id: number) {
+  return db.post.findUnique({
+    where: { id },
+    include: {
+      author: { select: { id: true, name: true } },
+      comments: {
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { name: true } } },
+      },
+    },
+  });
+}
+```
+
+Then your route handlers / server components / server actions all read through these named functions:
+
+```ts
+import { getRecentPosts } from "@/lib/queries/posts";
+
+export default async function HomePage() {
+  const posts = await getRecentPosts(10);
+  return <FeedList posts={posts} />;
+}
+```
+
+Three wins from this layout:
+
+1. **Reusability.** The same `getRecentPosts` powers the homepage, the API, the admin panel — written once.
+2. **Refactorability.** Schema change → fix the data-access layer → all callers stay correct. No grep across 50 files.
+3. **Testability.** You can mock the data-access layer at test boundaries without mocking Prisma itself.
+
+This pattern is the start of what people sometimes call "the repository pattern." For Next.js apps, the lighter version — module-per-resource — is enough.
+
+### Error handling — the common errors
+
+Prisma throws specific error classes you can switch on:
+
+```ts
+import { Prisma } from "@prisma/client";
+
+try {
+  await db.user.create({ data });
+} catch (e) {
+  if (e instanceof Prisma.PrismaClientKnownRequestError) {
+    if (e.code === "P2002") return error("Email already exists");
+    if (e.code === "P2025") return error("Record not found");
+  }
+  if (e instanceof Prisma.PrismaClientValidationError) {
+    return error("Invalid input shape");
+  }
+  throw e; // unknown — let the framework's error boundary catch it
+}
+```
+
+The codes you'll see most often:
+
+- **`P2002`** — unique constraint violated.
+- **`P2003`** — foreign key constraint failed.
+- **`P2025`** — record not found (delete/update of a row that doesn't exist).
+
+Look these up the first time you see them; they become muscle memory fast.
+
+<ExampleProject
+  src="four-verbs"
+  title="The four verbs, side by side"
+  description="findMany, create, update, delete — each shown as the Prisma call, the SQL it generates, and the typed result. Switch between verbs to see the same shape with a different action. The fastest way to internalise the API surface."
+/>
+
+<Exercise
+  title="Build a query module for posts"
+  starter={`Continue with the schema from the previous concept (User, Post,
+Comment). Write a 'lib/queries/posts.ts' file that exports five
+functions covering the queries a blog homepage needs.
+
+  1. getRecentPosts(limit = 20): published posts, newest first, with
+     the author's name. Use 'select' so only the fields the homepage
+     renders come back.
+
+  2. getPostBySlug(slug: string): one post by its slug, with the
+     author + all comments (each comment with its commenter's name).
+     Returns null if not found.
+
+  3. createPost(input: { authorId: number; title: string; body: string }):
+     insert and return the new post.
+
+  4. publishPost(id: number): set publishedAt = now() if it was null.
+
+  5. deleteOldDrafts(daysOld: number): delete all unpublished posts
+     older than N days. Returns the count deleted.
+
+For each function:
+  - Type the input arguments.
+  - Use the narrowest 'select' / 'include' that the callers need.
+  - Handle the "not found" case with a return value, not an exception
+    (the caller knows what to do).
+
+Wire one into a page. Import getRecentPosts into app/page.tsx;
+render the post titles. Verify the types still flow through —
+hovering over each variable should show exactly the shape you
+selected, no more.
+
+Then look at the Prisma docs for one query you wrote. Find the SQL
+log option (turn on logging in lib/db.ts via 'log: ["query"]') and
+re-run the page. The exact SQL Prisma generated will appear in your
+terminal. Compare it to what you would have written by hand. That
+comparison — your SQL vs Prisma's SQL — is the fastest way to
+internalise both.`}
+/>

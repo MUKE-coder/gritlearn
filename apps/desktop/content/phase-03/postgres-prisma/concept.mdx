@@ -1,0 +1,358 @@
+## Connecting Postgres with Prisma
+
+You know SQL. You know what tables, rows, columns, foreign keys are. Now the practical question: how do you actually run queries from your Next.js code without writing raw SQL strings everywhere, and how do you keep TypeScript types in sync with what the database actually contains? The answer the modern Next.js ecosystem reached for is **Prisma** — an ORM (object-relational mapper) that gives you a typed query API in TypeScript, generates the SQL underneath, and tracks your schema as a file in your repo.
+
+This concept covers the setup: spinning up a Postgres database, installing Prisma, writing your first schema, and running your first query. The next two concepts cover the everyday workflow — changing the schema as your app evolves (`prisma-schema-migrations`) and the four verbs you'll use 100× a day (`crud-prisma`).
+
+<Analogy>
+Prisma is **a bilingual secretary who sits between you and the filing cabinet.**
+
+In raw SQL, you walk up to the cabinet and shout your request in the cabinet's dialect. It works, but you have to remember the dialect perfectly, and the cabinet hands you back a stack of paper with no labels — you have to know what columns came back in what order, type them yourself, hope nothing breaks if someone reshuffles the drawers.
+
+Prisma is a secretary who speaks both languages fluently. You speak to her in TypeScript:
+
+```ts
+const newest = await prisma.post.findMany({
+  where: { publishedAt: { not: null } },
+  orderBy: { createdAt: "desc" },
+  take: 20,
+  include: { author: { select: { name: true } } },
+});
+```
+
+She walks to the cabinet, translates that into SQL:
+
+```sql
+SELECT p.*, u.name FROM posts p JOIN users u ON u.id = p.user_id
+WHERE p.published_at IS NOT NULL ORDER BY p.created_at DESC LIMIT 20;
+```
+
+…runs it, takes the raw rows the cabinet gives back, and hands you a fully-typed result your IDE understands. `newest[0].author.name` autocompletes; `newest[0].title.length` works; `newest[0].nonexistentField` errors at compile time. The fidelity goes both directions: if you change the schema, the next time you regenerate Prisma, the types update everywhere — every query that referenced a renamed column now shows a red squiggle until you fix it.
+
+Three jobs Prisma does for you:
+
+1. **Translation.** TypeScript → SQL on the way in, raw rows → typed objects on the way out. You never write `SELECT name FROM users WHERE id = $1` and worry about SQL injection; the API forces the values through parameterised queries.
+
+2. **Schema as a single source of truth.** Your tables, columns, relations, indexes — all live in one file (`prisma/schema.prisma`). Change it, run a command, your database catches up *and* your TypeScript types catch up. No "I forgot to update the type after I added the column" bugs.
+
+3. **Migrations as code.** Every schema change generates a SQL file that goes into version control. Three months from now, you can replay the entire database history from migrations alone. Production schema changes ship the same way features do — a PR with a migration file inside.
+
+The trade: you give up some flexibility (a few SQL patterns Prisma can't express; you reach for `prisma.$queryRaw` when you need them) and you take on a generation step (`prisma generate` runs in your build). In exchange, you get type safety, refactor-ability, and a workflow that scales from solo project to 40-person team.
+</Analogy>
+
+### The shape of a Prisma-enabled project
+
+After setup, your repo has three Prisma-related additions:
+
+```
+my-app/
+├── prisma/
+│   ├── schema.prisma             ← single source of truth
+│   └── migrations/
+│       ├── 20260616_init/
+│       │   └── migration.sql     ← generated SQL for each schema change
+│       └── 20260620_add_bio/
+│           └── migration.sql
+├── lib/
+│   └── db.ts                     ← exports a singleton Prisma client
+└── .env.local
+    DATABASE_URL=postgresql://...  ← Prisma reads this
+```
+
+The `schema.prisma` file defines your tables (Prisma calls them **models**). The `migrations/` folder is auto-generated; you don't write SQL there by hand. `lib/db.ts` exports the Prisma client your route handlers, server components, and server actions will import. `DATABASE_URL` is the connection string.
+
+### Step 1 — Get a Postgres database
+
+You need a Postgres running somewhere your code can reach. Three options, easiest first:
+
+**Option A — Cloud (Neon, Supabase, Railway, Render).** Sign up, create a project, copy the connection string. 30 seconds to a running database. Free tiers cover learning + side projects. The string looks like:
+
+```
+postgresql://user:Passw0rd@ep-cool-thunder-123.us-east-1.aws.neon.tech/myapp?sslmode=require
+```
+
+**Option B — Local Docker.** If you have Docker installed:
+
+```bash
+docker run --name myapp-pg \
+  -e POSTGRES_PASSWORD=dev \
+  -e POSTGRES_DB=myapp \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+Connection string: `postgresql://postgres:dev@localhost:5432/myapp`.
+
+**Option C — Native install.** Postgres.app (macOS), the official installer (Windows), or `apt install postgresql` (Linux). More setup, but no Docker dependency.
+
+For learning, Option A (Neon free tier) is the fastest path — no install, works from a coffee-shop laptop, your Vercel deploy reads the same database.
+
+### Step 2 — Install Prisma
+
+In your Next.js project:
+
+```bash
+npm install prisma --save-dev
+npm install @prisma/client
+npx prisma init
+```
+
+`prisma init` creates `prisma/schema.prisma` and adds `DATABASE_URL` to `.env`. Open `.env` (it's gitignored) and paste in the connection string from Step 1.
+
+The default `schema.prisma`:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+```
+
+Two blocks. `generator client` tells Prisma "generate the TypeScript client." `datasource db` says "I'm talking to Postgres, read the URL from the env var named `DATABASE_URL`."
+
+### Step 3 — Write your first model
+
+Append to `schema.prisma`:
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  posts     Post[]
+}
+
+model Post {
+  id          Int       @id @default(autoincrement())
+  title       String
+  body        String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  authorId    Int
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+```
+
+Reading top to bottom:
+
+- **`model User`** — defines a `User` table. The Prisma file uses `PascalCase` model names; the actual table will be `users` (lowercased & pluralised? actually Prisma uses the singular `User` by default — you can override with `@@map("users")` if you want a different table name).
+- **`id Int @id @default(autoincrement())`** — column `id`, type `Int`, marked as the primary key (`@id`), auto-incremented. The TS field comes out as `number`.
+- **`email String @unique`** — required string column, with a `UNIQUE` constraint at the DB level.
+- **`name String`** — required, no constraint.
+- **`createdAt DateTime @default(now())`** — Postgres `timestamptz`, defaults to `now()` on insert.
+- **`posts Post[]`** — relation: a `User` has many `Post`s. This is a **virtual field** — Prisma uses it for the typed API; no column on `users`.
+- In `Post`:
+  - **`authorId Int`** + **`author User @relation(...)`** — the foreign key column and the typed relation. `authorId` becomes the actual `user_id`-equivalent column; `author` is what you'll access in code (`post.author.name`).
+  - **`onDelete: Cascade`** — same as SQL's `ON DELETE CASCADE`: deleting a user cascades to their posts.
+
+Compare to the SQL you wrote in the previous concept:
+
+```sql
+CREATE TABLE users (
+  id         serial      PRIMARY KEY,
+  email      text        UNIQUE NOT NULL,
+  name       text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE posts (
+  id           serial       PRIMARY KEY,
+  user_id      int          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title        text         NOT NULL,
+  body         text,
+  published_at timestamptz,
+  created_at   timestamptz  NOT NULL DEFAULT now()
+);
+```
+
+The Prisma schema is the same information, in a more compact syntax. The two stay in lock-step: `prisma migrate` reads the schema, diffs it against the actual database, and emits the SQL needed to align them.
+
+### Step 4 — Push the schema to Postgres
+
+Two paths. For your first time, use `db push`:
+
+```bash
+npx prisma db push
+```
+
+This force-syncs the database to match the schema, no migration files. Good for prototyping (schema changes happen rapidly, you don't care about history yet).
+
+For real projects, use migrations:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+This:
+1. Creates `prisma/migrations/20260616_init/migration.sql` with the generated `CREATE TABLE` statements.
+2. Runs the SQL against your database.
+3. Regenerates the Prisma client to include the new types.
+
+Migrations live in version control. Three months from now, a teammate cloning the repo runs `npx prisma migrate deploy` and gets the same schema. Production CI runs the same command on deploy. The migration files are *the history*.
+
+### Step 5 — The Prisma client
+
+`npx prisma migrate dev` automatically runs `prisma generate`, which builds the typed client into `node_modules/@prisma/client`. To use it:
+
+```ts
+// lib/db.ts — a singleton pattern that survives Next.js hot reload
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const db = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+```
+
+The dance with `globalThis` is because Next.js hot-reloads server modules in dev — without the singleton, every save would spawn a new Prisma client + open new connections to Postgres until the pool exhausted. In production, the module only runs once, so the global isn't needed; this pattern handles both.
+
+### Step 6 — Your first query
+
+In a server component, route handler, or server action:
+
+```ts
+import { db } from "@/lib/db";
+
+export default async function HomePage() {
+  const recentUsers = await db.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  return (
+    <ul>
+      {recentUsers.map((u) => (
+        <li key={u.id}>{u.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+`db.user.findMany` is fully typed: `recentUsers` is `Pick<User, ...>[]`. Hover any field in your editor; the types match the schema. Add a column to the schema → `prisma generate` → the column appears in autocompletion immediately.
+
+### Where to put `db`
+
+The convention: **`lib/db.ts`** in your Next.js project. Server components, route handlers, and server actions all import it from there. **Never** import it from a client component — Prisma needs Node APIs that don't exist in the browser, and your `DATABASE_URL` would leak into the bundle. Server-only imports are how the architecture protects you.
+
+If you accidentally import `db` into a client component, Next.js will throw a build error. The error message tells you exactly which import path to remove.
+
+### Connection pooling — the gotcha at scale
+
+Postgres allows ~100 concurrent connections by default. A single Vercel serverless function can spin up many instances, each with its own Prisma client — quickly exhausting the pool. The fix: a **connection pooler** between your code and Postgres.
+
+- **Neon** has a built-in pooler — use the `*-pooler.*` URL variant in production.
+- **Supabase** ships PgBouncer; use the pooled connection string.
+- **Self-hosted** Postgres needs PgBouncer or pgcat configured separately.
+
+In dev (local Docker, one process), you don't need a pooler. In production on Vercel/Render, you do. Your `.env.local` can hold the direct URL for migrations + the pooled URL for runtime:
+
+```env
+DATABASE_URL="postgresql://...pooler.host..."          # runtime — pooled
+DIRECT_URL="postgresql://...primary.host..."           # migrations — direct
+```
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+```
+
+`prisma migrate` uses `directUrl` (migrations need a direct connection); runtime queries use the pooled URL.
+
+You won't hit this on day one. When you deploy to Vercel and start seeing `too many connections` errors at peak traffic, this is the fix.
+
+### When to *not* use Prisma
+
+Prisma's typed API covers 95% of queries beautifully. The 5% where you want raw SQL:
+
+- **Complex analytics queries** with window functions, CTEs, or PostGIS.
+- **Bulk operations** where you need precise control over SQL.
+- **Database-specific features** Prisma doesn't expose (Postgres `LISTEN/NOTIFY`, full-text search ranking).
+
+For those, drop to `db.$queryRaw`:
+
+```ts
+const results = await db.$queryRaw<
+  Array<{ id: number; lifetime_cents: number }>
+>`
+  SELECT user_id AS id, SUM(total_cents) AS lifetime_cents
+  FROM orders
+  WHERE status = 'paid'
+  GROUP BY user_id
+  HAVING SUM(total_cents) > 100000
+`;
+```
+
+You pass a tagged template literal; Prisma parameterises the values; you provide the result type. You lose Prisma's static checking, but you get full SQL.
+
+Most projects never need this. When they do, it's a small island of raw SQL inside a typed-query codebase — best of both.
+
+<ExampleProject
+  src="setup-walkthrough"
+  title="A complete Prisma setup, one screen"
+  description="The five files / commands needed to get from 'empty Next.js project' to 'first typed query.' Side-by-side: the .env, the schema.prisma, the lib/db.ts, the CLI command sequence, and the working query. Annotated with what each piece does."
+/>
+
+<Exercise
+  title="Spin up Prisma against a real Postgres"
+  starter={`Do this in a real Next.js project. The point is muscle memory for
+the setup — every time you start a new project you'll repeat the same
+six steps.
+
+  1. Get a Postgres URL — Neon free tier is the lowest-friction
+     (https://neon.tech), or Supabase, or Railway. Sign in with
+     GitHub, create a new project, copy the connection string.
+
+  2. In your Next.js project:
+       npm i -D prisma
+       npm i @prisma/client
+       npx prisma init
+
+  3. Open .env and replace the placeholder DATABASE_URL with the
+     real one from step 1.
+
+  4. Open prisma/schema.prisma. Add two models — User and Post —
+     matching the SQL you wrote in the sql-basics exercise. Use the
+     @relation syntax for the foreign key.
+
+  5. Run npx prisma migrate dev --name init. Read the migration.sql
+     file it generates. Does the SQL match what you wrote by hand?
+     (Spoiler: it'll match almost exactly, give or take some Postgres
+     formatting.)
+
+  6. Create lib/db.ts with the singleton client. Then in
+     app/page.tsx (server component), write:
+
+       import { db } from "@/lib/db";
+       export default async function Page() {
+         const users = await db.user.findMany();
+         return <pre>{JSON.stringify(users, null, 2)}</pre>;
+       }
+
+     Run 'npm run dev'. You'll see [] — an empty array. That's a
+     working query against a real database.
+
+  7. Add a row from the Prisma Studio:
+       npx prisma studio
+     opens a visual editor at localhost:5555. Click 'Add record',
+     fill in email + name, save. Refresh your /page — your user
+     should appear.
+
+If anything errors, the message is usually the literal answer.
+"Environment variable not found: DATABASE_URL" → .env path wrong.
+"P1001 Can't reach database" → URL wrong, firewall, or sslmode
+missing. Read the error, trust it.`}
+/>

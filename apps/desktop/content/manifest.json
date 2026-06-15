@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "phases": [
     {
       "id": "phase-01",
@@ -100,9 +100,9 @@
         { "slug": "phase-03/what-is-a-database", "title": "What a database is", "available": true },
         { "slug": "phase-03/sql-basics", "title": "SQL basics (tables, rows, columns)", "available": true },
         { "slug": "phase-03/sql-queries", "title": "SQL queries (SELECT, WHERE, JOIN)", "available": true },
-        { "slug": "phase-03/postgres-prisma", "title": "Connecting Postgres with Prisma", "available": false },
-        { "slug": "phase-03/prisma-schema-migrations", "title": "Prisma schema and migrations", "available": false },
-        { "slug": "phase-03/crud-prisma", "title": "CRUD with Prisma", "available": false },
+        { "slug": "phase-03/postgres-prisma", "title": "Connecting Postgres with Prisma", "available": true },
+        { "slug": "phase-03/prisma-schema-migrations", "title": "Prisma schema and migrations", "available": true },
+        { "slug": "phase-03/crud-prisma", "title": "CRUD with Prisma", "available": true },
         { "slug": "phase-03/authjs", "title": "Authentication with Auth.js / NextAuth", "available": false },
         { "slug": "phase-03/protecting-routes", "title": "Protecting routes and sessions", "available": false },
         { "slug": "phase-03/env-secrets", "title": "Environment variables and secrets", "available": false },
