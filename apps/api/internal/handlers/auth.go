@@ -110,7 +110,8 @@ type forgotPasswordRequest struct {
 }
 
 type resetPasswordRequest struct {
-	Token    string `json:"token" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Code     string `json:"code" binding:"required,len=6"`
 	Password string `json:"password" binding:"required,min=8"`
 }
 
@@ -621,7 +622,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
-// ForgotPassword initiates a password reset.
+// ForgotPassword issues a 6-digit reset code and emails it. Returns
+// 200 with the same shape whether the email exists or not, so a
+// stranger can't probe the user table by submitting addresses.
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req forgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -636,33 +639,82 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 	var user models.User
 	if err := h.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		// Return success even if email not found (security)
 		c.JSON(http.StatusOK, gin.H{
-			"message": "If an account with that email exists, a password reset link has been sent",
+			"message": "If an account with that email exists, a reset code has been sent.",
 		})
 		return
 	}
 
-	token, err := services.GenerateResetToken()
+	// Social-only accounts have no password to reset; surface a 200
+	// with the same body to avoid leaking that distinction.
+	if user.Password == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "If an account with that email exists, a reset code has been sent.",
+		})
+		return
+	}
+
+	code, err := generateOTP()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "INTERNAL_ERROR",
-				"message": "Failed to generate reset token",
-			},
+			"error": gin.H{"code": "OTP_ERROR", "message": "Failed to generate reset code"},
+		})
+		return
+	}
+	expiry := time.Now().Add(10 * time.Minute)
+	if err := h.DB.Model(&user).Updates(map[string]interface{}{
+		"password_reset_code":       code,
+		"password_reset_expires_at": &expiry,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to save reset code"},
 		})
 		return
 	}
 
-	// For Phase 1, just log the token (email integration comes in Phase 4)
-	log.Printf("Password reset token for %s: %s", user.Email, token)
+	h.sendPasswordResetEmail(user, code)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "If an account with that email exists, a password reset link has been sent",
+		"message": "If an account with that email exists, a reset code has been sent.",
 	})
 }
 
-// ResetPassword resets a user's password with a valid token.
+// sendPasswordResetEmail fires the reset OTP via the configured Mailer.
+// Fire-and-forget — the user row already has the code persisted, so a
+// mail failure must not bubble back to the HTTP response.
+func (h *AuthHandler) sendPasswordResetEmail(user models.User, code string) {
+	if h.Mailer == nil {
+		log.Printf("[mail] reset email skipped — Mailer not configured. Code for %s: %s", user.Email, code)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		appName := h.Config.AppName
+		if appName == "" {
+			appName = "JEditor"
+		}
+		data := map[string]interface{}{
+			"AppName":   appName,
+			"Year":      time.Now().Year(),
+			"FirstName": user.FirstName,
+			"Code":      code,
+		}
+		if err := h.Mailer.Send(ctx, mail.SendOptions{
+			To:       user.Email,
+			Subject:  "Reset your " + appName + " password",
+			Template: "password-reset-otp",
+			Data:     data,
+		}); err != nil {
+			log.Printf("[mail] reset send failed for %s: %v", user.Email, err)
+		}
+	}()
+}
+
+// ResetPassword validates the 6-digit code emailed by ForgotPassword
+// and swaps the user's password hash in place. On success the code is
+// cleared so it can't be reused; the client should then call /login.
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req resetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -675,22 +727,48 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Phase 1: simplified reset (in production, validate the token against stored tokens)
-	// For now, this is a placeholder that demonstrates the API contract
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "INTERNAL_ERROR",
-				"message": "Failed to hash password",
-			},
+	var user models.User
+	if err := h.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "INVALID_CODE", "message": "Invalid or expired code"},
 		})
 		return
 	}
-	_ = hashedPassword
+
+	if user.PasswordResetCode == "" || user.PasswordResetExpiresAt == nil || time.Now().After(*user.PasswordResetExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "CODE_EXPIRED", "message": "Code expired. Request a new one."},
+		})
+		return
+	}
+	if user.PasswordResetCode != req.Code {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "INVALID_CODE", "message": "Invalid code"},
+		})
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to hash password"},
+		})
+		return
+	}
+
+	if err := h.DB.Model(&user).Updates(map[string]interface{}{
+		"password":                  string(hashed),
+		"password_reset_code":       "",
+		"password_reset_expires_at": nil,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to update password"},
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Password reset successfully",
+		"message": "Password reset successfully. You can now sign in with your new password.",
 	})
 }
 

@@ -110,6 +110,33 @@ export function useResendOTP() {
   });
 }
 
+// useForgotPassword fires the "send me a reset code" request. Always
+// returns 200 server-side so a stranger can't probe the user table.
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      await apiClient.post("/auth/forgot-password", { email });
+    },
+  });
+}
+
+// useResetPassword completes the reset by submitting the 6-digit
+// code + new password. On success the user goes to /auth/login to
+// sign in fresh — we deliberately don't auto-issue tokens here.
+interface ResetPasswordInput {
+  email: string;
+  code: string;
+  password: string;
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async (input: ResetPasswordInput) => {
+      await apiClient.post("/auth/reset-password", input);
+    },
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({

@@ -6,8 +6,42 @@ var EmailTemplates = map[string]string{
 	"password-reset":     passwordResetTemplate,
 	"email-verification": emailVerificationTemplate,
 	"otp-verification":   otpVerificationTemplate,
+	"password-reset-otp": passwordResetOTPTemplate,
 	"notification":       notificationTemplate,
 }
+
+const passwordResetOTPTemplate = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; padding: 0; background-color: #0a0a0d; color: #ededee; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .container { max-width: 560px; margin: 0 auto; padding: 40px 20px; }
+    .card { background-color: #111114; border: 1px solid #1f1f25; border-radius: 12px; padding: 32px; }
+    .logo { text-align: center; margin-bottom: 24px; font-size: 22px; font-weight: 700; color: #5FE3B0; letter-spacing: -0.5px; }
+    h1 { font-size: 22px; margin: 0 0 14px; color: #ededee; text-align: center; }
+    p { font-size: 14px; line-height: 1.6; color: #a1a1aa; margin: 0 0 14px; text-align: center; }
+    .code { background-color: #0a0a0d; border: 1px solid #1f1f25; border-radius: 12px; padding: 22px; text-align: center; font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 36px; letter-spacing: 12px; font-weight: 700; color: #5FE3B0; margin: 22px 0; }
+    .hint { font-size: 12px; color: #71717a; text-align: center; }
+    .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #71717a; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">{{.AppName}}</div>
+      <h1>Reset your password</h1>
+      <p>Hi {{.FirstName}}, enter this code in {{.AppName}} to set a new password.</p>
+      <div class="code">{{.Code}}</div>
+      <p class="hint">Code expires in 10 minutes. If you didn't request a reset, ignore this email — your password stays the same.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; {{.Year}} {{.AppName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`
 
 const otpVerificationTemplate = `<!DOCTYPE html>
 <html>

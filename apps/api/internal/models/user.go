@@ -42,6 +42,11 @@ type User struct {
 	// caps the window the code is valid for (10 minutes).
 	OTPCode      string     `gorm:"size:6" json:"-"`
 	OTPExpiresAt *time.Time `json:"-"`
+	// Separate 6-digit code + expiry for password reset. Kept apart from
+	// the verification OTP above so a pending forgot-password request
+	// doesn't clobber (or get clobbered by) a re-verification attempt.
+	PasswordResetCode      string     `gorm:"size:6" json:"-"`
+	PasswordResetExpiresAt *time.Time `json:"-"`
 	IPAddress       string         `gorm:"size:45" json:"ip_address"`
 	MACAddress      string         `gorm:"size:50" json:"mac_address"`
 	Version         int            `gorm:"not null;default:1" json:"version"`
