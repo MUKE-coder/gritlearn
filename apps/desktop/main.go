@@ -27,6 +27,15 @@ func main() {
 		MinWidth:  1000,
 		MinHeight: 700,
 		Frameless: true,
+		// Force a normal/restored window state on every launch.
+		// Without this, Wails inherits the previous session's state
+		// AND on some Win11 fresh installs the window can come up
+		// maximised, which combined with our Frameless: true (no
+		// title bar / maximise button) makes a slow-to-paint
+		// webview look like a full-screen black window. The
+		// reference Shoppleet build sets the same option for this
+		// exact reason.
+		WindowStartState: options.Normal,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
