@@ -23,6 +23,7 @@ import (
 	"gritlearn/apps/api/internal/database"
 	"gritlearn/apps/api/internal/jobs"
 	"gritlearn/apps/api/internal/mail"
+	"gritlearn/apps/api/internal/models"
 	"gritlearn/apps/api/internal/routes"
 	"gritlearn/apps/api/internal/services"
 	"gritlearn/apps/api/internal/storage"
@@ -40,6 +41,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+
+	// Run GORM AutoMigrate at boot so every Models() entry has a table.
+	// Without this the server starts up, the flags engine's periodic
+	// refresh logs ERROR: relation "feature_flags" does not exist every
+	// 30s, register handlers fail to insert into users.otp_code, etc.
+	// AutoMigrate is idempotent — adds missing columns, doesn't drop or
+	// reorder anything. Safe to run on every boot. (Was previously only
+	// reachable via the standalone cmd/migrate binary which nobody ran
+	// in the Dokploy deploy pipeline.)
+	if err := models.Migrate(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+	log.Println("Database migrations applied")
 
 	// On-boot admin seed (idempotent — upserts to match env on every boot).
 	// Gated by SEED_ADMINS_ON_BOOT so prod can opt in once and the dev
