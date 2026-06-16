@@ -7,6 +7,12 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FALLBACK_VERSION } from "@/lib/platform";
+
+// Short ("v0.4") version pill that lives next to the wordmark. Tracks
+// the canonical fallback constant so we update one place per release
+// and the navbar, the download fallback, the manifest stay in sync.
+const NAV_VERSION = "v" + FALLBACK_VERSION.split(".").slice(0, 2).join(".");
 
 const navLinks = [
   { href: "/#how-it-works", label: "How it works" },
@@ -46,7 +52,7 @@ export function Navbar() {
             priority
           />
           <span className="text-[15px] font-semibold tracking-tight">JEditor</span>
-          <span className="hidden sm:inline font-mono text-[10px] text-text-muted tracking-wider">v0.3</span>
+          <span className="hidden sm:inline font-mono text-[10px] text-text-muted tracking-wider">{NAV_VERSION}</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">

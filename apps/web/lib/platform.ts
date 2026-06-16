@@ -75,15 +75,20 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // REAL latest GitHub release so the page degrades gracefully — even if
 // the API is unreachable, the button still downloads a working setup.
 // Bump this each release alongside scripts/release-desktop.ps1.
-const FALLBACK_VERSION = "0.3.0";
+// Latest version we know about for sync rendering / fallback paths.
+// Bump this each release alongside scripts/release-desktop.ps1. Used
+// by the navbar version pill, the /download page (server-fetched
+// installer_url is preferred when the API is reachable), and any
+// future "What's new" banner.
+export const FALLBACK_VERSION = "0.4.0";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-16T01:36:37Z",
+  releasedAt: "2026-06-16T09:00:00Z",
   releaseNotes:
-    "JEditor v0.3.0 — full NSIS installer with bundled WebView2, mint brand refresh, in-app auto-updater, Phase 3 curriculum (Next.js intro through Postgres+Prisma).",
+    "JEditor v0.4.0 — split-screen auth pages with editor mockup, 6-digit OTP email verification via Resend, full Phase 3 curriculum (21 lessons across 7 batches) and a hardened install path (useSync/useProgress/useCurriculum/useWorkspace now noop-stub when their providers aren't mounted).",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.
