@@ -1,0 +1,495 @@
+## Postgres + Prisma in an Express API
+
+You built REST endpoints in the previous concept against an in-memory `Map`. That's fine for the first sketch — but the moment you restart the server, all the data disappears. To ship a real API, the storage has to live somewhere durable. **PostgreSQL** is the storage. **Prisma** is the typed query layer you'll talk to it through.
+
+Phase 3 covered Prisma in the Next.js context. The good news: **Prisma works identically in Express.** The schema is the same. The migrations are the same. The queries — `db.user.findMany()`, `db.post.create({ data })` — are the same. The only thing that changes is *where you import the client* and *how you wire it into route handlers*.
+
+This concept ports everything you know about Prisma into the Express setup pattern.
+
+<Analogy>
+Express + Postgres + Prisma is **a kitchen + a walk-in pantry + a bilingual sous-chef.**
+
+The kitchen (Express) is where orders come in and dishes go out. The cook reads the order, chops, sautés, plates, sends it back.
+
+The walk-in pantry (Postgres) is where the raw ingredients are kept. Boxes labeled with categories (users, posts, orders), each box holding cards (rows) with shelves of details. Frozen and stable. Doesn't fall over when the kitchen is busy.
+
+The bilingual sous-chef (Prisma) is the human who walks between the kitchen and the pantry. When the cook says "I need three pounds of post #47 with all the tags it has," the sous-chef walks to the pantry, finds the right box, pulls the right card, brings it back in the format the cook expects.
+
+The sous-chef speaks two languages fluently:
+
+- **To the cook (your Express handler)**: TypeScript. "Here is `Post { id, title, body, author: User { name } }` — typed, autocompleted, no surprises."
+- **To the pantry (Postgres)**: SQL. "SELECT p.*, u.name FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = 47."
+
+You never speak SQL to the pantry directly. You don't have to. The sous-chef handles the translation, the connection management, the parameter escaping (SQL injection — gone), the row → object mapping.
+
+Three jobs the sous-chef does that you'd hate to do yourself:
+
+1. **Type translation.** `await db.post.findUnique({ where: { id: 47 } })` returns a typed `Post` object. Your TypeScript knows what fields it has. Renaming a column in `schema.prisma` makes the type change everywhere — every handler that referenced the old name shows a red squiggle.
+
+2. **Connection pooling.** The pantry can only handle ~100 simultaneous visitors. The sous-chef holds the connection pool — picks up a free connection, runs the query, returns it to the pool. You don't think about it.
+
+3. **Migration history.** When you decide to add a new column ("posts now have a `featured` boolean"), the sous-chef writes down the recipe for adding it to the pantry (`prisma/migrations/`), runs it, and remembers what's been applied so a new sous-chef joining the team can replay the entire history.
+
+The wiring is shockingly small. About 5 files. One `npm install`. Once it's set up, you write database-backed Express endpoints with the same handler shape — `req` in, `res` out — except now the data persists.
+</Analogy>
+
+### What you'll install + create
+
+```bash
+# Inside your Express project:
+npm install prisma --save-dev
+npm install @prisma/client
+npx prisma init
+```
+
+After this:
+
+```
+my-api/
+├── prisma/
+│   └── schema.prisma           ← single source of truth
+├── src/
+│   ├── server.js
+│   ├── lib/
+│   │   └── db.js               ← Prisma singleton (NEW)
+│   └── routes/
+│       └── posts.js            ← uses { db } from lib/db
+├── .env                         ← DATABASE_URL added by prisma init
+└── package.json
+```
+
+The schema file you'll touch every time the data model changes. `lib/db.js` you write once and rarely modify. Everything else is your routes.
+
+### Step 1 — point `.env` at a real Postgres
+
+Inside `.env`:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/myapp_dev"
+```
+
+For dev:
+- **Local Postgres** — installed natively or via Docker: `docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 -d postgres:16`.
+- **Cloud Postgres** — Neon, Supabase, Railway, all free tier. The fastest path. Sign up, copy the connection string, paste.
+
+For prod the same env var points at your production database. Different value, same code.
+
+### Step 2 — the schema
+
+Open `prisma/schema.prisma`. The default skeleton looks like this; replace the placeholder model with the resource you're building:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  posts     Post[]
+}
+
+model Post {
+  id          Int       @id @default(autoincrement())
+  title       String
+  body        String?
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  authorId    Int
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+}
+```
+
+This is identical to what you wrote in Phase 3. Prisma doesn't care whether it's serving a Next.js server component or an Express handler — same schema, same client API.
+
+### Step 3 — migrate
+
+```bash
+npx prisma migrate dev --name init
+```
+
+This:
+1. Generates `prisma/migrations/<timestamp>_init/migration.sql` with the SQL it'll run.
+2. Connects to your Postgres and runs the SQL.
+3. Regenerates the typed Prisma client.
+4. (Runs your seed script if `prisma/seed.js` exists.)
+
+Open the migration file. It's just `CREATE TABLE` statements. The file is your durable record of every schema change. Commit it.
+
+### Step 4 — the Prisma client singleton
+
+Create `src/lib/db.js`:
+
+```js
+import { PrismaClient } from "@prisma/client";
+
+// Singleton pattern. Without it, dev mode with file-watching (node
+// --watch) would spawn a new PrismaClient on every restart and you'd
+// eventually run out of Postgres connections.
+const globalForPrisma = global;
+
+export const db = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = db;
+}
+```
+
+The `globalThis` trick is the same one we used in Next.js — keeps a single PrismaClient instance across hot-reloads.
+
+For TypeScript projects, the imports become typed automatically; for plain JS the JSDoc inferred types still work in modern editors.
+
+### Step 5 — use it in handlers
+
+```js
+// src/routes/posts.js
+import { Router } from "express";
+import { z } from "zod";
+import { db } from "../lib/db.js";
+
+export const postsRouter = Router();
+
+const CreateSchema = z.object({
+  title:    z.string().min(1).max(200),
+  body:     z.string().optional(),
+  authorId: z.number().int(),
+});
+
+// LIST
+postsRouter.get("/", async (req, res) => {
+  const where = {};
+  if (req.query.published === "true")  where.published = true;
+  if (req.query.published === "false") where.published = false;
+
+  const page  = Math.max(1, Number(req.query.page ?? 1));
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 20)));
+
+  const [data, total] = await Promise.all([
+    db.post.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip:    (page - 1) * limit,
+      take:    limit,
+      select: {
+        id: true, title: true, published: true, createdAt: true,
+        author: { select: { id: true, name: true } },
+      },
+    }),
+    db.post.count({ where }),
+  ]);
+
+  res.json({
+    data,
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// READ
+postsRouter.get("/:id", async (req, res) => {
+  const post = await db.post.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { author: { select: { id: true, name: true } } },
+  });
+  if (!post) {
+    return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+  }
+  res.json({ data: post });
+});
+
+// CREATE
+postsRouter.post("/", async (req, res) => {
+  const parsed = CreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: "VALIDATION_ERROR", details: parsed.error.format() } });
+  }
+  const post = await db.post.create({ data: parsed.data });
+  res.status(201).set("Location", `/api/posts/${post.id}`).json({ data: post });
+});
+
+// PATCH
+postsRouter.patch("/:id", async (req, res) => {
+  try {
+    const post = await db.post.update({
+      where: { id: Number(req.params.id) },
+      data:  req.body,            // validate with Zod in real code!
+    });
+    res.json({ data: post });
+  } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+    }
+    throw err;
+  }
+});
+
+// DELETE
+postsRouter.delete("/:id", async (req, res) => {
+  try {
+    await db.post.delete({ where: { id: Number(req.params.id) } });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+    }
+    throw err;
+  }
+});
+```
+
+Mount it in `src/server.js`:
+
+```js
+import express from "express";
+import { postsRouter } from "./routes/posts.js";
+
+const app = express();
+app.use(express.json());
+app.use("/api/posts", postsRouter);
+app.listen(3000, () => console.log("→ http://localhost:3000"));
+```
+
+Compare to the in-memory version from the previous concept. The handler **shape is identical**. The only difference is `db.post.findMany(...)` instead of `posts.values()`. Persistence, types, and pagination via SQL come along for free.
+
+### The Prisma error codes you'll hit
+
+When something goes wrong against the database, Prisma throws errors with a `code` field. The ones you'll see most:
+
+| Code | Meaning | What to return |
+|--|--|--|
+| `P2002` | Unique constraint violated (duplicate email, etc.) | `409 Conflict` |
+| `P2003` | Foreign key constraint failed (referenced row gone) | `400 Bad Request` |
+| `P2025` | Record to update/delete not found | `404 Not Found` |
+| `P1001` | Cannot reach database server | `503 Service Unavailable` |
+
+A reusable error handler middleware to map these:
+
+```js
+// src/middleware/prisma-errors.js
+import { Prisma } from "@prisma/client";
+
+export function prismaErrors(err, req, res, next) {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: { code: "DUPLICATE", message: "Already exists" } });
+    }
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Resource not found" } });
+    }
+    if (err.code === "P2003") {
+      return res.status(400).json({ error: { code: "FK_VIOLATION", message: "Referenced record does not exist" } });
+    }
+  }
+  next(err);   // forward unhandled errors
+}
+
+// In server.js, register AFTER routes:
+app.use(prismaErrors);
+app.use(errorHandler);   // generic 500 handler
+```
+
+Now individual handlers don't have to catch Prisma errors — they `throw` and the middleware does the right thing.
+
+### Connection pooling at scale
+
+A single Express container can serve ~hundreds of concurrent requests, but each Prisma client opens a pool of Postgres connections. Default pool size is 9 (`num_physical_cpus * 2 + 1`). For most APIs this is fine.
+
+When you start scaling:
+
+- **Multiple Express containers** → each opens its own pool. 4 containers × 10 connections = 40 connections. Postgres caps at ~100 default.
+- **Serverless** (Lambda, Vercel functions) → cold-start spawns a new client per invocation. Without pooling, you hit connection limits fast.
+
+For serverless or high-concurrency, use a **connection pooler** between your code and Postgres:
+
+- **Neon** ships a built-in pooler — use the pooled connection URL (`-pooler.` in the host).
+- **Supabase** ships PgBouncer; use the pooled connection.
+- **Self-hosted** Postgres → run **PgBouncer** in front.
+
+For Express running on a long-lived container (Docker, ECS, EC2), the default pool is fine until you have a real reason to change it.
+
+### Migrations in production
+
+The dev loop:
+
+```bash
+# 1. Edit schema.prisma — add a column, a model, an index
+# 2. Generate + apply locally:
+npx prisma migrate dev --name add_post_tags
+
+# 3. Commit the new migration file in prisma/migrations/
+# 4. git push
+```
+
+In CI / production:
+
+```bash
+# Before starting the app:
+npx prisma migrate deploy
+
+# Then start:
+node src/server.js
+```
+
+`migrate deploy` applies any unapplied migrations from `prisma/migrations/`. It's idempotent — re-running doesn't re-apply. Wire it into your Docker entrypoint or your CI step before the app starts. Concrete docker-entrypoint.sh:
+
+```bash
+#!/usr/bin/env sh
+set -e
+npx prisma migrate deploy
+exec node src/server.js
+```
+
+Now every container boot brings the schema forward to whatever the codebase declares. The bug we hit in our own production deploy earlier in this curriculum — "feature_flags relation does not exist" — was exactly the case where the schema-deploy step wasn't being run. Don't repeat it.
+
+### Seeding — known starting data
+
+For local dev and CI, seed the database with predictable data:
+
+```js
+// prisma/seed.js
+import { PrismaClient } from "@prisma/client";
+const db = new PrismaClient();
+
+async function main() {
+  await db.user.upsert({
+    where:  { email: "demo@test.local" },
+    update: {},
+    create: { email: "demo@test.local", name: "Demo User" },
+  });
+}
+
+main().finally(() => db.$disconnect());
+```
+
+In `package.json`:
+
+```json
+{
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
+```
+
+Now `npx prisma db seed` runs it. `prisma migrate reset` runs it too (after wiping the dev DB).
+
+`upsert` makes the seed idempotent — running twice doesn't create duplicates. Always pattern seeds this way.
+
+### Using Prisma Studio for ad-hoc browsing
+
+```bash
+npx prisma studio
+```
+
+Opens a visual editor at `http://localhost:5555`. You can browse tables, edit rows, run filters. Beats `psql` for everyday "what's in my dev DB" questions. Use it locally; don't expose it to production.
+
+### Comparing to raw `pg`
+
+For completeness — if you'd reached for the raw `pg` library instead:
+
+```js
+import pg from "pg";
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+app.get("/api/posts/:id", async (req, res) => {
+  const result = await pool.query(
+    "SELECT p.*, u.name as author_name FROM posts p JOIN users u ON u.id = p.author_id WHERE p.id = $1",
+    [req.params.id],
+  );
+  if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
+  res.json({ data: result.rows[0] });
+});
+```
+
+Works. Faster runtime (no Prisma overhead). But:
+
+- You write SQL by hand. Every query.
+- You write SQL injection protection by hand (use parameterised queries, $1 / $2, never string concat).
+- You write the type for what `rows[0]` is by hand.
+- You write the migration runner by hand (or use a separate tool like `node-pg-migrate` / `dbmate`).
+- You write the connection pooling by hand.
+
+For learning the boundary between Node and Postgres, `pg` is great. For shipping, Prisma is what 90% of teams reach for. The trade-off is clear: Prisma's overhead in exchange for safety, types, schema discipline, and migrations.
+
+We use Prisma for the rest of Phase 4. If you're curious about raw `pg`, build a small parallel project — it'll teach you what Prisma is doing for you behind the scenes.
+
+<ExampleProject
+  src="prisma-setup"
+  title="The full Express + Prisma setup, one screen"
+  description="Six tabs — terminal, .env, schema.prisma, lib/db.js, routes/posts.js, server.js — showing the complete shape of an Express API with Prisma. Annotated; usable as a starter template."
+/>
+
+<Exercise
+  title="Swap your in-memory CRUD for Prisma + Postgres"
+  starter={`Continue from the in-memory Express CRUD you built in the previous
+concept. Make it persist.
+
+  1. Get a Postgres database. Easiest path: Neon free tier
+     (https://neon.tech) — sign up with GitHub, new project, copy
+     the connection string.
+
+  2. In your Express project:
+       npm install prisma --save-dev
+       npm install @prisma/client
+       npx prisma init
+
+  3. Open the .env that prisma init created. Replace the
+     DATABASE_URL with the one you got from Neon.
+
+  4. Edit prisma/schema.prisma. Add a Post model that matches the
+     shape of your in-memory data:
+       model Post {
+         id        Int      @id @default(autoincrement())
+         title     String
+         body      String?
+         published Boolean  @default(false)
+         createdAt DateTime @default(now())
+       }
+
+  5. npx prisma migrate dev --name init
+     Read the generated migration file in prisma/migrations/.
+
+  6. Create src/lib/db.js with the singleton client (from the concept).
+
+  7. Update each handler to use db.post instead of the Map:
+       - LIST    → db.post.findMany() + db.post.count()
+       - READ    → db.post.findUnique()
+       - CREATE  → db.post.create()
+       - PATCH   → db.post.update() (wrap in try/catch for P2025)
+       - DELETE  → db.post.delete() (wrap in try/catch for P2025)
+
+  8. Test all five with curl. Create a post, list, read by id,
+     toggle published, delete. Restart the server — your data is
+     STILL THERE. That's the Postgres part working.
+
+  9. Open Prisma Studio:
+       npx prisma studio
+     Browse your posts table. Add a row directly via the UI. Hit
+     curl http://localhost:3000/api/posts — it shows up. Two ways
+     to write to the DB, one source of truth.
+
+ 10. Add the prismaErrors middleware from the concept to your
+     server. Verify hitting GET /api/posts/9999 returns a clean 404
+     instead of a 500.
+
+Bonus: write a prisma/seed.js that inserts 10 sample posts and wire
+it up in package.json's "prisma.seed". Run npx prisma migrate reset
+— your DB wipes and re-seeds in 2 seconds. Now you have a
+reproducible starting state for tests.
+
+You now have what 95% of production Node APIs run: Express +
+Prisma + Postgres. The next batch (jwt-sessions, authorization,
+input-validation) wraps auth + security around this shape.`}
+/>

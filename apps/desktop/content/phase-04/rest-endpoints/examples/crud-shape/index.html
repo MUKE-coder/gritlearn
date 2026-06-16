@@ -1,0 +1,262 @@
+<!--
+  REST CRUD reference card. Five tabs (LIST / READ / CREATE / PATCH /
+  DELETE) showing the canonical request shape, status code, and
+  response shape for each endpoint. Use as a checklist when laying
+  out a new REST resource.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The five REST endpoints — reference card</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1020px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .tabs { display: flex; gap: 0.35rem; margin: 1rem 0; flex-wrap: wrap; }
+      .tabs button {
+        padding: 0.55rem 0.95rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+        font-family: ui-monospace, monospace;
+      }
+      .tabs button.active {
+        background: #15803d; color: #fff; border-color: #15803d;
+      }
+      .tabs button .method {
+        font-size: 0.66rem; padding: 1px 6px; border-radius: 3px;
+        background: #f4f4f5; color: #71717a; margin-right: 0.35rem;
+        font-weight: 700;
+      }
+      .tabs button.active .method { background: #fde68a; color: #92400e; }
+      .tabs button.get  .method { background: #dbeafe; color: #1e40af; }
+      .tabs button.post .method { background: #dcfce7; color: #166534; }
+      .tabs button.patch .method{ background: #fef3c7; color: #92400e; }
+      .tabs button.delete .method{ background: #fee2e2; color: #7f1d1d; }
+
+      .grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;
+      }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .url     { color: #c084fc; }
+      .ok      { color: #4ade80; }
+      .fail    { color: #f87171; }
+
+      .annot {
+        margin-top: 0.7rem; font-size: 0.86rem; padding: 0.6rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      .status-row {
+        display: flex; gap: 0.5rem; align-items: center; margin: 0.6rem 0;
+      }
+      .status-badge {
+        font-family: ui-monospace, monospace; font-size: 0.8rem;
+        padding: 4px 10px; border-radius: 999px; font-weight: 700;
+      }
+      .status-badge.s2 { background: #dcfce7; color: #166534; }
+      .status-badge.s4 { background: #fee2e2; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>The five REST endpoints — reference card</h1>
+    <p>Resource: <code>posts</code>. Click any endpoint to see the request shape, the status code, and the response shape.</p>
+
+    <div class="tabs" id="tabs">
+      <button data-id="list"   class="get active"><span class="method">GET</span>/api/posts</button>
+      <button data-id="read"   class="get"><span class="method">GET</span>/api/posts/:id</button>
+      <button data-id="create" class="post"><span class="method">POST</span>/api/posts</button>
+      <button data-id="patch"  class="patch"><span class="method">PATCH</span>/api/posts/:id</button>
+      <button data-id="delete" class="delete"><span class="method">DELETE</span>/api/posts/:id</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Request</h2>
+        <pre id="req"></pre>
+      </div>
+      <div class="col">
+        <h2>Response</h2>
+        <div class="status-row" id="status"></div>
+        <pre id="resp"></pre>
+      </div>
+    </div>
+
+    <div class="annot" id="annot"></div>
+
+    <script>
+      const endpoints = {
+        list: {
+          req:
+`<span class="keyword">GET</span> <span class="url">/api/posts?published=true&page=2&limit=20</span>
+<span class="keyword">Authorization:</span> Bearer eyJhbGc...
+<span class="keyword">Accept:</span> application/json`,
+          statusKind: "s2",
+          statusCode: "200",
+          statusText: "OK",
+          resp:
+`{
+  <span class="string">"data"</span>: [
+    {
+      <span class="string">"id"</span>: <span class="number">47</span>,
+      <span class="string">"title"</span>: <span class="string">"Express in 2026"</span>,
+      <span class="string">"published"</span>: <span class="keyword">true</span>,
+      <span class="string">"createdAt"</span>: <span class="string">"2026-06-16T10:00:00Z"</span>
+    },
+    <span class="comment">/* ... 19 more ... */</span>
+  ],
+  <span class="string">"meta"</span>: {
+    <span class="string">"page"</span>: <span class="number">2</span>,
+    <span class="string">"limit"</span>: <span class="number">20</span>,
+    <span class="string">"total"</span>: <span class="number">147</span>,
+    <span class="string">"totalPages"</span>: <span class="number">8</span>
+  }
+}`,
+          annot: "Lists are paginated. Include meta { page, limit, total, totalPages } so the client can render a 'Next' button correctly. Filter via query params; sort via ?sort=field:dir.",
+        },
+        read: {
+          req:
+`<span class="keyword">GET</span> <span class="url">/api/posts/47</span>
+<span class="keyword">Authorization:</span> Bearer eyJhbGc...
+<span class="keyword">Accept:</span> application/json`,
+          statusKind: "s2",
+          statusCode: "200",
+          statusText: "OK",
+          resp:
+`{
+  <span class="string">"data"</span>: {
+    <span class="string">"id"</span>: <span class="number">47</span>,
+    <span class="string">"title"</span>: <span class="string">"Express in 2026"</span>,
+    <span class="string">"body"</span>: <span class="string">"Long form content..."</span>,
+    <span class="string">"published"</span>: <span class="keyword">true</span>,
+    <span class="string">"author"</span>: { <span class="string">"id"</span>: <span class="number">12</span>, <span class="string">"name"</span>: <span class="string">"Lia"</span> },
+    <span class="string">"createdAt"</span>: <span class="string">"2026-06-16T10:00:00Z"</span>
+  }
+}
+
+<span class="comment">// or 404 if /api/posts/9999</span>
+<span class="comment">// {</span>
+<span class="comment">//   "error": { "code": "NOT_FOUND", "message": "Post not found" }</span>
+<span class="comment">// }</span>`,
+          annot: "Read-one returns 404 when the ID doesn't exist (NOT 200 with null body). Include related resources (author here) when they make sense for the consumer.",
+        },
+        create: {
+          req:
+`<span class="keyword">POST</span> <span class="url">/api/posts</span>
+<span class="keyword">Authorization:</span> Bearer eyJhbGc...
+<span class="keyword">Content-Type:</span> application/json
+
+{
+  <span class="string">"title"</span>: <span class="string">"My new post"</span>,
+  <span class="string">"body"</span>:  <span class="string">"Hello world"</span>
+}`,
+          statusKind: "s2",
+          statusCode: "201",
+          statusText: "Created",
+          resp:
+`<span class="keyword">Location:</span> /api/posts/48
+
+{
+  <span class="string">"data"</span>: {
+    <span class="string">"id"</span>: <span class="number">48</span>,
+    <span class="string">"title"</span>: <span class="string">"My new post"</span>,
+    <span class="string">"body"</span>:  <span class="string">"Hello world"</span>,
+    <span class="string">"published"</span>: <span class="keyword">false</span>,
+    <span class="string">"createdAt"</span>: <span class="string">"2026-06-16T12:30:00Z"</span>
+  }
+}
+
+<span class="comment">// or 400 if invalid body</span>
+<span class="comment">// {</span>
+<span class="comment">//   "error": {</span>
+<span class="comment">//     "code": "VALIDATION_ERROR",</span>
+<span class="comment">//     "details": { ... Zod issues ... }</span>
+<span class="comment">//   }</span>
+<span class="comment">// }</span>`,
+          annot: "Status 201 (Created), NOT 200. Include a Location header pointing to the new resource. Return the created object so the client doesn't have to re-fetch. 400 for validation errors with details.",
+        },
+        patch: {
+          req:
+`<span class="keyword">PATCH</span> <span class="url">/api/posts/47</span>
+<span class="keyword">Authorization:</span> Bearer eyJhbGc...
+<span class="keyword">Content-Type:</span> application/json
+
+{
+  <span class="string">"published"</span>: <span class="keyword">true</span>
+}
+
+<span class="comment">// Note: only the fields being CHANGED. Unrelated</span>
+<span class="comment">// fields (title, body) stay as they were.</span>`,
+          statusKind: "s2",
+          statusCode: "200",
+          statusText: "OK",
+          resp:
+`{
+  <span class="string">"data"</span>: {
+    <span class="string">"id"</span>: <span class="number">47</span>,
+    <span class="string">"title"</span>: <span class="string">"Express in 2026"</span>,
+    <span class="string">"body"</span>:  <span class="string">"Long form..."</span>,
+    <span class="string">"published"</span>: <span class="keyword">true</span>,        <span class="comment">// ← changed</span>
+    <span class="string">"updatedAt"</span>: <span class="string">"2026-06-16T12:35:00Z"</span> <span class="comment">// ← bumped</span>
+  }
+}`,
+          annot: "PATCH = partial update. Client sends only the fields it wants to change; server merges. Return the FULL updated resource so the client can refresh its cache. Use PUT only when you genuinely mean 'overwrite everything'.",
+        },
+        delete: {
+          req:
+`<span class="keyword">DELETE</span> <span class="url">/api/posts/47</span>
+<span class="keyword">Authorization:</span> Bearer eyJhbGc...`,
+          statusKind: "s2",
+          statusCode: "204",
+          statusText: "No Content",
+          resp:
+`<span class="comment">// No response body.</span>
+<span class="comment">// Status 204 means "succeeded, nothing to return".</span>
+
+<span class="comment">// Some teams return 200 with the deleted</span>
+<span class="comment">// resource so the client can show a "undo"</span>
+<span class="comment">// affordance. Either is OK; pick one and</span>
+<span class="comment">// be consistent.</span>
+
+<span class="comment">// 404 if the ID didn't exist:</span>
+<span class="comment">// {</span>
+<span class="comment">//   "error": { "code": "NOT_FOUND", "message": "Post not found" }</span>
+<span class="comment">// }</span>`,
+          annot: "Delete with 204 + no body. Idempotent — repeatedly DELETE-ing the same ID after it's gone should give 404 (the modern convention) rather than 'silently succeed'.",
+        },
+      };
+
+      function show(id) {
+        const e = endpoints[id];
+        document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+        document.getElementById("req").innerHTML = e.req;
+        document.getElementById("status").innerHTML = `
+          <span class="status-badge ${e.statusKind}">${e.statusCode} ${e.statusText}</span>
+        `;
+        document.getElementById("resp").innerHTML = e.resp;
+        document.getElementById("annot").innerHTML = `<strong>Convention:</strong> ${e.annot}`;
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        show(b.dataset.id);
+      });
+
+      show("list");
+    </script>
+  </body>
+</html>

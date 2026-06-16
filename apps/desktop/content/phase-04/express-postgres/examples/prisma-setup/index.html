@@ -1,0 +1,240 @@
+<!--
+  Six-tab view of the complete Express + Prisma + Postgres setup.
+  Click each tab to see one of the files: terminal commands, .env,
+  schema.prisma, lib/db.js, routes/posts.js, server.js. Use as a
+  starter template or a "where does which thing go" reference.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Express + Prisma setup — one screen</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .tabs { display: flex; gap: 0.35rem; margin: 1rem 0; flex-wrap: wrap; }
+      .tab {
+        padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem;
+        font-family: ui-monospace, monospace;
+      }
+      .tab.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; min-height: 24rem; }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.79rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .type    { color: #c084fc; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .annot   {
+        margin-top: 0.7rem; font-size: 0.84rem; padding: 0.65rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      .file-tag {
+        display: inline-block; font-family: ui-monospace, monospace; font-size: 0.72rem;
+        color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Express + Prisma + Postgres — one screen</h1>
+    <p>Six tabs covering the complete setup. Click each to see one file in context.</p>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-id="terminal">1 — Terminal</button>
+      <button class="tab" data-id="env">2 — .env</button>
+      <button class="tab" data-id="schema">3 — schema.prisma</button>
+      <button class="tab" data-id="db">4 — lib/db.js</button>
+      <button class="tab" data-id="routes">5 — routes/posts.js</button>
+      <button class="tab" data-id="server">6 — server.js</button>
+    </div>
+
+    <div class="panel" id="panel"></div>
+
+    <script>
+      const files = {
+        terminal: {
+          tag: "Terminal — once per project",
+          code:
+`<span class="comment"># 1. Get a Postgres URL (Neon, Supabase, Railway — free tier).</span>
+
+<span class="comment"># 2. Install Prisma + the runtime client.</span>
+npm install prisma --save-dev
+npm install @prisma/client
+
+<span class="comment"># 3. Scaffold prisma/schema.prisma + .env</span>
+npx prisma init
+
+<span class="comment"># 4. Paste your DATABASE_URL into .env, edit schema.prisma,</span>
+<span class="comment">#    then create the first migration:</span>
+npx prisma migrate dev --name init
+
+<span class="comment"># 5. Browse data visually (optional, dev only):</span>
+npx prisma studio`,
+          annot: "Six commands from empty project to typed Express + Postgres API. Steps 1-3 are once-per-project; step 4 repeats every schema change.",
+        },
+        env: {
+          tag: ".env — gitignored",
+          code:
+`<span class="comment"># Connection string from Neon / Supabase / Railway / local Postgres.</span>
+<span class="comment"># Prisma reads this. The runtime client uses it; prisma migrate uses it.</span>
+
+DATABASE_URL=<span class="string">"postgresql://user:password@host:5432/myapp?sslmode=require"</span>
+
+<span class="comment"># For pooled-vs-direct on Neon (production):</span>
+<span class="comment"># DATABASE_URL=...pooler...   (runtime queries)</span>
+<span class="comment"># DIRECT_URL=...primary...    (migrations)</span>`,
+          annot: "Never commit. Add to .gitignore. Different value per environment (dev / staging / prod). Same code reads from process.env.DATABASE_URL everywhere.",
+        },
+        schema: {
+          tag: "prisma/schema.prisma",
+          code:
+`<span class="keyword">generator</span> client {
+  provider = <span class="string">"prisma-client-js"</span>
+}
+
+<span class="keyword">datasource</span> db {
+  provider = <span class="string">"postgresql"</span>
+  url      = <span class="keyword">env</span>(<span class="string">"DATABASE_URL"</span>)
+}
+
+<span class="keyword">model</span> <span class="type">Post</span> {
+  id          <span class="type">Int</span>       @id @default(autoincrement())
+  title       <span class="type">String</span>
+  body        <span class="type">String</span>?
+  published   <span class="type">Boolean</span>   @default(<span class="keyword">false</span>)
+  publishedAt <span class="type">DateTime</span>?
+  createdAt   <span class="type">DateTime</span>  @default(now())
+  updatedAt   <span class="type">DateTime</span>  @updatedAt
+
+  authorId    <span class="type">Int</span>
+  author      <span class="type">User</span>      @relation(fields: [authorId], references: [id], onDelete: <span class="type">Cascade</span>)
+
+  @@index([authorId])
+}
+
+<span class="keyword">model</span> <span class="type">User</span> {
+  id        <span class="type">Int</span>      @id @default(autoincrement())
+  email     <span class="type">String</span>   @unique
+  name      <span class="type">String</span>
+  createdAt <span class="type">DateTime</span> @default(now())
+
+  posts     <span class="type">Post</span>[]
+}`,
+          annot: "Single source of truth for tables. Run `npx prisma migrate dev` to apply changes; the generated SQL lands in prisma/migrations/. Same syntax as the Phase 3 Prisma — identical between Next.js and Express.",
+        },
+        db: {
+          tag: "src/lib/db.js",
+          code:
+`<span class="keyword">import</span> { PrismaClient } <span class="keyword">from</span> <span class="string">"@prisma/client"</span>;
+
+<span class="comment">// Singleton pattern. Without this, node --watch would spawn a new</span>
+<span class="comment">// PrismaClient on every restart and exhaust the Postgres pool.</span>
+<span class="keyword">const</span> globalForPrisma = <span class="keyword">global</span>;
+
+<span class="keyword">export const</span> db = globalForPrisma.prisma ?? <span class="keyword">new</span> PrismaClient();
+
+<span class="keyword">if</span> (process.env.NODE_ENV !== <span class="string">"production"</span>) {
+  globalForPrisma.prisma = db;
+}`,
+          annot: "Write once. Import { db } anywhere on the server side. The globalThis trick is the same one used in Next.js — survives hot reloads in dev.",
+        },
+        routes: {
+          tag: "src/routes/posts.js",
+          code:
+`<span class="keyword">import</span> { Router } <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"../lib/db.js"</span>;
+
+<span class="keyword">export const</span> postsRouter = Router();
+
+<span class="keyword">const</span> CreateSchema = z.object({
+  title:    z.string().min(<span class="number">1</span>).max(<span class="number">200</span>),
+  body:     z.string().optional(),
+  authorId: z.number().int(),
+});
+
+postsRouter.get(<span class="string">"/"</span>, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> [data, total] = <span class="keyword">await</span> <span class="type">Promise</span>.all([
+    db.post.findMany({
+      orderBy: { createdAt: <span class="string">"desc"</span> },
+      take: <span class="number">20</span>,
+      <span class="keyword">include</span>: { author: { select: { id: <span class="keyword">true</span>, name: <span class="keyword">true</span> } } },
+    }),
+    db.post.count(),
+  ]);
+  res.json({ data, meta: { total } });
+});
+
+postsRouter.get(<span class="string">"/:id"</span>, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> post = <span class="keyword">await</span> db.post.findUnique({
+    where: { id: <span class="type">Number</span>(req.params.id) },
+  });
+  <span class="keyword">if</span> (!post) <span class="keyword">return</span> res.status(<span class="number">404</span>).json({ error: { code: <span class="string">"NOT_FOUND"</span> } });
+  res.json({ data: post });
+});
+
+postsRouter.post(<span class="string">"/"</span>, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> parsed = CreateSchema.safeParse(req.body);
+  <span class="keyword">if</span> (!parsed.success) <span class="keyword">return</span> res.status(<span class="number">400</span>).json({ error: { code: <span class="string">"VALIDATION"</span>, details: parsed.error.format() } });
+  <span class="keyword">const</span> post = <span class="keyword">await</span> db.post.create({ data: parsed.data });
+  res.status(<span class="number">201</span>).set(<span class="string">"Location"</span>, \`/api/posts/\${post.id}\`).json({ data: post });
+});`,
+          annot: "The handlers are the same shape as in the in-memory CRUD — just db.post.findMany() instead of an in-memory Map. The Prisma client returns typed objects; the Zod schema validates inputs at the boundary.",
+        },
+        server: {
+          tag: "src/server.js",
+          code:
+`<span class="keyword">import</span> express <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> { postsRouter } <span class="keyword">from</span> <span class="string">"./routes/posts.js"</span>;
+<span class="keyword">import</span> { prismaErrors } <span class="keyword">from</span> <span class="string">"./middleware/prisma-errors.js"</span>;
+
+<span class="keyword">const</span> app = express();
+app.use(express.json());
+
+<span class="keyword">app.use(<span class="string">"/api/posts"</span>, postsRouter);</span>
+
+<span class="comment">// Maps Prisma error codes (P2002 → 409, P2025 → 404, etc) to</span>
+<span class="comment">// HTTP responses, so handlers don't have to try/catch them.</span>
+app.use(prismaErrors);
+
+<span class="comment">// Generic catch-all 500 handler (must be LAST).</span>
+app.use((err, req, res, next) =&gt; {
+  console.error(err);
+  res.status(<span class="number">500</span>).json({ error: { code: <span class="string">"INTERNAL"</span>, message: <span class="string">"Internal server error"</span> } });
+});
+
+app.listen(<span class="number">3000</span>, () =&gt; <span class="keyword">console</span>.log(<span class="string">"→ http://localhost:3000"</span>));`,
+          annot: "Standard Express bootstrap. Body parser → routers → Prisma error middleware → generic 500 handler. The whole API surface is a handful of routers; the data layer is one db import.",
+        },
+      };
+
+      function show(id) {
+        const f = files[id];
+        document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+        document.getElementById("panel").innerHTML = `
+          <div class="file-tag">${f.tag}</div>
+          <pre>${f.code}</pre>
+          <div class="annot">${f.annot}</div>
+        `;
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        show(b.dataset.id);
+      });
+
+      show("terminal");
+    </script>
+  </body>
+</html>

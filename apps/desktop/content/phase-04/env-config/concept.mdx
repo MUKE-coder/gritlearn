@@ -1,0 +1,347 @@
+## Environment config and dotenv
+
+Your Express app reads from the outside world: the Postgres URL, the JWT signing secret, the third-party API keys (Stripe, OpenAI, Resend), the SMTP credentials. None of these belong in your repo. They're per-environment (different in dev, staging, prod), they're sensitive (committing them is a security incident), and they change without code changes.
+
+Phase 3 covered the same concept for Next.js (`env-secrets`). The same rules apply to Express — same threat model, same `.env` file convention, same `NEXT_PUBLIC_*`-style boundary (with subtle differences). The mechanics are slightly different and worth covering explicitly.
+
+This concept is about how Express + Node read env vars, how to validate them at boot, how to keep secrets out of the repo, and the production wiring.
+
+<Analogy>
+The env file is **a sealed envelope you keep next to your code, never inside it.**
+
+Your code is the recipe — public, shared, gets pushed to GitHub, gets read by future-you. The recipe says things like "use the secret ingredient" but doesn't say *what* the secret ingredient is.
+
+The envelope is what holds the secret ingredient. It travels with the chef — to the home kitchen for dev, to the test kitchen for staging, to the restaurant for production. Each location's envelope holds a *different* value of the same labeled fields. The recipe just says "open the envelope and look up `STRIPE_SECRET_KEY`."
+
+Three rules of envelope discipline:
+
+1. **The envelope never enters the repo.** `.env` is gitignored — always. If it ever shows up in git, treat the contents as leaked: rotate immediately.
+
+2. **The shape of the envelope is documented.** `.env.example` lives in the repo and contains every field name with a placeholder value. A new developer copies `.env.example` to `.env.local`, fills in the blanks, and is ready.
+
+3. **The code validates the envelope at boot.** Before the server starts taking requests, it checks that every required env var is set. Missing key? Fail fast at startup, NOT during the third request at 3am when someone hits a route that needs Stripe.
+
+The threat model is simple: a secret committed to git is **gone**. Even if you delete the commit. Public repos are scraped, archives exist, build logs leak. Rotate every key the moment you realize it might have leaked.
+</Analogy>
+
+### Where envs live, per environment
+
+- **Local dev**: `.env` (or `.env.local` if your tooling prefers that name). Gitignored. Each developer has their own.
+- **Staging / preview**: set in the hosting platform's UI (Railway, Render, Fly, Vercel, Dokploy).
+- **Production**: same place as staging but with production values. Often *different* values (real Stripe `sk_live_...` vs `sk_test_...`).
+- **CI**: set in GitHub Actions secrets / your CI's secret store. Test versions.
+
+Each is independent. A secret added to `.env` doesn't ride along to staging — you set it again there.
+
+### The `dotenv` package — loading `.env` into `process.env`
+
+Node doesn't auto-load `.env` files. You import the `dotenv` package early in your boot:
+
+```bash
+npm install dotenv
+```
+
+```js
+// src/server.js — at the very top
+import "dotenv/config";
+
+// Now process.env.DATABASE_URL etc are populated from .env
+```
+
+The `dotenv/config` side-effect import reads `.env` from the current working directory and merges its keys into `process.env`. After that line, every `process.env.X` in the rest of your code can be read.
+
+Two important notes:
+
+- **Order matters.** Anything importing modules that read env vars *during their module-level setup* (like `new PrismaClient()` if it reads env at import time) needs `dotenv/config` to run first. The `import "dotenv/config"` at the top of `server.js` covers this because imports run before any code below them.
+- **In production**, env vars are set by the hosting platform — there's no `.env` file. `dotenv/config` simply finds no file and continues silently. Your code runs the same either way.
+
+Modern alternative: **Node 20.6+ has built-in `--env-file` flag**:
+
+```bash
+node --env-file=.env src/server.js
+```
+
+No `dotenv` package needed. The flag reads the file and sets `process.env` before any user code runs. Cleaner. Use this if you're on Node 20.6+; fall back to `dotenv` otherwise.
+
+### `.env` file syntax
+
+```env
+# Comments start with #
+DATABASE_URL=postgresql://user:pass@localhost:5432/myapp_dev
+JWT_SECRET=long-random-string-min-32-chars
+STRIPE_SECRET_KEY=sk_test_xyz123
+PORT=3000
+
+# Spaces around = work too but most teams skip them
+LOG_LEVEL = info
+
+# Quotes are optional but useful if the value has spaces
+WELCOME_MESSAGE="Hello, world!"
+
+# Multi-line values via \n (rare):
+FOO="line one\nline two"
+```
+
+Each line is `KEY=VALUE`. No commas, no semicolons. `dotenv` parses it permissively — single quotes, double quotes, no quotes all work for simple values. For complex values, quote them.
+
+### Validate at boot — fail loudly, fail early
+
+Code that reads `process.env.DATABASE_URL` and gets `undefined` because you typo'd the key — that's a 3am bug. Worse: it might "work" through a hundred routes that don't need that env, then explode on the one that does.
+
+**Validate every env var your code reads, at boot.** Zod is the de facto pattern in 2026:
+
+```js
+// src/lib/env.js
+import { z } from "zod";
+
+const Schema = z.object({
+  // Runtime
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  PORT:     z.coerce.number().default(3000),
+
+  // Database
+  DATABASE_URL: z.string().url(),
+
+  // Auth
+  JWT_SECRET:           z.string().min(32, "JWT_SECRET must be at least 32 chars"),
+  JWT_ACCESS_EXPIRY:    z.string().default("15m"),
+  JWT_REFRESH_EXPIRY:   z.string().default("7d"),
+
+  // Third-party APIs
+  STRIPE_SECRET_KEY:   z.string().startsWith("sk_"),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
+  RESEND_API_KEY:      z.string().min(1).optional(),
+
+  // Public URL (for redirect URLs, email links, etc.)
+  APP_URL: z.string().url(),
+
+  // CORS
+  CORS_ORIGINS: z.string().transform((s) => s.split(",").map((o) => o.trim())),
+});
+
+const parsed = Schema.safeParse(process.env);
+if (!parsed.success) {
+  console.error("❌ Invalid environment variables:");
+  console.error(parsed.error.format());
+  process.exit(1);
+}
+
+export const env = parsed.data;
+```
+
+Now elsewhere:
+
+```js
+import { env } from "./lib/env.js";
+
+// Strongly typed, validated.
+console.log(`Listening on port ${env.PORT}`);
+const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+```
+
+If you forget `JWT_SECRET` in `.env`, the server **refuses to start** with a clear error message pointing exactly at the field. No mysterious null pointer at 3am.
+
+### `process.env` — what's on it
+
+Node populates `process.env` from three sources, in order:
+
+1. **The shell environment** when Node was started (`PORT=8080 node server.js` → `process.env.PORT === "8080"`).
+2. **`dotenv` or `--env-file`** loading a `.env` file.
+3. **Anything your code sets** at runtime (`process.env.LOG_LEVEL = "debug"` — possible but rare).
+
+Sources are merged into a single `process.env` object. There's no per-source visibility — once a value lands there, you can't tell where it came from.
+
+Everything on `process.env` is a **string**. Even `PORT=3000` becomes `"3000"`. Always convert: `Number(process.env.PORT)` or `z.coerce.number()` in the Zod schema.
+
+### `NODE_ENV` — special-cased everywhere
+
+By convention, `NODE_ENV` is set to one of `"development"`, `"production"`, `"test"`. Many libraries change behavior based on it:
+
+- **Express** turns off detailed error stack traces in `production`.
+- **React** runs production-optimized builds.
+- **Prisma** logs queries in `development` if you opt in.
+- **Lots of tools** assume `NODE_ENV=production` is set when deploying.
+
+Always set it explicitly in production:
+
+```bash
+NODE_ENV=production node src/server.js
+```
+
+Or in your `package.json`:
+
+```json
+{
+  "scripts": {
+    "start": "NODE_ENV=production node src/server.js",
+    "dev":   "NODE_ENV=development node --watch src/server.js"
+  }
+}
+```
+
+(On Windows the cross-platform way is via `cross-env`: `npm install -D cross-env`, then `"start": "cross-env NODE_ENV=production node src/server.js"`.)
+
+### `.env.example` — onboarding's best friend
+
+Commit this. It's not secret. It's the shape:
+
+```env
+# .env.example — copy this to .env and fill in real values
+
+# Database (Neon or local Postgres)
+DATABASE_URL=postgresql://user:pass@localhost:5432/myapp_dev
+
+# JWT signing — generate one: openssl rand -base64 32
+JWT_SECRET=
+
+# Stripe (https://dashboard.stripe.com/test/apikeys)
+STRIPE_SECRET_KEY=sk_test_
+STRIPE_WEBHOOK_SECRET=whsec_
+
+# Resend (https://resend.com — for transactional email)
+RESEND_API_KEY=
+
+# Public URL — used for email links + redirects
+APP_URL=http://localhost:3000
+
+# CORS — comma-separated list of allowed origins
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+```
+
+A new contributor:
+
+```bash
+cp .env.example .env
+# edit .env to fill in real values
+npm install
+npm run dev
+```
+
+Day-1 onboarding ritual. No "ask someone for the keys on Slack" friction.
+
+### Where each env source lives
+
+| Where | What | Committed? |
+|--|--|--|
+| `.env` | Real secrets for dev | **No** (gitignored) |
+| `.env.example` | Shape + placeholder values | **Yes** |
+| `.env.local` | Optional override for your machine | **No** (gitignored) |
+| `.env.production` | Sometimes prod defaults | **No** (gitignored) |
+| Hosting platform UI | Real prod secrets | (lives outside repo) |
+
+The `.gitignore` should cover all forms:
+
+```gitignore
+.env
+.env.*
+!.env.example
+```
+
+The `!.env.example` re-includes the example so it's committed despite the wildcard.
+
+### Secret rotation — the 5-minute habit
+
+Secret rotation = generate a new value and swap it in. You should be able to rotate any secret in five minutes with zero downtime.
+
+The drill:
+
+1. **Generate** a new key in the third-party dashboard.
+2. **Add** the new value to your hosting platform's env (alongside the old, if your code can read both).
+3. **Deploy** — new requests use the new key.
+4. **Wait** — let in-flight requests finish.
+5. **Revoke** the old key.
+
+Some keys are harder. `JWT_SECRET` invalidates every active session because it's used to sign tokens. For those, plan a maintenance window or build dual-secret support (try the new one first, fall back to the old one for a week, then drop the old).
+
+### What CANNOT go in env vars
+
+- **Per-user data.** Env vars are app-wide. User-specific config (preferences, tokens) goes in the database.
+- **Anything that needs to be reloaded without restart.** Env vars are read at boot. To change a value mid-runtime, restart the process (or use a config system that does live reload — but env vars don't).
+- **Large blobs.** Don't stuff a 200 KB JSON config in an env var. Use a file mount or a secrets manager (AWS Secrets Manager, HashiCorp Vault) for that.
+
+### Secrets managers — the next step up
+
+For high-stakes prod, env vars in a hosting platform's UI might not be enough. **Secrets managers** (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault, Doppler) add:
+
+- **Audit logs** — who read what, when.
+- **Automatic rotation** — secrets rotate on a schedule without code changes.
+- **Access control** — only specific roles can read specific secrets.
+- **Versioning** — instant rollback if a rotation breaks something.
+
+For a side project or early startup, hosting-platform env UI is fine. When you're shipping payments or healthcare and the SOC2 audit is coming, secrets managers become necessary.
+
+### Anti-patterns to skip
+
+- **Hard-coding "just for a test."** Hard-coded values get committed.
+- **Sharing `.env` over Slack or email.** Use a sanctioned share tool (1Password Share, Vercel's "share env" UI). Those have expiry.
+- **Committing `.env` files** via `git add -A`. Check `git status` before every commit.
+- **Letting `NODE_ENV` drift.** If your prod doesn't set `NODE_ENV=production`, Express runs in dev mode in prod — verbose errors leaked to clients, slow request paths. Confirmed via `console.log(process.env.NODE_ENV)`.
+- **One giant `.env` with 200 keys.** Group them by purpose, comment them, maintain a `.env.example` that mirrors the structure.
+
+<ExampleProject
+  src="env-layers"
+  title="Where each env value comes from"
+  description="Interactive trace — pick an env var name and the trace shows: which file/source provided the value, what the Zod schema validates, and what the running code sees. Visualises the .env → process.env → Zod → app.locals.env pipeline."
+/>
+
+<Exercise
+  title="Add a validated env module to your Express API"
+  starter={`Continue from the Express + Prisma API you built in the previous
+concept. Add boot-time env validation.
+
+  1. Decide what env vars your app reads. Probably:
+       DATABASE_URL — pointing at Neon / local Postgres
+       PORT         — defaults 3000
+       NODE_ENV     — development | production | test
+       JWT_SECRET   — for the auth concept next
+       APP_URL      — for OAuth callbacks etc.
+
+  2. Create .env.example committing the placeholders:
+       DATABASE_URL=postgresql://user:pass@localhost:5432/myapp_dev
+       PORT=3000
+       NODE_ENV=development
+       JWT_SECRET=
+       APP_URL=http://localhost:3000
+
+  3. Generate a JWT_SECRET:
+       openssl rand -base64 32
+     Add it to your .env (NOT .env.example).
+
+  4. Confirm .env is in .gitignore. (npx create-express-app might
+     not have included this — add it.)
+
+  5. npm install zod   (if not already installed)
+
+  6. Create src/lib/env.js with the Zod schema from the concept.
+     Make DATABASE_URL required, PORT optional with default 3000,
+     JWT_SECRET min length 32.
+
+  7. In server.js, import { env } from './lib/env.js' at the top.
+     Use env.PORT instead of process.env.PORT in app.listen.
+     Use env.NODE_ENV instead of process.env.NODE_ENV anywhere.
+
+  8. Test the validator:
+     - Delete JWT_SECRET from .env. Run the server. Should fail
+       with a clear Zod error.
+     - Set JWT_SECRET to something short ("abc"). Run again. Zod
+       fails with "min 32 chars" error.
+     - Restore a valid JWT_SECRET. Server starts cleanly.
+
+  9. (Optional) Switch from dotenv to Node's built-in --env-file:
+       package.json: "dev": "node --env-file=.env --watch src/server.js"
+     Verify it still works (you can drop the dotenv package if you
+     don't need to fall back).
+
+ 10. Bonus — add a /api/health endpoint that returns:
+       { status: "ok", node_env: env.NODE_ENV, version: "1.0.0" }
+     Production deployment platforms (Render, Fly, Dokploy) hit this
+     to know if the container is healthy. Returning env.NODE_ENV
+     in the response also confirms your env vars are wired correctly
+     after deployment.
+
+When done: every required env var is validated at boot. Forgetting
+one is a clear startup error, not a mysterious 500 in production.
+You now have a foundation that makes EVERY future env-using feature
+(JWT auth in the next concept, Stripe webhooks in the milestone)
+safe to add.`}
+/>

@@ -1,0 +1,243 @@
+<!--
+  Visual trace of the env var pipeline.
+  Pick an env var name + pretend source (.env / shell / hosting UI),
+  see how it flows through dotenv → process.env → Zod schema → final
+  validated env.X used by the running code. Highlights missing
+  required vars + Zod failures.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Where each env value comes from</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-top: 1rem; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .panel h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .row { display: flex; align-items: center; gap: 0.5rem; margin: 0.45rem 0; font-size: 0.84rem; }
+      select, input[type="text"] {
+        font-size: 0.84rem; padding: 0.32rem 0.45rem; border: 1px solid #d4d4d8;
+        border-radius: 4px; background: #fff; font-family: ui-monospace, monospace;
+        flex: 1;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8rem;
+        line-height: 1.55; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+
+      .stage {
+        margin: 0.6rem 0; padding: 0.7rem 0.9rem; background: #fff;
+        border-radius: 6px; border: 1px solid #e4e4e7;
+        border-left: 3px solid #2563eb;
+      }
+      .stage .head {
+        font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #71717a; margin-bottom: 0.25rem;
+      }
+      .stage.ok    { border-left-color: #16a34a; background: #ecfdf5; color: #166534; }
+      .stage.fail  { border-left-color: #dc2626; background: #fee2e2; color: #7f1d1d; }
+      .stage.warn  { border-left-color: #f59e0b; background: #fef3c7; color: #92400e; }
+
+      .outcome {
+        margin-top: 0.8rem; padding: 0.85rem 1rem; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600;
+      }
+      .outcome.ok    { background: #dcfce7; color: #166534; }
+      .outcome.fail  { background: #fee2e2; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>Where each env value comes from</h1>
+    <p>Pick an env var name and a source. The right panel traces it through dotenv → process.env → Zod validation → the typed <code>env</code> object the running code reads.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Pick the var + source</h2>
+        <div class="row">
+          <label for="varname">Var:</label>
+          <select id="varname">
+            <option value="DATABASE_URL">DATABASE_URL</option>
+            <option value="PORT">PORT</option>
+            <option value="JWT_SECRET">JWT_SECRET</option>
+            <option value="STRIPE_SECRET_KEY">STRIPE_SECRET_KEY</option>
+            <option value="NODE_ENV">NODE_ENV</option>
+            <option value="MISSING">MISSING (no source)</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="source">Source:</label>
+          <select id="source">
+            <option value="env">.env file</option>
+            <option value="shell">Shell env (PORT=8080 node ...)</option>
+            <option value="platform">Hosting platform UI</option>
+            <option value="none">none</option>
+          </select>
+        </div>
+
+        <h2 style="margin-top:0.8rem;">Schema (lib/env.js)</h2>
+        <pre>
+<span class="keyword">const</span> Schema = z.object({
+  <span class="keyword">NODE_ENV</span>: z.enum([<span class="string">"development"</span>, <span class="string">"production"</span>, <span class="string">"test"</span>]).default(<span class="string">"development"</span>),
+  <span class="keyword">PORT</span>: z.coerce.number().default(<span class="number">3000</span>),
+  <span class="keyword">DATABASE_URL</span>: z.string().url(),
+  <span class="keyword">JWT_SECRET</span>: z.string().min(<span class="number">32</span>),
+  <span class="keyword">STRIPE_SECRET_KEY</span>: z.string().startsWith(<span class="string">"sk_"</span>),
+});</pre>
+      </div>
+
+      <div class="panel">
+        <h2>Trace</h2>
+        <div id="stages"></div>
+        <div id="outcome"></div>
+      </div>
+    </div>
+
+    <script>
+      const sources = {
+        env: ".env file",
+        shell: "shell env (e.g. PORT=8080 node ...)",
+        platform: "hosting platform Environment UI",
+        none: "(no source)",
+      };
+
+      // Sample concrete values per (var, source) so the trace can show
+      // realistic content.
+      const sampleValues = {
+        DATABASE_URL: {
+          env:      "postgresql://user:pass@localhost:5432/myapp_dev",
+          platform: "postgresql://neondb:xxx@ep-cool.us.aws.neon.tech/db",
+          shell:    "postgresql://user:pass@localhost:5432/myapp_dev",
+        },
+        PORT: {
+          env:      "3000",
+          shell:    "8080",
+          platform: "3000",
+        },
+        JWT_SECRET: {
+          env:      "abcdef0123456789abcdef0123456789",
+          shell:    "abc",   // too short → fails Zod
+          platform: "0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+        STRIPE_SECRET_KEY: {
+          env:      "sk_test_xyz123",
+          platform: "sk_live_prod456",
+          shell:    "wrong_prefix_xyz",
+        },
+        NODE_ENV: {
+          env:      "development",
+          shell:    "test",
+          platform: "production",
+        },
+      };
+
+      const schemaRules = {
+        DATABASE_URL: { required: true, type: "url" },
+        PORT: { required: false, type: "coerce-number", default: 3000 },
+        JWT_SECRET: { required: true, type: "string-min-32" },
+        STRIPE_SECRET_KEY: { required: true, type: "string-startswith-sk_" },
+        NODE_ENV: { required: false, type: "enum", default: "development", values: ["development", "production", "test"] },
+      };
+
+      function validate(name, value) {
+        const r = schemaRules[name];
+        if (!r) return { ok: false, msg: `Unknown var ${name} — not in the Zod schema` };
+        if (value === undefined || value === null || value === "") {
+          if (r.required) return { ok: false, msg: `${name} is required; Zod throws ZodIssue { path: ['${name}'], code: invalid_type, expected: string, received: undefined }` };
+          return { ok: true, msg: `Optional — Zod applies default: ${JSON.stringify(r.default)}` };
+        }
+        if (r.type === "url") {
+          try { new URL(value); } catch { return { ok: false, msg: `${name} must be a valid URL (z.string().url())` }; }
+          return { ok: true, msg: "Passed URL check" };
+        }
+        if (r.type === "coerce-number") {
+          const n = Number(value);
+          if (!Number.isFinite(n)) return { ok: false, msg: `${name} can't be coerced to a number (got ${JSON.stringify(value)})` };
+          return { ok: true, msg: `Coerced "${value}" → ${n}` };
+        }
+        if (r.type === "string-min-32") {
+          if (value.length < 32) return { ok: false, msg: `${name} too short (got ${value.length} chars, min 32)` };
+          return { ok: true, msg: `Length ${value.length} ≥ 32 ✓` };
+        }
+        if (r.type === "string-startswith-sk_") {
+          if (!value.startsWith("sk_")) return { ok: false, msg: `${name} must start with "sk_" (got ${JSON.stringify(value.slice(0, 8))})` };
+          return { ok: true, msg: `Starts with sk_ ✓` };
+        }
+        if (r.type === "enum") {
+          if (!r.values.includes(value)) return { ok: false, msg: `${name} must be one of ${r.values.join(", ")} (got ${JSON.stringify(value)})` };
+          return { ok: true, msg: `Allowed value ✓` };
+        }
+        return { ok: true, msg: "OK" };
+      }
+
+      function render() {
+        const varname = document.getElementById("varname").value;
+        const source  = document.getElementById("source").value;
+
+        const stages = [];
+
+        // 1. Source has the value?
+        let raw;
+        if (varname === "MISSING") {
+          raw = undefined;
+          stages.push({ kind: "warn", head: "1 — Source", body: `No source provides a value for the requested var.` });
+        } else if (source === "none") {
+          raw = undefined;
+          stages.push({ kind: "warn", head: "1 — Source", body: `Source set to 'none' — no value provided.` });
+        } else {
+          raw = sampleValues[varname]?.[source];
+          stages.push({ kind: "ok", head: `1 — Source: ${sources[source]}`, body: `Raw string from source: <code>${raw}</code>` });
+        }
+
+        // 2. dotenv merges into process.env
+        if (source === "env" && raw !== undefined) {
+          stages.push({ kind: "ok", head: "2 — dotenv/config (or --env-file)", body: `Reads .env → assigns <code>process.env.${varname} = ${JSON.stringify(raw)}</code>` });
+        } else if (source === "shell" && raw !== undefined) {
+          stages.push({ kind: "ok", head: "2 — Shell environment", body: `<code>process.env.${varname}</code> already populated before Node started, value <code>${JSON.stringify(raw)}</code>` });
+        } else if (source === "platform" && raw !== undefined) {
+          stages.push({ kind: "ok", head: "2 — Hosting platform", body: `Platform injects env vars into the container's environment, so <code>process.env.${varname} = ${JSON.stringify(raw)}</code>` });
+        } else {
+          stages.push({ kind: "warn", head: "2 — process.env", body: `<code>process.env.${varname}</code> is <code>undefined</code>` });
+        }
+
+        // 3. Zod schema validates process.env
+        const v = validate(varname, raw);
+        stages.push({
+          kind: v.ok ? "ok" : "fail",
+          head: "3 — Zod validation (Schema.safeParse)",
+          body: v.msg,
+        });
+
+        // 4. Outcome
+        let outcome;
+        if (v.ok) {
+          outcome = `<div class="outcome ok">✓ Server boots cleanly. <code>env.${varname}</code> is available.</div>`;
+        } else {
+          outcome = `<div class="outcome fail">✗ Server REFUSES to start: <code>console.error("Invalid environment variables:")</code> then <code>process.exit(1)</code>. Fix at boot, not at 3am.</div>`;
+        }
+
+        document.getElementById("stages").innerHTML = stages.map(s => `
+          <div class="stage ${s.kind}">
+            <div class="head">${s.head}</div>
+            <div>${s.body}</div>
+          </div>
+        `).join("");
+        document.getElementById("outcome").innerHTML = outcome;
+      }
+
+      document.getElementById("varname").addEventListener("change", render);
+      document.getElementById("source").addEventListener("change", render);
+      render();
+    </script>
+  </body>
+</html>

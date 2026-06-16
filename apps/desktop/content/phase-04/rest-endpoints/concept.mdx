@@ -1,0 +1,376 @@
+## Building REST endpoints
+
+You have Express. You have routing, middleware, the req/res surface. Now: how do you take a brief like "users can create, read, update, and delete posts" and lay it out as a coherent set of HTTP endpoints? **REST** is the convention that 90% of public APIs follow. It's not a protocol, not a standard — it's a *naming + verb* convention that makes APIs predictable to consume.
+
+This concept is about the *shape* of an API. The next concept wires it to a real database with Prisma; for now we'll use in-memory data so the focus stays on the endpoint design.
+
+<Analogy>
+A REST API is **a library catalog organized as physical aisles + standard motions**.
+
+Walk into an old library. Books are stored on shelves grouped by category (Cooking, History, Fiction, Reference). Each book has a number. The shelves are the *resources*; the numbers are the *IDs*. To do anything with a book you combine a *location* and an *action*:
+
+- "Go to Cooking shelf, get book #47" — read one.
+- "Go to Cooking shelf, get the whole shelf's worth" — list.
+- "Go to Cooking shelf, put a new book at the next slot" — create.
+- "Go to Cooking shelf, find book #47, replace it" — update.
+- "Go to Cooking shelf, find book #47, remove it" — delete.
+
+The library doesn't have a separate procedure for "show me Cooking book 47" vs "show me Fiction book 12." Same motion, different shelf + number. That uniformity is what makes the library navigable.
+
+REST is the same idea for HTTP:
+
+- A **resource** is a category of things — `users`, `posts`, `comments`, `orders`. Becomes the URL path.
+- An **ID** identifies one specific thing in that category — `posts/47`.
+- The **HTTP method** is the action: `GET` to read, `POST` to create, `PATCH` to update, `DELETE` to remove.
+
+The naming + verb table for a typical resource:
+
+| Method | URL | Action |
+|---|---|---|
+| `GET` | `/api/posts` | List all posts |
+| `GET` | `/api/posts/47` | Read post 47 |
+| `POST` | `/api/posts` | Create a new post |
+| `PATCH` | `/api/posts/47` | Update fields on post 47 |
+| `DELETE` | `/api/posts/47` | Delete post 47 |
+
+Five endpoints. Every resource looks the same shape. Once you've used one REST API you can navigate any other one — the conventions transfer because they're the same conventions everywhere.
+
+REST's payoff is **predictability**. A new developer joining your team can guess where the "create a comment on post 47" endpoint is even before reading the docs. They'll guess `POST /api/posts/47/comments` — and they'll be right.
+</Analogy>
+
+### The five endpoints per resource
+
+For a `posts` resource, the canonical set:
+
+```js
+// List all (with optional filtering via query string)
+app.get("/api/posts", listPosts);
+// GET /api/posts?published=true&page=2&limit=20
+// → 200 OK { data: [...] }
+
+// Read one
+app.get("/api/posts/:id", getPost);
+// GET /api/posts/47
+// → 200 OK { data: {...} }    or  404 if not found
+
+// Create one
+app.post("/api/posts", createPost);
+// POST /api/posts  + body { title, body }
+// → 201 Created  + Location: /api/posts/48  + { data: {...} }
+
+// Partial update
+app.patch("/api/posts/:id", updatePost);
+// PATCH /api/posts/47  + body { title: "Updated" }
+// → 200 OK { data: {...} }    or  404 if not found
+
+// Delete
+app.delete("/api/posts/:id", deletePost);
+// DELETE /api/posts/47
+// → 204 No Content    or  404 if not found
+```
+
+These five lines define the entire surface for `posts`. A team building a mobile app or admin dashboard against this API has everything they need from this table.
+
+### `PUT` vs `PATCH` — when to use which
+
+Both update. The difference is semantic:
+
+- **`PUT /api/posts/47`** — *replace* the entire resource. Body must contain all required fields. Missing fields get nulled.
+- **`PATCH /api/posts/47`** — *partially update*. Body contains only the fields you want to change. Other fields untouched.
+
+`PATCH` is the modern default because it matches how UI forms work — you change one field and submit just that. `PUT` is rare in practice for typical CRUD; reach for it when you genuinely mean "overwrite the whole thing" (e.g., overwriting a configuration document).
+
+### URL conventions — plural, lowercase, hyphenated
+
+```
+✅  /api/posts
+✅  /api/posts/47
+✅  /api/posts/47/comments
+✅  /api/users/me/preferences
+
+❌  /api/post                    # singular — should be plural
+❌  /api/getPosts                # verb in URL — verb is HTTP method
+❌  /api/Posts/47                # uppercase
+❌  /api/posts_old/47            # snake_case — use hyphens
+```
+
+Three rules:
+
+1. **Resource names are plural nouns.** `posts`, `users`, `orders`. Reads naturally — "the posts collection" — and the singular vs plural disambiguates list vs read-one.
+2. **No verbs in URLs.** The HTTP method is the verb. `GET /api/users` not `GET /api/getUsers`.
+3. **Hyphens for multi-word, lowercase everything.** `/api/help-articles/47` not `/helpArticles/47`.
+
+### Nested resources — when does `/posts/47/comments` make sense
+
+When a resource only exists *within the context of its parent*, nest:
+
+```
+/api/posts/47/comments         # comments belong to post 47
+/api/users/me/sessions         # sessions belong to the current user
+/api/orgs/anthropic/projects   # projects belong to the org
+```
+
+When a resource can stand on its own and you might want to query it without the parent, keep it flat:
+
+```
+/api/comments?postId=47        # works alongside /api/posts/47/comments
+
+/api/sessions?userId=me        # works alongside /api/users/me/sessions
+```
+
+Most REST APIs use a *hybrid*: provide both. `/api/posts/47/comments` for the natural-fit context, and `/api/comments?postId=47` for power users who want to combine filters.
+
+Don't nest deeper than two levels. `/api/orgs/x/projects/y/tasks/z/comments` becomes a URL nobody remembers. Switch to flat IDs by that point.
+
+### Filtering, sorting, pagination — the query-string contract
+
+Lists need to support filtering, sorting, and pagination. Use query strings, consistently:
+
+```
+GET /api/posts?published=true                 # filter
+GET /api/posts?sort=createdAt:desc            # sort
+GET /api/posts?page=2&limit=20                # pagination
+GET /api/posts?search=express                 # full-text search
+GET /api/posts?published=true&sort=createdAt:desc&page=2&limit=20  # all at once
+```
+
+The conventions on the query side:
+
+- **`page` / `limit`** for pagination. Some APIs use `offset` / `limit`; pick one and stick to it.
+- **`sort`** as `field:direction`, comma-separated for multi: `?sort=priority:desc,createdAt:asc`.
+- **Filters** are flat: `?status=open` for one value, `?status=open,in_progress` for OR-of-many.
+- **Search** is a single `q` or `search` param: `?q=express`.
+
+The response should include pagination metadata:
+
+```json
+{
+  "data": [ ... ],
+  "meta": {
+    "page": 2,
+    "limit": 20,
+    "total": 147,
+    "totalPages": 8
+  }
+}
+```
+
+Client code reads `meta.totalPages` to decide whether to enable a "Next" button.
+
+### Status codes — the canonical mapping
+
+| Code | Use for |
+|--|--|
+| `200 OK` | Successful read, successful update with body, fallback for success |
+| `201 Created` | POST that created a new resource. Include `Location` header pointing at it |
+| `204 No Content` | DELETE or PUT that succeeded with no body to return |
+| `400 Bad Request` | Malformed JSON, missing required field — client problem |
+| `401 Unauthorized` | No auth token or invalid token |
+| `403 Forbidden` | Authenticated but not allowed (wrong role, not the owner) |
+| `404 Not Found` | Resource doesn't exist |
+| `409 Conflict` | Duplicate (unique constraint), or update conflict |
+| `422 Unprocessable Entity` | Validation failed on otherwise valid input |
+| `429 Too Many Requests` | Rate-limited |
+| `500 Internal Server Error` | Your bug |
+| `503 Service Unavailable` | Downstream service down, maintenance |
+
+The default `200` is fine for `GET`. For `POST` always return `201`. For `DELETE` return `204` with no body.
+
+### A complete REST API for `posts` in 50 lines
+
+```js
+// src/server.js
+import express from "express";
+import { z } from "zod";
+
+const app = express();
+app.use(express.json());
+
+// In-memory store. Replaced with Prisma in the next concept.
+const posts = new Map();
+let nextId = 1;
+
+// Validation schemas
+const CreateSchema = z.object({
+  title: z.string().min(1).max(200),
+  body:  z.string().optional().default(""),
+});
+
+const UpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  body:  z.string().optional(),
+  published: z.boolean().optional(),
+});
+
+// LIST  with filter + pagination
+app.get("/api/posts", (req, res) => {
+  let all = Array.from(posts.values());
+  if (req.query.published === "true")  all = all.filter((p) => p.published);
+  if (req.query.published === "false") all = all.filter((p) => !p.published);
+
+  const page  = Math.max(1, Number(req.query.page  ?? 1));
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 20)));
+  const start = (page - 1) * limit;
+
+  res.json({
+    data: all.slice(start, start + limit),
+    meta: { page, limit, total: all.length, totalPages: Math.ceil(all.length / limit) },
+  });
+});
+
+// READ one
+app.get("/api/posts/:id", (req, res) => {
+  const post = posts.get(Number(req.params.id));
+  if (!post) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+  res.json({ data: post });
+});
+
+// CREATE
+app.post("/api/posts", (req, res) => {
+  const parsed = CreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: "VALIDATION_ERROR", details: parsed.error.format() } });
+  }
+  const post = { id: nextId++, ...parsed.data, published: false, createdAt: new Date().toISOString() };
+  posts.set(post.id, post);
+  res.status(201).set("Location", `/api/posts/${post.id}`).json({ data: post });
+});
+
+// PATCH
+app.patch("/api/posts/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const post = posts.get(id);
+  if (!post) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+
+  const parsed = UpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: "VALIDATION_ERROR", details: parsed.error.format() } });
+  }
+  Object.assign(post, parsed.data);
+  res.json({ data: post });
+});
+
+// DELETE
+app.delete("/api/posts/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (!posts.has(id)) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found" } });
+  posts.delete(id);
+  res.status(204).end();
+});
+
+app.listen(3000, () => console.log("→ http://localhost:3000"));
+```
+
+That's a working REST API. Five endpoints, validation, proper status codes, consistent response shape. Hit it with curl:
+
+```bash
+# Create
+curl -X POST http://localhost:3000/api/posts \
+     -H "Content-Type: application/json" \
+     -d '{"title":"My first post"}'
+# → 201, { data: { id: 1, ... } }
+
+# List
+curl http://localhost:3000/api/posts
+# → 200, { data: [...], meta: { ... } }
+
+# Read
+curl http://localhost:3000/api/posts/1
+# → 200, { data: {...} }
+
+# Patch
+curl -X PATCH http://localhost:3000/api/posts/1 \
+     -H "Content-Type: application/json" \
+     -d '{"published":true}'
+# → 200, { data: { ...published: true } }
+
+# Delete
+curl -X DELETE http://localhost:3000/api/posts/1
+# → 204 (no body)
+```
+
+Every other resource in the API follows the same shape. The next concept replaces the in-memory `Map` with Prisma against a real Postgres — none of the endpoint shape changes.
+
+### Versioning — when and how
+
+Eventually you'll need to make a breaking change to an endpoint. Two common strategies:
+
+- **URL path versioning**: `/api/v1/posts`, `/api/v2/posts`. Most explicit.
+- **Header versioning**: `Accept: application/vnd.myapi.v2+json`. Cleaner URLs, harder to test.
+
+Most teams pick URL path versioning because it's the easiest to debug from a browser/curl. If you're sure the API is stable, you can skip versioning entirely — most internal APIs do. If the API will be consumed by clients you don't control (mobile apps in the App Store, third-party integrations), versioning from day 1 is worth the small ceremony.
+
+### REST anti-patterns to skip
+
+- **Verbs in URLs.** `/api/getPosts`, `/api/createUser`. The HTTP method IS the verb.
+- **Single endpoint that does everything.** `/api/posts?action=create&id=47`. Use proper methods + paths.
+- **Returning errors as 200 with `{ success: false }`.** Use status codes. Reserves `200` for actual success.
+- **Inconsistent response shapes between endpoints.** Pick `{ data, error, meta }` and stick to it everywhere.
+- **Exposing internal IDs that leak business info.** Sequential IDs leak how many users you have. Use UUIDs for resources that go in URLs.
+
+<ExampleProject
+  src="crud-shape"
+  title="The five endpoints, side by side"
+  description="Click any of LIST / READ / CREATE / PATCH / DELETE to see the full request + response shape for that endpoint. Use as a reference when laying out a new REST resource — the same five rows match every resource you'll ever build."
+/>
+
+<Exercise
+  title="Design a REST surface from a brief"
+  starter={`You're given a brief: 'Build an API for a recipe sharing app.'
+
+Recipes have: id, title, description, prepTimeMinutes, servings,
+ingredients (array of strings), instructions (string), userId
+(who created it), createdAt, public (boolean).
+
+Users have: id, email, name.
+Comments have: id, recipeId, userId, body, createdAt.
+Tags: a recipe can have many tags (string), tags are not their own
+resource — they're just an array on the recipe.
+
+Design the REST API. Write the table of endpoints you'd implement.
+
+Hints to think through:
+
+  1. Plurality + naming:
+       /api/recipes, /api/users, /api/comments
+
+  2. Five canonical endpoints per resource. List each:
+       GET    /api/recipes               → list
+       GET    /api/recipes/:id           → read one
+       POST   /api/recipes               → create
+       PATCH  /api/recipes/:id           → update
+       DELETE /api/recipes/:id           → delete
+
+  3. Should comments be nested under recipes?
+       GET  /api/recipes/:id/comments    ← discovery within a recipe
+       POST /api/recipes/:id/comments    ← create attached to a recipe
+       GET  /api/comments?userId=me       ← list one user's comments
+     Both. Hybrid pattern.
+
+  4. Special endpoints — the brief implies some queries:
+       GET /api/recipes?public=true           → public-only filter
+       GET /api/recipes?tag=vegan             → tag filter
+       GET /api/recipes?search=lasagna        → search
+       GET /api/recipes?userId=me             → my recipes
+       GET /api/recipes?sort=createdAt:desc    → sort
+
+  5. Auth-aware endpoints:
+       GET /api/users/me                       → current user
+       PATCH /api/users/me                     → update self
+       (vs /api/users/:id which would be admin-only)
+
+  6. Status codes for each:
+       POST → 201 with Location header
+       DELETE → 204
+       Not found → 404
+       Validation fail → 400
+
+When you have the full table written out, you have the API spec. Hand
+it to a frontend developer and they can build a UI against it before
+you've written a single Express handler. The endpoint table IS the
+contract.
+
+Bonus: write the Zod schemas you'd validate POST and PATCH bodies
+with for the Recipe resource. That ALSO becomes part of the API spec
+— it's the boundary contract for what's accepted.`}
+/>
