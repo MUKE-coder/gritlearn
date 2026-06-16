@@ -18,7 +18,14 @@ const API_URL =
 
 export const apiClient = axios.create({
   baseURL: API_URL,
-  headers: { "Content-Type": "application/json" },
+  // Note: Content-Type is set per-method in the request interceptor.
+  // Sending Content-Type: application/json on a GET (which has no body)
+  // turns the request into a CORS-PREFLIGHTED request — the browser
+  // does an OPTIONS first to ask "can I send this Content-Type?". On
+  // some networks / WebView2 builds the preflight gets blocked while
+  // the GET itself would have been fine, producing a false 'Offline'
+  // status from the /api/health heartbeat. Set it only when we actually
+  // send a body.
 });
 
 // Attach JWT from OS keychain (or localStorage in dev) and auto-generate an
@@ -33,8 +40,14 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
   if (config.headers) {
     const method = (config.method || "get").toUpperCase();
     const unsafe = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
-    if (unsafe && !config.headers["Idempotency-Key"]) {
-      config.headers["Idempotency-Key"] = crypto.randomUUID();
+    if (unsafe) {
+      // Body-carrying methods get Content-Type + Idempotency-Key.
+      if (!config.headers["Content-Type"]) {
+        config.headers["Content-Type"] = "application/json";
+      }
+      if (!config.headers["Idempotency-Key"]) {
+        config.headers["Idempotency-Key"] = crypto.randomUUID();
+      }
     }
   }
   return config;
