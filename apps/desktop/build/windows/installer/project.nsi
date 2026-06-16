@@ -50,6 +50,14 @@ VIAddVersionKey "ProductName"     "${INFO_PRODUCTNAME}"
 ManifestDPIAware true
 BrandingText " "    ; hide the default "Nullsoft Install System" footer
 
+# Embed the JEditor logomark into the installer .exe and the
+# uninstaller .exe themselves. These directives are the bits that make
+# the file in Explorer / on the user's Downloads pane show the right
+# icon — distinct from MUI_ICON below, which only paints the icon on
+# the wizard pages. Both required for full coverage.
+Icon         "..\icon.ico"
+UninstallIcon "..\icon.ico"
+
 !include "MUI.nsh"
 
 !define MUI_ICON   "..\icon.ico"

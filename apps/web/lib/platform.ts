@@ -23,6 +23,12 @@ export interface ReleaseInfo {
   releasedAt: string;
   releaseNotes: string;
   githubUrl: string;
+  // The full Windows NSIS installer (~200 MB, WebView2 bundled). This
+  // is the SINGLE download the /download page surfaces — every other
+  // version after first install comes through the in-app auto-updater.
+  // Direct GitHub asset URL so the button works even when the API is
+  // unreachable from the web container.
+  installerUrl: string;
   downloads: DownloadOption[];
   source: "github" | "env" | "fallback";
 }
@@ -62,16 +68,29 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
   },
 ];
 
-// Hard-coded fallback the page can render synchronously. Marked
-// available:false so the UI can show "coming soon" instead of a button
-// that 404s.
+// Hard-coded fallback the page can render synchronously. Points at the
+// REAL latest GitHub release so the page degrades gracefully — even if
+// the API is unreachable, the button still downloads a working setup.
+// Bump this each release alongside scripts/release-desktop.ps1.
+const FALLBACK_VERSION = "0.3.0";
+const FALLBACK_INSTALLER_URL =
+  `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
+
 export const fallbackRelease: ReleaseInfo = {
-  version: "0.1.0",
-  releasedAt: "2026-06-15T12:00:00Z",
+  version: FALLBACK_VERSION,
+  releasedAt: "2026-06-16T01:36:37Z",
   releaseNotes:
-    "JEditor desktop preview — Wails + Monaco with Phase 1 curriculum bundled offline.",
-  githubUrl: "https://github.com/MUKE-coder/gritlearn/releases",
-  downloads: STATIC_OPTIONS.map((o) => ({ ...o, available: false, size: 0 })),
+    "JEditor v0.3.0 — full NSIS installer with bundled WebView2, mint brand refresh, in-app auto-updater, Phase 3 curriculum (Next.js intro through Postgres+Prisma).",
+  githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
+  installerUrl: FALLBACK_INSTALLER_URL,
+  downloads: STATIC_OPTIONS.map((o) => ({
+    ...o,
+    // Windows tile points at the installer; the others stay marked
+    // unavailable until macOS / Linux builds land.
+    available: o.platform === "windows",
+    url: o.platform === "windows" ? FALLBACK_INSTALLER_URL : o.url,
+    size: o.platform === "windows" ? 200 * 1024 * 1024 : 0,
+  })),
   source: "fallback",
 };
 
@@ -105,6 +124,7 @@ interface ApiReleasePayload {
   released_at: string;
   release_notes: string;
   github_url: string;
+  installer_url?: string;
   source: "github" | "env" | "fallback";
   downloads: Array<{
     platform: Platform;
@@ -118,11 +138,16 @@ interface ApiReleasePayload {
 }
 
 function mapApiResponse(p: ApiReleasePayload): ReleaseInfo {
+  // Prefer the API's installer_url. Fall back to the static value so
+  // the page always has a working download even if the API runs an
+  // older build that doesn't surface installer_url.
+  const installerUrl = p.installer_url || fallbackRelease.installerUrl;
   return {
     version: p.version,
     releasedAt: p.released_at,
     releaseNotes: p.release_notes,
     githubUrl: p.github_url,
+    installerUrl,
     source: p.source,
     downloads: p.downloads.map((d) => ({
       platform: d.platform,
