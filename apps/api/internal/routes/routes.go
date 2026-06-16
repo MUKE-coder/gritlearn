@@ -75,9 +75,17 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		// In development, use relaxed rate limits so devs don't get blocked while testing
 		isDev := cfg.AppEnv == "development"
 		ipLimit := &sentinel.Limit{Requests: 100, Window: 1 * time.Minute}
+		// Auth route limits relaxed from the original {login: 5, register: 3}
+		// which silently blocked real signup flows where a user iterates
+		// (wrong password, request fresh OTP, retry, etc.). The previous
+		// values turned 3 retries from one IP in 15 minutes into a hard
+		// block — with no visible error on the client because Sentinel
+		// short-circuits before CORS headers are emitted, so the browser
+		// reads it as a network failure. Bumping to numbers that still
+		// stop brute-force attempts but tolerate human iteration.
 		routeLimits := map[string]sentinel.Limit{
-			"/api/auth/login":    {Requests: 5, Window: 15 * time.Minute},
-			"/api/auth/register": {Requests: 3, Window: 15 * time.Minute},
+			"/api/auth/login":    {Requests: 30, Window: 15 * time.Minute},
+			"/api/auth/register": {Requests: 20, Window: 15 * time.Minute},
 		}
 		if isDev {
 			ipLimit = &sentinel.Limit{Requests: 1000, Window: 1 * time.Minute}
