@@ -21,6 +21,7 @@ import {
 import {
   detectPlatform,
   fallbackRelease,
+  FALLBACK_VERSION,
   getDownload,
   type Platform,
 } from "@/lib/platform";
@@ -93,7 +94,7 @@ function Hero({ primaryLabel }: { primaryLabel: string }) {
           className="mb-6 inline-flex items-center gap-2 rounded-sm border border-border bg-bg-secondary/80 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-text-secondary backdrop-blur"
         >
           <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
-          <span>preview · v0.1 · free during beta</span>
+          <span>preview · v{FALLBACK_VERSION} · free during beta</span>
         </motion.div>
 
         <motion.h1

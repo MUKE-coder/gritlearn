@@ -13,6 +13,7 @@ import {
   Square as SquareIcon,
   X,
 } from "lucide-react";
+import { FALLBACK_VERSION } from "@/lib/platform";
 
 // HeroEditor: a screenshot-fidelity mockup of the actual JEditor desktop
 // app — the same shell visitors will see after they install. Three panes:
@@ -284,7 +285,7 @@ export function HeroEditor() {
           </div>
           <div className="flex items-center gap-3">
             <span>Ln 6, Col 19</span>
-            <span>v0.2.0</span>
+            <span>v{FALLBACK_VERSION}</span>
           </div>
         </div>
       </div>
