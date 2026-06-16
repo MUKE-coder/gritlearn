@@ -229,11 +229,11 @@ if (-not $NoInstaller -and -not $SlimOnly) {
     exit 1
   }
   $fullSizeMB = [Math]::Round((Get-Item $installerFullPath).Length / 1MB, 1)
-  Write-Host "==> Full setup:   $installerFullPath ($fullSizeMB MB)" -ForegroundColor Green
+  Write-Host "==> Full setup:   $installerFullPath ($($fullSizeMB) MB)" -ForegroundColor Green
 }
 if (-not $NoInstaller -and (Test-Path $installerSlimPath)) {
   $slimSizeMB = [Math]::Round((Get-Item $installerSlimPath).Length / 1MB, 1)
-  Write-Host "==> Slim setup:   $installerSlimPath ($slimSizeMB MB)" -ForegroundColor Green
+  Write-Host "==> Slim setup:   $installerSlimPath ($($slimSizeMB) MB)" -ForegroundColor Green
 }
 
 if ($DryRun) {
