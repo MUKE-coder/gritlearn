@@ -1,0 +1,385 @@
+<!--
+  Interactive map of the task-manager project: click each file in
+  the tree to see what it does, what it imports, and which Phase 3
+  concept it puts into practice. Lets the student plan the whole
+  project before starting, and use it as a checklist while building.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Task manager — every file mapped to a Phase 3 concept</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-top: 1rem; align-items: start; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .tree {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.84rem; line-height: 1.55;
+      }
+      .tree .row {
+        display: block; padding: 0.18rem 0.5rem; border-radius: 3px;
+        cursor: pointer; text-decoration: none; color: #18181b;
+        border-left: 3px solid transparent;
+      }
+      .tree .row:hover { background: #f4f4f5; }
+      .tree .row.active {
+        background: #ecfdf5; border-left-color: #16a34a; color: #166534; font-weight: 600;
+      }
+      .tree .row.dir {
+        color: #71717a; font-weight: 600; padding-left: 0;
+      }
+      .tree .row.dir.indent { padding-left: 1.2rem; }
+      .tree .row.file.indent  { padding-left: 1.4rem; }
+      .tree .row.file.indent2 { padding-left: 2.6rem; }
+      .tree .row.file.indent3 { padding-left: 3.8rem; }
+      .tree .badge {
+        font-size: 0.62rem; padding: 1px 6px; border-radius: 999px;
+        margin-left: 0.4rem;
+        text-transform: uppercase; letter-spacing: 0.08em;
+      }
+      .tree .badge.cfg     { background: #fef3c7; color: #92400e; }
+      .tree .badge.server  { background: #dcfce7; color: #166534; }
+      .tree .badge.client  { background: #dbeafe; color: #1e40af; }
+      .tree .badge.action  { background: #ede9fe; color: #6b21a8; }
+      .tree .badge.mdl     { background: #fce7f3; color: #9f1239; }
+
+      .panel h3 { margin: 0; font-size: 0.95rem; }
+      .panel .path {
+        font-family: ui-monospace, monospace; color: #71717a; font-size: 0.74rem;
+        margin-top: 0.2rem;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0.7rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .type    { color: #c084fc; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .concept {
+        margin-top: 0.7rem; padding: 0.65rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px; font-size: 0.85rem;
+      }
+      .imports {
+        margin-top: 0.5rem; font-size: 0.78rem; color: #71717a;
+      }
+      .imports code { background: #f4f4f5; padding: 1px 5px; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <h1>Every file. Every concept.</h1>
+    <p>Click a file on the left to see what it does, what it imports, and which Phase 3 concept it puts into practice. Use this as a checklist while you build.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Project tree</h2>
+        <div class="tree" id="tree"></div>
+      </div>
+      <div class="col">
+        <h2>File detail</h2>
+        <div class="panel" id="panel"></div>
+      </div>
+    </div>
+
+    <script>
+      const files = {
+        "schema": {
+          path: "prisma/schema.prisma",
+          title: "schema.prisma",
+          badge: "cfg",
+          concept: "what-is-a-database, sql-basics, prisma-schema-migrations",
+          imports: [],
+          purpose: "Source of truth for every table. User / Account / Session / VerificationToken come from the Auth.js Prisma adapter docs; Task is your own. Run prisma migrate dev to apply schema changes; never edit the database with raw SQL.",
+          code:
+`<span class="keyword">model</span> <span class="type">Task</span> {
+  id        <span class="type">String</span>   @id @default(cuid())
+  title     <span class="type">String</span>
+  done      <span class="type">Boolean</span>  @default(false)
+  dueAt     <span class="type">DateTime</span>?
+  createdAt <span class="type">DateTime</span> @default(now())
+  updatedAt <span class="type">DateTime</span> @updatedAt
+
+  userId    <span class="type">String</span>
+  user      <span class="type">User</span>     @relation(fields: [userId], references: [id], onDelete: <span class="type">Cascade</span>)
+
+  @@index([userId])
+  @@index([userId, done])
+}`,
+        },
+        "auth": {
+          path: "auth.ts",
+          title: "auth.ts",
+          badge: "cfg",
+          concept: "authjs",
+          imports: ["@auth/prisma-adapter", "next-auth/providers/github", "lib/db"],
+          purpose: "Auth.js v5 configuration. Exports handlers (API routes), auth (server helper), signIn / signOut. The jwt + session callbacks copy user.id into the JWT so server actions can use session.user.id.",
+          code:
+`<span class="keyword">export const</span> { handlers, auth, signIn, signOut } = <span class="keyword">NextAuth</span>({
+  adapter: PrismaAdapter(db),
+  session: { strategy: <span class="string">"jwt"</span> },
+  providers: [GitHub({
+    clientId:     process.env.<span class="type">GITHUB_CLIENT_ID</span>,
+    clientSecret: process.env.<span class="type">GITHUB_CLIENT_SECRET</span>,
+  })],
+  callbacks: {
+    <span class="keyword">async</span> jwt({ token, user }) {
+      <span class="keyword">if</span> (user) token.id = user.id;
+      <span class="keyword">return</span> token;
+    },
+    <span class="keyword">async</span> session({ session, token }) {
+      <span class="keyword">if</span> (token?.id) session.user.id = token.id <span class="keyword">as</span> <span class="type">string</span>;
+      <span class="keyword">return</span> session;
+    },
+  },
+});`,
+        },
+        "middleware": {
+          path: "middleware.ts",
+          title: "middleware.ts",
+          badge: "server",
+          concept: "protecting-routes",
+          imports: ["auth"],
+          purpose: "Runs on every request before any page. Cheap session check: if hitting /dashboard/* without a session cookie, redirect to /login?from=<original>.",
+          code:
+`<span class="keyword">export default</span> auth((req) =&gt; {
+  <span class="keyword">const</span> isProtected = req.nextUrl.pathname.startsWith(<span class="string">"/dashboard"</span>);
+  <span class="keyword">if</span> (!isProtected || req.auth?.user) <span class="keyword">return</span> NextResponse.next();
+  <span class="keyword">const</span> url = <span class="keyword">new</span> URL(<span class="string">"/login"</span>, req.url);
+  url.searchParams.set(<span class="string">"from"</span>, req.nextUrl.pathname);
+  <span class="keyword">return</span> NextResponse.redirect(url);
+});`,
+        },
+        "env": {
+          path: "env.ts",
+          title: "env.ts",
+          badge: "cfg",
+          concept: "env-secrets",
+          imports: ["zod"],
+          purpose: "Zod-validated env at boot. Fails fast at startup if any required env var is missing — no mysterious 500s at request time.",
+          code:
+`<span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+<span class="keyword">const</span> Schema = z.object({
+  <span class="type">DATABASE_URL</span>:         z.string().url(),
+  <span class="type">AUTH_SECRET</span>:          z.string().min(<span class="number">32</span>),
+  <span class="type">GITHUB_CLIENT_ID</span>:     z.string().min(<span class="number">1</span>),
+  <span class="type">GITHUB_CLIENT_SECRET</span>: z.string().min(<span class="number">1</span>),
+});
+<span class="keyword">export const</span> env = Schema.parse(process.env);`,
+        },
+        "db": {
+          path: "lib/db.ts",
+          title: "lib/db.ts",
+          badge: "server",
+          concept: "postgres-prisma",
+          imports: ["@prisma/client"],
+          purpose: "Singleton Prisma client. The globalThis trick survives Next.js hot-reload — without it dev would spawn a new connection per save.",
+          code:
+`<span class="keyword">import</span> { PrismaClient } <span class="keyword">from</span> <span class="string">"@prisma/client"</span>;
+<span class="keyword">const</span> g = globalThis <span class="keyword">as</span> { prisma?: <span class="type">PrismaClient</span> };
+<span class="keyword">export const</span> db = g.prisma ?? <span class="keyword">new</span> PrismaClient();
+<span class="keyword">if</span> (process.env.<span class="type">NODE_ENV</span> !== <span class="string">"production"</span>) g.prisma = db;`,
+        },
+        "queries": {
+          path: "lib/queries/tasks.ts",
+          title: "lib/queries/tasks.ts",
+          badge: "server",
+          concept: "crud-prisma",
+          imports: ["lib/db"],
+          purpose: "Read-side query module. getTasks(userId, filter) is the canonical way to fetch — every caller funnels through here so the userId scope is enforced in one place.",
+          code:
+`<span class="keyword">export async function</span> getTasks(
+  userId: <span class="type">string</span>,
+  filter: <span class="string">"all"</span> | <span class="string">"open"</span> | <span class="string">"done"</span>,
+) {
+  <span class="keyword">return</span> db.task.findMany({
+    where: {
+      userId,
+      ...(filter === <span class="string">"open"</span> ? { done: <span class="keyword">false</span> } :
+         filter === <span class="string">"done"</span> ? { done: <span class="keyword">true</span> } : {}),
+    },
+    orderBy: [{ done: <span class="string">"asc"</span> }, { createdAt: <span class="string">"desc"</span> }],
+    select: { id: <span class="keyword">true</span>, title: <span class="keyword">true</span>, done: <span class="keyword">true</span>, dueAt: <span class="keyword">true</span>, createdAt: <span class="keyword">true</span> },
+  });
+}`,
+        },
+        "actions": {
+          path: "app/dashboard/actions.ts",
+          title: "actions.ts",
+          badge: "action",
+          concept: "server-actions, crud-prisma, protecting-routes",
+          imports: ["auth", "lib/db", "zod", "next/cache"],
+          purpose: "Server actions for create / toggle / delete. EVERY action calls auth() first, validates with Zod, and scopes the DB write to session.user.id. revalidatePath() refreshes the dashboard cache after each mutation.",
+          code:
+`<span class="string">"use server"</span>;
+<span class="keyword">const</span> Schema = z.object({ title: z.string().min(<span class="number">1</span>).max(<span class="number">200</span>) });
+
+<span class="keyword">export async function</span> createTask(prev: <span class="type">FormState</span>, formData: <span class="type">FormData</span>) {
+  <span class="keyword">const</span> session = <span class="keyword">await</span> auth();
+  <span class="keyword">if</span> (!session?.user) <span class="keyword">return</span> { error: <span class="string">"Unauthorized"</span> };
+  <span class="keyword">const</span> parsed = Schema.safeParse({ title: formData.get(<span class="string">"title"</span>) });
+  <span class="keyword">if</span> (!parsed.success) <span class="keyword">return</span> { error: parsed.error.issues[<span class="number">0</span>].message };
+
+  <span class="keyword">await</span> db.task.create({
+    data: { title: parsed.data.title, userId: session.user.id },
+  });
+  revalidatePath(<span class="string">"/dashboard"</span>);
+  <span class="keyword">return</span> {};
+}`,
+        },
+        "dashboard": {
+          path: "app/dashboard/page.tsx",
+          title: "page.tsx",
+          badge: "server",
+          concept: "server-vs-client, data-fetching, protecting-routes",
+          imports: ["auth", "lib/queries/tasks", "components/*"],
+          purpose: "Server component. Reads session, fetches tasks for that user, hands them to TaskList. No client fetch, no useEffect, no loading skeleton — server renders the real list on first paint.",
+          code:
+`<span class="keyword">export default async function</span> DashboardPage({
+  searchParams,
+}: { searchParams: { filter?: <span class="string">"all"</span> | <span class="string">"open"</span> | <span class="string">"done"</span> } }) {
+  <span class="keyword">const</span> session = <span class="keyword">await</span> auth();
+  <span class="keyword">if</span> (!session?.user) <span class="keyword">redirect</span>(<span class="string">"/login"</span>);
+  <span class="keyword">const</span> filter = searchParams.filter ?? <span class="string">"all"</span>;
+  <span class="keyword">const</span> tasks = <span class="keyword">await</span> getTasks(session.user.id, filter);
+  <span class="keyword">return</span> &lt;<span class="type">main</span>&gt;
+    &lt;<span class="type">TaskForm</span> /&gt;
+    &lt;<span class="type">FilterTabs</span> current={filter} /&gt;
+    &lt;<span class="type">TaskList</span> tasks={tasks} /&gt;
+  &lt;/<span class="type">main</span>&gt;;
+}`,
+        },
+        "taskform": {
+          path: "app/dashboard/components/TaskForm.tsx",
+          title: "TaskForm.tsx",
+          badge: "client",
+          concept: "server-actions, server-vs-client",
+          imports: ["actions/createTask", "react-dom"],
+          purpose: "Client component. Renders the input + submit. useFormState wires up the createTask server action; useFormStatus disables the submit while pending. No useState, no useEffect.",
+          code:
+`<span class="string">"use client"</span>;
+<span class="keyword">export function</span> TaskForm() {
+  <span class="keyword">const</span> [state, formAction] = useFormState(createTask, {});
+  <span class="keyword">return</span> (
+    &lt;<span class="type">form</span> action={formAction}&gt;
+      &lt;<span class="type">input</span> name=<span class="string">"title"</span> placeholder=<span class="string">"New task"</span> /&gt;
+      {state.error &amp;&amp; &lt;<span class="type">p</span>&gt;{state.error}&lt;/<span class="type">p</span>&gt;}
+      &lt;<span class="type">SubmitButton</span> /&gt;
+    &lt;/<span class="type">form</span>&gt;
+  );
+}`,
+        },
+        "tasklist": {
+          path: "app/dashboard/components/TaskList.tsx",
+          title: "TaskList.tsx",
+          badge: "server",
+          concept: "server-vs-client",
+          imports: ["TaskRow"],
+          purpose: "Server component. Receives the tasks array as a prop, renders the rows. No data fetching — the parent already loaded them. This file is pure transformation, dirt cheap to render.",
+          code:
+`<span class="keyword">export function</span> TaskList({ tasks }: { tasks: <span class="type">Task</span>[] }) {
+  <span class="keyword">if</span> (tasks.length === <span class="number">0</span>) {
+    <span class="keyword">return</span> &lt;<span class="type">p</span>&gt;No tasks yet — add one above.&lt;/<span class="type">p</span>&gt;;
+  }
+  <span class="keyword">return</span> (
+    &lt;<span class="type">ul</span>&gt;
+      {tasks.map((t) =&gt; (
+        &lt;<span class="type">TaskRow</span> key={t.id} task={t} /&gt;
+      ))}
+    &lt;/<span class="type">ul</span>&gt;
+  );
+}`,
+        },
+        "vercel": {
+          path: ".vercelignore + Vercel project",
+          title: "Vercel deployment",
+          badge: "cfg",
+          concept: "deploy-vercel, env-secrets",
+          imports: [],
+          purpose: "Not a file — a checklist. Connect repo → paste env vars (DATABASE_URL pooled + DIRECT_URL + AUTH_SECRET + GITHUB_*) → deploy. First build ~90 s. Add custom domain after first successful prod deploy.",
+          code:
+`<span class="comment"># Vercel env vars (Production scope):</span>
+<span class="type">DATABASE_URL</span>=postgres://...neon.tech/?sslmode=require<span class="keyword">&amp;pgbouncer=true</span>
+<span class="type">DIRECT_URL</span>=postgres://...neon.tech/?sslmode=require
+<span class="type">AUTH_SECRET</span>=<span class="string">"openssl rand -base64 32"</span>
+<span class="type">GITHUB_CLIENT_ID</span>=Iv1.xxxx
+<span class="type">GITHUB_CLIENT_SECRET</span>=xxxx
+<span class="type">NEXTAUTH_URL</span>=https://your-app.vercel.app`,
+        },
+      };
+
+      const tree = [
+        { kind: "dir", label: "prisma/" },
+        { kind: "file", indent: 1, label: "schema.prisma", id: "schema" },
+        { kind: "dir",  indent: 0, label: "auth.ts (root)", id: "auth", file: true },
+        { kind: "dir",  indent: 0, label: "middleware.ts (root)", id: "middleware", file: true },
+        { kind: "dir",  indent: 0, label: "env.ts (root)", id: "env", file: true },
+        { kind: "dir",  indent: 0, label: "lib/" },
+        { kind: "file", indent: 1, label: "db.ts", id: "db" },
+        { kind: "dir",  indent: 1, label: "queries/" },
+        { kind: "file", indent: 2, label: "tasks.ts", id: "queries" },
+        { kind: "dir",  indent: 0, label: "app/" },
+        { kind: "dir",  indent: 1, label: "dashboard/" },
+        { kind: "file", indent: 2, label: "page.tsx", id: "dashboard" },
+        { kind: "file", indent: 2, label: "actions.ts", id: "actions" },
+        { kind: "dir",  indent: 2, label: "components/" },
+        { kind: "file", indent: 3, label: "TaskForm.tsx", id: "taskform" },
+        { kind: "file", indent: 3, label: "TaskList.tsx", id: "tasklist" },
+        { kind: "dir",  indent: 0, label: "Deploy → Vercel", id: "vercel", file: true },
+      ];
+
+      function renderTree(activeId) {
+        document.getElementById("tree").innerHTML = tree.map(n => {
+          if (n.file === true || n.kind === "file") {
+            const id = n.id;
+            const f = files[id];
+            const badge = f ? `<span class="badge ${f.badge}">${f.badge}</span>` : "";
+            const indentClass = n.indent ? ` indent${n.indent === 1 ? "" : n.indent}` : "";
+            const cls = n.file === true ? "file" : ("file" + indentClass);
+            const active = id === activeId ? " active" : "";
+            return `<a class="row ${cls}${active}" data-id="${id}">${n.label}${badge}</a>`;
+          }
+          // Directory row
+          const indent = n.indent ? " indent" : "";
+          return `<span class="row dir${indent}">${n.label}</span>`;
+        }).join("");
+      }
+
+      function renderPanel(id) {
+        const f = files[id];
+        if (!f) return;
+        document.getElementById("panel").innerHTML = `
+          <h3>${f.title}</h3>
+          <div class="path">${f.path}</div>
+          <pre>${f.code}</pre>
+          <p>${f.purpose}</p>
+          <div class="imports">Imports: ${f.imports.length ? f.imports.map(i => `<code>${i}</code>`).join(", ") : "—"}</div>
+          <div class="concept"><strong>Phase 3 concept(s) used:</strong> ${f.concept}</div>
+        `;
+      }
+
+      function show(id) {
+        renderTree(id);
+        renderPanel(id);
+      }
+
+      document.getElementById("tree").addEventListener("click", (e) => {
+        const a = e.target.closest("a.row");
+        if (!a) return;
+        show(a.dataset.id);
+      });
+
+      show("schema");
+    </script>
+  </body>
+</html>

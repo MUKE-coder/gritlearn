@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "phases": [
     {
       "id": "phase-01",
@@ -107,7 +107,7 @@
         { "slug": "phase-03/protecting-routes", "title": "Protecting routes and sessions", "available": true },
         { "slug": "phase-03/env-secrets", "title": "Environment variables and secrets", "available": true },
         { "slug": "phase-03/deploy-vercel", "title": "Deploying to Vercel", "available": true },
-        { "slug": "phase-03/milestone-task-manager", "title": "Milestone: Full-stack task manager", "available": false }
+        { "slug": "phase-03/milestone-task-manager", "title": "Milestone: Full-stack task manager", "available": true }
       ]
     },
     {
