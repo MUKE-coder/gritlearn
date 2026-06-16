@@ -302,17 +302,18 @@ func desktopResolveFromGithub(proxyBase string) gin.H {
 	// asset, not per-platform). The desktop in-app updater uses
 	// download_url; the marketing download page + the modal's
 	// browser-fallback path use installer_url.
-	installerURL, _ := pickInstallerAsset(rel)
+	installerURL, installerSize := pickInstallerAsset(rel)
 
 	return gin.H{
-		"version":       version,
-		"download_url":  windowsRawURL,
-		"installer_url": installerURL,
-		"released_at":   rel.PublishedAt,
-		"release_notes": rel.Body,
-		"github_url":    rel.HTMLURL,
-		"downloads":     downloads,
-		"source":        "github",
+		"version":        version,
+		"download_url":   windowsRawURL,
+		"installer_url":  installerURL,
+		"installer_size": installerSize,
+		"released_at":    rel.PublishedAt,
+		"release_notes":  rel.Body,
+		"github_url":     rel.HTMLURL,
+		"downloads":      downloads,
+		"source":         "github",
 	}
 }
 
@@ -350,14 +351,15 @@ func fallbackPayload(proxyBase string) gin.H {
 		})
 	}
 	return gin.H{
-		"version":       desktopDefaultVersion,
-		"download_url":  "",
-		"installer_url": "",
-		"released_at":   desktopDefaultReleasedAt,
-		"release_notes": desktopDefaultReleaseNotes,
-		"github_url":    fmt.Sprintf("https://github.com/%s/%s/releases", desktopDefaultGithubOwner, desktopDefaultGithubRepo),
-		"downloads":     downloads,
-		"source":        "fallback",
+		"version":        desktopDefaultVersion,
+		"download_url":   "",
+		"installer_url":  "",
+		"installer_size": int64(0),
+		"released_at":    desktopDefaultReleasedAt,
+		"release_notes":  desktopDefaultReleaseNotes,
+		"github_url":     fmt.Sprintf("https://github.com/%s/%s/releases", desktopDefaultGithubOwner, desktopDefaultGithubRepo),
+		"downloads":      downloads,
+		"source":         "fallback",
 	}
 }
 

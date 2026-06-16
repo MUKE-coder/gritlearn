@@ -29,6 +29,9 @@ export interface ReleaseInfo {
   // Direct GitHub asset URL so the button works even when the API is
   // unreachable from the web container.
   installerUrl: string;
+  // Size in bytes of the installer asset. 0 / undefined when API didn't
+  // surface it. The page falls back to the ~200 MB literal in that case.
+  installerSize: number;
   downloads: DownloadOption[];
   source: "github" | "env" | "fallback";
 }
@@ -83,6 +86,8 @@ export const fallbackRelease: ReleaseInfo = {
     "JEditor v0.3.0 — full NSIS installer with bundled WebView2, mint brand refresh, in-app auto-updater, Phase 3 curriculum (Next.js intro through Postgres+Prisma).",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
+  // Approximate — real value flows from the API on success.
+  installerSize: 200 * 1024 * 1024,
   downloads: STATIC_OPTIONS.map((o) => ({
     ...o,
     // Windows tile points at the installer; the others stay marked
@@ -125,6 +130,7 @@ interface ApiReleasePayload {
   release_notes: string;
   github_url: string;
   installer_url?: string;
+  installer_size?: number;
   source: "github" | "env" | "fallback";
   downloads: Array<{
     platform: Platform;
@@ -138,16 +144,18 @@ interface ApiReleasePayload {
 }
 
 function mapApiResponse(p: ApiReleasePayload): ReleaseInfo {
-  // Prefer the API's installer_url. Fall back to the static value so
-  // the page always has a working download even if the API runs an
-  // older build that doesn't surface installer_url.
-  const installerUrl = p.installer_url || fallbackRelease.installerUrl;
+  // Prefer the API's installer_url + installer_size. Fall back to the
+  // static values so the page always has a working download even if the
+  // API runs an older build that doesn't surface them.
+  const installerUrl  = p.installer_url  || fallbackRelease.installerUrl;
+  const installerSize = (p.installer_size && p.installer_size > 0) ? p.installer_size : fallbackRelease.installerSize;
   return {
     version: p.version,
     releasedAt: p.released_at,
     releaseNotes: p.release_notes,
     githubUrl: p.github_url,
     installerUrl,
+    installerSize,
     source: p.source,
     downloads: p.downloads.map((d) => ({
       platform: d.platform,

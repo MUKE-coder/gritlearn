@@ -108,8 +108,28 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
+// Tolerant no-op stub returned by useSync() when no provider is mounted.
+// This is the canonical "no sync available" shape — same fields, all
+// inert. Lets components like the TitleBar's SyncButton render inside
+// the /auth layout (which deliberately mounts BEFORE the user signs in,
+// so SyncProvider isn't on the tree yet) without exploding the whole
+// React tree. The v0.3.0 / v0.3.1 / v0.3.3 black-screen-on-install bug
+// was exactly this — first launch with no token sent the user to
+// /auth/login, TitleBar rendered, SyncButton called useSync, the throw
+// nuked the page → user saw nothing but the BackgroundColour.
+const noopSyncContext: SyncContextValue = {
+  syncing:            false,
+  lastResult:         null,
+  contentUpdate:      null,
+  syncNow:            async () => {},
+  dismissContentUpdate: () => {},
+};
+
 export function useSync(): SyncContextValue {
   const ctx = useContext(SyncContext);
-  if (!ctx) throw new Error("useSync must be used inside <SyncProvider>");
-  return ctx;
+  // No provider on this part of the tree (e.g. inside the /auth layout
+  // before the user signs in). Return a stub instead of throwing —
+  // consumers like SyncButton render as disabled / hidden and the page
+  // still mounts.
+  return ctx ?? noopSyncContext;
 }

@@ -144,8 +144,27 @@ if (-not (Test-Path $headerBmp) -or -not (Test-Path $welcomeBmp)) {
   $mintBrush  = New-Object System.Drawing.SolidBrush($mint)
   $creamBrush = New-Object System.Drawing.SolidBrush($cream)
   $mutedBrush = New-Object System.Drawing.SolidBrush($muted)
-  $iconLg = (New-Object System.Drawing.Icon($iconPath, 64, 64)).ToBitmap()
-  $iconSm = (New-Object System.Drawing.Icon($iconPath, 32, 32)).ToBitmap()
+
+  # Source the logo from the 512x512 PNG, NOT the multi-size icon.ico.
+  # System.Drawing.Icon's (Icon, w, h) constructor doesn't decode the
+  # PNG-encoded entries in the ICO correctly on .NET Framework — the
+  # pixel data lands as RGB noise (the static glyph in the v0.3.3
+  # installer welcome page). Reading the PNG with FromFile + scaling
+  # via HighQualityBicubic gives a clean glyph.
+  $logoPng = "apps/web/public/web-app-manifest-512x512.png"
+  $logoSrc = [System.Drawing.Bitmap]::FromFile((Resolve-Path $logoPng).Path)
+  function ScaleLogo($src, $size) {
+    $b = New-Object System.Drawing.Bitmap($size, $size)
+    $g = [System.Drawing.Graphics]::FromImage($b)
+    $g.InterpolationMode = 'HighQualityBicubic'
+    $g.SmoothingMode     = 'AntiAlias'
+    $g.PixelOffsetMode   = 'HighQuality'
+    $g.DrawImage($src, 0, 0, $size, $size)
+    $g.Dispose()
+    return $b
+  }
+  $iconSm = ScaleLogo $logoSrc 32
+  $iconLg = ScaleLogo $logoSrc 96
 
   # Build as 32-bit, then flatten to 24-bit before save. NSIS MUI
   # classic expects 24-bit BMPs — 32-bit ARGB renders corrupt or

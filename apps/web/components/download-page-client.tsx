@@ -31,13 +31,13 @@ export function DownloadPageClient({ release }: { release: ReleaseInfo }) {
   const released = formatReleaseDate(release.releasedAt);
   const couldntReach = release.source === "fallback";
 
-  // Compute a friendly file size for the Windows tile when the API
-  // gave us one; falls back to the rough "~200 MB" the installer is
-  // known to be when no live number is available.
-  const winDownload = release.downloads.find((d) => d.platform === "windows");
+  // Size label uses installerSize (the ~200 MB Setup .exe) — NOT the
+  // size of the entries in release.downloads which point at the 32 MB
+  // portable .exe the auto-updater uses. The previous wiring showed
+  // 32 MB next to the Setup download button.
   const sizeLabel =
-    winDownload && winDownload.size > 0
-      ? `${Math.round(winDownload.size / (1024 * 1024))} MB`
+    release.installerSize && release.installerSize > 0
+      ? `${Math.round(release.installerSize / (1024 * 1024))} MB`
       : "~200 MB";
 
   return (
