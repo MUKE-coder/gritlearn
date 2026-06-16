@@ -324,6 +324,11 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 		auth.POST("/forgot-password", authHandler.ForgotPassword)
 		auth.POST("/reset-password", authHandler.ResetPassword)
 		auth.GET("/verify-email", authHandler.VerifyEmail)
+		// OTP-based email verification (the modern signup flow). Register
+		// no longer issues tokens; clients call /verify-otp with the
+		// 6-digit code from the email to finish signing up.
+		auth.POST("/verify-otp", authHandler.VerifyOTP)
+		auth.POST("/resend-otp", authHandler.ResendOTP)
 	}
 
 	// OAuth2 social login

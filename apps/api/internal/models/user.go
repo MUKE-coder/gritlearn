@@ -37,6 +37,11 @@ type User struct {
 	GoogleID        string         `gorm:"size:255" json:"-"`
 	GithubID        string         `gorm:"size:255" json:"-"`
 	EmailVerifiedAt *time.Time     `json:"email_verified_at"`
+	// 6-digit OTP delivered via Resend at signup. Rotated by Register
+	// and Resend-OTP; cleared on successful verification. OTPExpiresAt
+	// caps the window the code is valid for (10 minutes).
+	OTPCode      string     `gorm:"size:6" json:"-"`
+	OTPExpiresAt *time.Time `json:"-"`
 	IPAddress       string         `gorm:"size:45" json:"ip_address"`
 	MACAddress      string         `gorm:"size:50" json:"mac_address"`
 	Version         int            `gorm:"not null;default:1" json:"version"`

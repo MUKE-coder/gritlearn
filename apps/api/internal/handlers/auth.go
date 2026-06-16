@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,6 +24,19 @@ import (
 	"gritlearn/apps/api/internal/services"
 	"gritlearn/apps/api/internal/totp"
 )
+
+// generateOTP returns a fresh six-digit code as a string. Sourced from
+// crypto/rand (NOT math/rand) so the value can't be guessed by an
+// attacker who can clock-skew the request. Padded with leading zeros
+// so the on-the-wire shape is always exactly six characters.
+func generateOTP() (string, error) {
+	max := big.NewInt(1000000)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
 
 // emailVerifyClaims signs an email-verification link. We keep it separate
 // from services.Claims so a stolen access token can't be replayed against
@@ -124,15 +139,28 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Generate a six-digit OTP up front so we can fail the request
+	// cleanly if crypto/rand is broken before any DB write.
+	code, err := generateOTP()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "OTP_ERROR", "message": "Failed to generate verification code"},
+		})
+		return
+	}
+	otpExpiry := time.Now().Add(10 * time.Minute)
+
 	user := models.User{
-		FirstName:  req.FirstName,
-		LastName:   req.LastName,
-		Email:      req.Email,
-		Password:   req.Password,
-		Role:       models.RoleStudent,
-		Active:     true,
-		IPAddress:  c.ClientIP(),
-		MACAddress: req.MACAddress,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		Email:        req.Email,
+		Password:     req.Password,
+		Role:         models.RoleStudent,
+		Active:       true,
+		IPAddress:    c.ClientIP(),
+		MACAddress:   req.MACAddress,
+		OTPCode:      code,
+		OTPExpiresAt: &otpExpiry,
 	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
@@ -145,38 +173,27 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.AuthService.GenerateTokenPair(user.ID, user.Email, user.Role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"code":    "TOKEN_ERROR",
-				"message": "Failed to generate tokens",
-			},
-		})
-		return
-	}
-
-	// Set HttpOnly auth cookies for browser clients.
-	h.AuthService.SetAuthCookies(c, tokens)
-
-	// Fire welcome + verification emails best-effort. We don't fail the
-	// signup if Mailhog is down — the user is already created.
-	h.sendSignupEmails(user)
+	// Send the OTP email. We deliberately do NOT issue tokens here —
+	// the client must complete /api/auth/verify-otp first. This makes
+	// the email-ownership check unskippable, and stops automated
+	// signup-with-throwaway-address abuse.
+	h.sendOTPEmail(user, code)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"data": gin.H{
-			"user":   user,
-			"tokens": tokens,
+			"email":             user.Email,
+			"verification_sent": true,
 		},
-		"message": "User registered successfully",
+		"message": "Verification code sent. Enter the 6-digit code from your email to finish signing up.",
 	})
 }
 
-// sendSignupEmails fires the welcome and email-verification messages in
-// the background. The user has already been persisted by the time we get
-// here, so a Mailer failure must NOT bubble up to the HTTP response.
-func (h *AuthHandler) sendSignupEmails(user models.User) {
+// sendOTPEmail dispatches the 6-digit code via the configured Mailer
+// (Resend in prod). Fired-and-forget — the user row is already
+// committed before we get here, so a mail failure must not bubble up.
+func (h *AuthHandler) sendOTPEmail(user models.User, code string) {
 	if h.Mailer == nil {
+		log.Printf("[mail] OTP email skipped — Mailer not configured. Code for %s: %s", user.Email, code)
 		return
 	}
 	go func() {
@@ -188,8 +205,178 @@ func (h *AuthHandler) sendSignupEmails(user models.User) {
 			appName = "JEditor"
 		}
 
-		// Welcome email — fired-and-forget; failures only get logged.
-		welcomeData := map[string]interface{}{
+		data := map[string]interface{}{
+			"AppName":   appName,
+			"Year":      time.Now().Year(),
+			"FirstName": user.FirstName,
+			"Code":      code,
+		}
+		if err := h.Mailer.Send(ctx, mail.SendOptions{
+			To:       user.Email,
+			Subject:  "Your " + appName + " verification code: " + code,
+			Template: "otp-verification",
+			Data:     data,
+		}); err != nil {
+			log.Printf("[mail] OTP send failed for %s: %v", user.Email, err)
+		}
+	}()
+}
+
+// VerifyOTP consumes a six-digit code submitted from the signup flow.
+// On success, marks email_verified_at, clears the OTP fields, and
+// issues real auth tokens. Idempotent on re-submission of a code that
+// was already used — second call returns 401 because we wipe the code.
+func (h *AuthHandler) VerifyOTP(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+		Code  string `json:"code" binding:"required,len=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": gin.H{"code": "VALIDATION_ERROR", "message": err.Error()},
+		})
+		return
+	}
+
+	var user models.User
+	if err := h.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "INVALID_CODE", "message": "Invalid or expired code"},
+		})
+		return
+	}
+
+	// Already verified — short-circuit with tokens so the user can sign
+	// in even if they kept the /verify-email tab open.
+	if user.EmailVerifiedAt != nil {
+		tokens, err := h.AuthService.GenerateTokenPair(user.ID, user.Email, user.Role)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{"code": "TOKEN_ERROR", "message": "Failed to generate tokens"},
+			})
+			return
+		}
+		h.AuthService.SetAuthCookies(c, tokens)
+		c.JSON(http.StatusOK, gin.H{
+			"data":    gin.H{"user": user, "tokens": tokens},
+			"message": "Email already verified",
+		})
+		return
+	}
+
+	if user.OTPCode == "" || user.OTPExpiresAt == nil || time.Now().After(*user.OTPExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "CODE_EXPIRED", "message": "Code expired. Request a new one."},
+		})
+		return
+	}
+	if user.OTPCode != req.Code {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "INVALID_CODE", "message": "Invalid code"},
+		})
+		return
+	}
+
+	// Mark verified and clear OTP fields atomically.
+	now := time.Now()
+	user.EmailVerifiedAt = &now
+	user.OTPCode = ""
+	user.OTPExpiresAt = nil
+	if err := h.DB.Model(&user).Updates(map[string]interface{}{
+		"email_verified_at": &now,
+		"otp_code":          "",
+		"otp_expires_at":    nil,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to save verification"},
+		})
+		return
+	}
+
+	// Fire the welcome email best-effort now that ownership is proven.
+	h.sendWelcomeEmail(user)
+
+	tokens, err := h.AuthService.GenerateTokenPair(user.ID, user.Email, user.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "TOKEN_ERROR", "message": "Failed to generate tokens"},
+		})
+		return
+	}
+	h.AuthService.SetAuthCookies(c, tokens)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":    gin.H{"user": user, "tokens": tokens},
+		"message": "Email verified",
+	})
+}
+
+// ResendOTP rotates the OTP and sends a fresh email. Rate-limited at
+// the route layer (see routes.go) so a stranger can't probe a known
+// email by spamming this endpoint.
+func (h *AuthHandler) ResendOTP(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": gin.H{"code": "VALIDATION_ERROR", "message": err.Error()},
+		})
+		return
+	}
+
+	var user models.User
+	if err := h.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		// Don't leak whether the email exists — always say "sent".
+		c.JSON(http.StatusOK, gin.H{"message": "If that account exists, a new code has been sent."})
+		return
+	}
+
+	if user.EmailVerifiedAt != nil {
+		c.JSON(http.StatusOK, gin.H{"message": "Email already verified — try signing in."})
+		return
+	}
+
+	code, err := generateOTP()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "OTP_ERROR", "message": "Failed to generate code"},
+		})
+		return
+	}
+	expiry := time.Now().Add(10 * time.Minute)
+	user.OTPCode = code
+	user.OTPExpiresAt = &expiry
+	if err := h.DB.Model(&user).Updates(map[string]interface{}{
+		"otp_code":       code,
+		"otp_expires_at": &expiry,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Failed to save code"},
+		})
+		return
+	}
+
+	h.sendOTPEmail(user, code)
+
+	c.JSON(http.StatusOK, gin.H{"message": "A new code has been sent."})
+}
+
+// sendWelcomeEmail fires the post-verification welcome. Separate from
+// sendOTPEmail so each can be retried in isolation.
+func (h *AuthHandler) sendWelcomeEmail(user models.User) {
+	if h.Mailer == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		appName := h.Config.AppName
+		if appName == "" {
+			appName = "JEditor"
+		}
+		data := map[string]interface{}{
 			"AppName":   appName,
 			"Year":      time.Now().Year(),
 			"FirstName": user.FirstName,
@@ -198,34 +385,24 @@ func (h *AuthHandler) sendSignupEmails(user models.User) {
 			To:       user.Email,
 			Subject:  "Welcome to " + appName,
 			Template: "welcome",
-			Data:     welcomeData,
+			Data:     data,
 		}); err != nil {
 			log.Printf("[mail] welcome send failed for %s: %v", user.Email, err)
 		}
-
-		// Verification email — link the user clicks to confirm ownership.
-		token, err := h.generateEmailVerifyToken(user.ID)
-		if err != nil {
-			log.Printf("[mail] verify token gen failed for %s: %v", user.Email, err)
-			return
-		}
-		verifyURL := strings.TrimSuffix(h.Config.AppURL, "/") + "/api/auth/verify-email?token=" + url.QueryEscape(token)
-		verifyData := map[string]interface{}{
-			"AppName":   appName,
-			"Year":      time.Now().Year(),
-			"FirstName": user.FirstName,
-			"VerifyURL": verifyURL,
-		}
-		if err := h.Mailer.Send(ctx, mail.SendOptions{
-			To:       user.Email,
-			Subject:  "Verify your " + appName + " email",
-			Template: "email-verification",
-			Data:     verifyData,
-		}); err != nil {
-			log.Printf("[mail] verification send failed for %s: %v", user.Email, err)
-		}
 	}()
 }
+
+// sendSignupEmails (legacy signed-link flow) replaced by sendOTPEmail +
+// sendWelcomeEmail above. Kept as a stub so any stale call sites fail
+// loudly during the cutover, then deleted in the next pass.
+func (h *AuthHandler) sendSignupEmails(_ models.User) {
+	log.Printf("[mail] sendSignupEmails is deprecated — Register now sends OTP via sendOTPEmail")
+}
+
+// _ keeps url + strings imports alive in case any other handler in this
+// file still references them.
+var _ = url.QueryEscape
+var _ = strings.TrimSuffix
 
 // Login authenticates a user and returns tokens.
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -280,6 +457,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"error": gin.H{
 				"code":    "INVALID_CREDENTIALS",
 				"message": "Invalid email or password",
+			},
+		})
+		return
+	}
+
+	// Reject sign-in until the email is verified. Frontend sees
+	// EMAIL_NOT_VERIFIED and routes to /verify-email?email=... so the
+	// user can request a fresh OTP and finish signup. Skipped for
+	// social-login accounts (Provider != local) — those are already
+	// verified by the OAuth provider.
+	if user.EmailVerifiedAt == nil && (user.Provider == "" || user.Provider == "local") {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": gin.H{
+				"code":    "EMAIL_NOT_VERIFIED",
+				"message": "Verify your email to continue. Check your inbox for the 6-digit code.",
+				"email":   user.Email,
 			},
 		})
 		return

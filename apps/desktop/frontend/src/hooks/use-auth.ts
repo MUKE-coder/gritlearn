@@ -54,11 +54,38 @@ export function useLogin() {
   });
 }
 
+// Register no longer returns tokens. The API creates the user with
+// email_verified_at = null, emails a 6-digit OTP via Resend, and
+// expects the client to call useVerifyOTP with the code. Once
+// verification succeeds THAT mutation hands back the tokens and we
+// stamp them into the keychain.
+interface RegisterResponse {
+  email: string;
+  verification_sent: boolean;
+}
+
 export function useRegister() {
+  return useMutation({
+    mutationFn: async (input: RegisterInput): Promise<RegisterResponse> => {
+      const { data } = await apiClient.post("/auth/register", input);
+      return data.data;
+    },
+  });
+}
+
+// useVerifyOTP completes the signup loop. On success the API returns
+// the same { user, tokens } shape useLogin uses, so we run the same
+// keychain dance.
+interface VerifyOTPInput {
+  email: string;
+  code: string;
+}
+
+export function useVerifyOTP() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RegisterInput): Promise<AuthResponse> => {
-      const { data } = await apiClient.post("/auth/register", input);
+    mutationFn: async (input: VerifyOTPInput): Promise<AuthResponse> => {
+      const { data } = await apiClient.post("/auth/verify-otp", input);
       return data.data;
     },
     onSuccess: async (data) => {
@@ -66,6 +93,17 @@ export function useRegister() {
       await setToken("refresh_token", data.refresh_token);
       await setToken(IDENTITY_KEY, JSON.stringify(data.user));
       qc.setQueryData(["me"], data.user);
+    },
+  });
+}
+
+// useResendOTP rotates the code server-side and re-sends the email.
+// Server is rate-limited so spamming is harmless; UI cooldown
+// (in the verify-email page) prevents users from triggering it.
+export function useResendOTP() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      await apiClient.post("/auth/resend-otp", { email });
     },
   });
 }

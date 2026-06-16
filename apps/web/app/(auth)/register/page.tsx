@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 import { api } from "@/lib/api";
+import { AuthSplitLayout } from "@/components/auth-split-layout";
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-4 py-3 text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors";
 
@@ -36,15 +35,17 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const { data } = await api.post("/api/auth/register", {
+      // Register no longer returns tokens. The API creates the user
+      // (email_verified_at = null) and emails a 6-digit OTP via Resend.
+      // We bounce to /verify-email where the user enters the code,
+      // and THAT endpoint hands back the tokens.
+      await api.post("/api/auth/register", {
         first_name: firstName,
         last_name: lastName,
         email,
         password,
       });
-      Cookies.set("access_token", data.data.tokens.access_token, { expires: 1 });
-      Cookies.set("refresh_token", data.data.tokens.refresh_token, { expires: 7 });
-      router.push("/");
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
       setError(msg || "Registration failed. Please try again.");
@@ -56,15 +57,13 @@ export default function RegisterPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <Image src="/appicon.png" alt="JEditor" width={40} height={40} className="h-10 w-10 rounded-lg" />
-            <span className="text-xl font-semibold tracking-tight">JEditor</span>
-          </Link>
-          <h1 className="mt-6 text-3xl font-bold text-foreground">Create account</h1>
-          <p className="mt-2 text-text-secondary">Sign up to get started</p>
+    <AuthSplitLayout kicker="Sign up once. Learn offline forever.">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Create your account</h1>
+          <p className="mt-2 text-text-secondary">
+            We&apos;ll email you a 6-digit code to confirm your address.
+          </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-5">
@@ -210,6 +209,6 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

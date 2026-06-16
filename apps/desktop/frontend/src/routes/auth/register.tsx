@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { useRegister } from "@/hooks/use-auth";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { AuthSplitLayout } from "@/components/auth-split-layout";
 
 export const Route = createFileRoute("/auth/register")({
   component: RegisterPage,
@@ -28,30 +29,28 @@ function RegisterPage() {
   });
 
   const onSubmit = (data: RegisterInput) => {
-    registerUser(data, { onSuccess: () => navigate({ to: "/app" }) });
+    // The API issues a 6-digit code to the email and creates the user
+    // unverified. Once the student enters the code on /auth/verify-email
+    // that route hands back real tokens.
+    registerUser(data, {
+      onSuccess: () => navigate({ to: "/auth/verify-email", search: { email: data.email } }),
+    });
   };
 
-  const input = "w-full h-11 rounded-lg border border-border bg-surface-2 px-3.5 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20";
+  const input =
+    "h-11 w-full rounded-lg border border-border bg-surface-2 px-3.5 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20";
 
   return (
-    <div className="relative w-full max-w-[420px] px-4">
-      <div className="relative rounded-2xl border border-border bg-surface p-10 shadow-sm">
-        <div className="flex justify-center">
-          <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center shadow-sm">
-            <span className="text-[17px] font-bold text-white">G</span>
-          </div>
-        </div>
-
-        <div className="mt-5 text-center">
-          <h1 className="text-[22px] font-semibold text-foreground tracking-tight">
-            Create account
-          </h1>
-          <p className="mt-1.5 text-[13px] text-foreground-secondary">
-            Get started in 30 seconds
+    <AuthSplitLayout kicker="Sign up once. Learn offline forever.">
+      <div className="space-y-7">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-foreground">Create your account</h1>
+          <p className="mt-1.5 text-[13.5px] text-foreground-secondary">
+            We&apos;ll email you a 6-digit code to confirm your address.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {error && (
             <div className="rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
               {authErrorMessage(error, "Registration failed")}
@@ -90,20 +89,20 @@ function RegisterPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full h-11 rounded-lg bg-accent text-[14px] font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent text-[14px] font-semibold text-background transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {isPending ? "Creating..." : "Create account"}
           </button>
         </form>
 
-        <p className="mt-7 text-center text-[13px] text-foreground-secondary">
+        <p className="text-center text-[13px] text-foreground-secondary">
           Already have an account?{" "}
           <Link to="/auth/login" className="font-medium text-accent hover:underline">
             Sign in
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

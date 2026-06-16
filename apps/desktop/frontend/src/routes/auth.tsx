@@ -13,10 +13,12 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthLayout() {
+  // No centring container — child pages use <AuthSplitLayout> which
+  // fills the whole below-titlebar area with its own two-column grid.
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex h-screen flex-col bg-background">
       <TitleBar showSidebarControls={false} />
-      <div className="flex-1 flex items-center justify-center overflow-auto">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </div>
     </div>

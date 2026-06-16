@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { api } from "@/lib/api";
+import { AuthSplitLayout } from "@/components/auth-split-layout";
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-4 py-3 text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors";
 
@@ -27,8 +27,14 @@ export default function LoginPage() {
       Cookies.set("refresh_token", data.data.tokens.refresh_token, { expires: 7 });
       router.push("/");
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(msg || "Invalid email or password");
+      const resp = (err as { response?: { data?: { error?: { code?: string; message?: string; email?: string } } } })?.response?.data?.error;
+      // Email-not-verified: route to /verify-email so the user can enter
+      // the 6-digit code they got at signup (or request a fresh one).
+      if (resp?.code === "EMAIL_NOT_VERIFIED") {
+        router.push(`/verify-email?email=${encodeURIComponent(resp.email ?? email)}`);
+        return;
+      }
+      setError(resp?.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -37,15 +43,11 @@ export default function LoginPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <Image src="/appicon.png" alt="JEditor" width={40} height={40} className="h-10 w-10 rounded-lg" />
-            <span className="text-xl font-semibold tracking-tight">JEditor</span>
-          </Link>
-          <h1 className="mt-6 text-3xl font-bold text-foreground">Welcome back</h1>
-          <p className="mt-2 text-text-secondary">Sign in to your account</p>
+    <AuthSplitLayout kicker="Sign in and your offline-bundled curriculum is one click away.">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Welcome back</h1>
+          <p className="mt-2 text-text-secondary">Sign in to your JEditor account</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-5">
@@ -151,6 +153,6 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

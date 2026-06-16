@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useLogin } from "@/hooks/use-auth";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { AuthSplitLayout } from "@/components/auth-split-layout";
 
 export const Route = createFileRoute("/auth/login")({
   component: LoginPage,
@@ -28,37 +29,33 @@ function LoginPage() {
   });
 
   const onSubmit = (data: LoginInput) => {
-    login(data, { onSuccess: () => navigate({ to: "/app" }) });
+    login(data, {
+      onSuccess: () => navigate({ to: "/app" }),
+      onError: (err: unknown) => {
+        // EMAIL_NOT_VERIFIED → bounce to the OTP screen with the email
+        // prefilled so the student can finish their original signup.
+        const code = (err as { response?: { data?: { error?: { code?: string; email?: string } } } })
+          ?.response?.data?.error?.code;
+        const emailFromErr =
+          (err as { response?: { data?: { error?: { email?: string } } } })?.response?.data?.error?.email;
+        if (code === "EMAIL_NOT_VERIFIED") {
+          navigate({ to: "/auth/verify-email", search: { email: emailFromErr ?? data.email } });
+        }
+      },
+    });
   };
 
   return (
-    <div className="relative w-full max-w-[420px] px-4">
-      {/* Subtle radial glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-24 h-[400px] opacity-60"
-        style={{
-          background: "radial-gradient(600px at 50% 0%, rgba(108, 92, 231, 0.12), transparent 70%)",
-        }}
-      />
-
-      <div className="relative rounded-2xl border border-border bg-surface p-10 shadow-sm">
-        <div className="flex justify-center">
-          <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center shadow-sm">
-            <span className="text-[17px] font-bold text-white">G</span>
-          </div>
-        </div>
-
-        <div className="mt-5 text-center">
-          <h1 className="text-[22px] font-semibold text-foreground tracking-tight">
-            Welcome back
-          </h1>
-          <p className="mt-1.5 text-[13px] text-foreground-secondary">
-            Sign in to continue
+    <AuthSplitLayout kicker="Sign in and your offline curriculum is one click away.">
+      <div className="space-y-7">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-foreground">Welcome back</h1>
+          <p className="mt-1.5 text-[13.5px] text-foreground-secondary">
+            Sign in to your JEditor account
           </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {error && (
             <div className="rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
               {authErrorMessage(error, "Invalid email or password")}
@@ -74,7 +71,7 @@ function LoginPage() {
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
-              className="w-full h-11 rounded-lg border border-border bg-surface-2 px-3.5 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+              className="h-11 w-full rounded-lg border border-border bg-surface-2 px-3.5 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               {...register("email")}
             />
             {errors.email && <p className="text-[12px] text-danger">{errors.email.message}</p>}
@@ -90,7 +87,7 @@ function LoginPage() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Enter your password"
-                className="w-full h-11 rounded-lg border border-border bg-surface-2 px-3.5 pr-10 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                className="h-11 w-full rounded-lg border border-border bg-surface-2 px-3.5 pr-10 text-[14px] text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
                 {...register("password")}
               />
               <button
@@ -107,20 +104,20 @@ function LoginPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full h-11 rounded-lg bg-accent text-[14px] font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent text-[14px] font-semibold text-background transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {isPending ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-7 text-center text-[13px] text-foreground-secondary">
+        <p className="text-center text-[13px] text-foreground-secondary">
           Don't have an account?{" "}
           <Link to="/auth/register" className="font-medium text-accent hover:underline">
             Sign up
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }
