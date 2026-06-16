@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { api } from "@/lib/api";
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-4 py-3 text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors";
@@ -28,7 +29,11 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground">Reset password</h1>
+          <Link href="/" className="inline-flex items-center gap-2">
+            <Image src="/appicon.png" alt="JEditor" width={40} height={40} className="h-10 w-10 rounded-lg" />
+            <span className="text-xl font-semibold tracking-tight">JEditor</span>
+          </Link>
+          <h1 className="mt-6 text-3xl font-bold text-foreground">Reset password</h1>
           <p className="mt-2 text-text-secondary">
             Enter your email and we&apos;ll send you a reset link
           </p>

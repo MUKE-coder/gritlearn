@@ -134,9 +134,11 @@ export function HeroEditor() {
         {/* ── Title bar ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between border-b border-border bg-bg-tertiary px-3 h-9">
           <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded-sm border border-accent/30 bg-accent/10">
-              <span className="text-accent font-mono font-bold text-[10px]">J</span>
-            </div>
+            <img
+              src="/appicon.png"
+              alt=""
+              className="h-5 w-5 rounded-sm"
+            />
             <span className="text-[11px] font-mono text-text-muted tracking-wider">
               JEditor — phase-01 / css-selectors.mdx
             </span>

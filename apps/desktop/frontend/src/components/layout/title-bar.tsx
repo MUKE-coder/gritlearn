@@ -8,6 +8,7 @@ import {
 } from "@/lib/wails-bridge";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { SyncButton } from "@/components/layout/sync-button";
+import logoUrl from "@/assets/logo.png";
 
 interface TitleBarProps {
   showSidebarControls?: boolean;
@@ -38,17 +39,15 @@ export function TitleBar({ showSidebarControls: _ = true }: TitleBarProps) {
           </div>
         ) : (
           <div className="flex items-center gap-2 pl-2">
-            <div className="h-6 w-6 rounded-md bg-accent flex items-center justify-center">
-              <span className="text-[11px] font-bold text-white">G</span>
-            </div>
-            <span className="text-[13px] font-medium text-foreground">gritlearn</span>
+            <img src={logoUrl} alt="" className="h-6 w-6 rounded-md" />
+            <span className="text-[13px] font-medium text-foreground">JEditor</span>
           </div>
         )}
       </div>
 
       {/* Center: app name (macOS only, since controls are on left) */}
       {isMac && (
-        <div className="text-[13px] font-medium text-foreground-secondary">gritlearn</div>
+        <div className="text-[13px] font-medium text-foreground-secondary">JEditor</div>
       )}
 
       {/* Right: sync button + connection indicator + (on Win/Linux) controls. */}

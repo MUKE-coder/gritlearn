@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,11 +37,16 @@ export function Navbar() {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="group flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-sm border border-accent/40 bg-accent/10 transition-all group-hover:bg-accent/20 group-hover:shadow-[0_0_16px_var(--accent-glow)]">
-            <span className="text-accent font-mono font-bold text-[13px]">J</span>
-          </div>
+          <Image
+            src="/appicon.png"
+            alt="JEditor"
+            width={28}
+            height={28}
+            className="h-7 w-7 rounded-md transition-all group-hover:shadow-[0_0_16px_var(--accent-glow)]"
+            priority
+          />
           <span className="text-[15px] font-semibold tracking-tight">JEditor</span>
-          <span className="hidden sm:inline font-mono text-[10px] text-text-muted tracking-wider">v0.1</span>
+          <span className="hidden sm:inline font-mono text-[10px] text-text-muted tracking-wider">v0.3</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">

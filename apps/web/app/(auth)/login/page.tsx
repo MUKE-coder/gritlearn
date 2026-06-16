@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { api } from "@/lib/api";
@@ -39,7 +40,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground">Welcome back</h1>
+          <Link href="/" className="inline-flex items-center gap-2">
+            <Image src="/appicon.png" alt="JEditor" width={40} height={40} className="h-10 w-10 rounded-lg" />
+            <span className="text-xl font-semibold tracking-tight">JEditor</span>
+          </Link>
+          <h1 className="mt-6 text-3xl font-bold text-foreground">Welcome back</h1>
           <p className="mt-2 text-text-secondary">Sign in to your account</p>
         </div>
 

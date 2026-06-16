@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const DOCS_URL = "https://grit-vert.vercel.app/docs";
 
@@ -8,7 +9,8 @@ export function Footer() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-text-muted">
-            <span className="font-semibold text-text-secondary">gritlearn</span>
+            <Image src="/appicon.png" alt="" width={20} height={20} className="h-5 w-5 rounded" />
+            <span className="font-semibold text-text-secondary">JEditor</span>
             <span className="text-border">·</span>
             <span>Built with Grit</span>
           </div>
@@ -33,7 +35,7 @@ export function Footer() {
         </div>
         <div className="mt-6 pt-6 border-t border-border/30 text-center">
           <p className="text-xs text-text-muted">
-            &copy; {new Date().getFullYear()} gritlearn. All rights reserved.
+            &copy; {new Date().getFullYear()} JEditor. All rights reserved.
           </p>
         </div>
       </div>
