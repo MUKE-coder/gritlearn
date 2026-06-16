@@ -120,6 +120,20 @@ func Setup(db *gorm.DB, cfg *config.Config, svc *Services) *gin.Engine {
 				// MaxBodyBytes outright so attackers can't pad past it.
 				MaxBodyBytes:          64 * 1024,
 				RejectOversizedBody:   true,
+				// Auth payloads (passwords, names) routinely false-positive
+				// against the WAF's generic SQLi/XSS patterns. These routes
+				// have their own route-level rate limits + bcrypt; skipping
+				// body inspection here trades hypothetical defence-in-depth
+				// for actually being able to sign up.
+				ExcludeRoutes: []string{
+					"/api/auth/register",
+					"/api/auth/login",
+					"/api/auth/refresh",
+					"/api/auth/forgot-password",
+					"/api/auth/reset-password",
+					"/api/auth/verify-otp",
+					"/api/auth/resend-otp",
+				},
 			},
 			RateLimit: sentinel.RateLimitConfig{
 				Enabled: !isDev,
