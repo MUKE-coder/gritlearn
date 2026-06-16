@@ -1,4 +1,4 @@
-# release-desktop.ps1 — build, tag, and publish a new JEditor desktop
+﻿# release-desktop.ps1 — build, tag, and publish a new JEditor desktop
 # release on Windows. Run from the repo root in PowerShell.
 #
 # Usage:
@@ -229,11 +229,15 @@ if (-not $NoInstaller -and -not $SlimOnly) {
     exit 1
   }
   $fullSizeMB = [Math]::Round((Get-Item $installerFullPath).Length / 1MB, 1)
-  Write-Host "==> Full setup:   $installerFullPath ($($fullSizeMB) MB)" -ForegroundColor Green
+  # Note: format-string style instead of inline interpolation —
+  # PowerShell 5.1 treats "MB" as a numeric multiplier literal
+  # (1MB = 1048576), so "$var MB" in a double-quoted string trips
+  # the parser. {0} / -f bypasses it.
+  Write-Host ("==> Full setup:   {0} ({1} MB)" -f $installerFullPath, $fullSizeMB) -ForegroundColor Green
 }
 if (-not $NoInstaller -and (Test-Path $installerSlimPath)) {
   $slimSizeMB = [Math]::Round((Get-Item $installerSlimPath).Length / 1MB, 1)
-  Write-Host "==> Slim setup:   $installerSlimPath ($($slimSizeMB) MB)" -ForegroundColor Green
+  Write-Host ("==> Slim setup:   {0} ({1} MB)" -f $installerSlimPath, $slimSizeMB) -ForegroundColor Green
 }
 
 if ($DryRun) {
