@@ -226,6 +226,62 @@ func (a *App) FileExists(path string) bool {
 	return err == nil
 }
 
+// CreateFile makes a new empty file at path. Parent dirs are created
+// as needed. Fails loudly if the path already exists so a stray click
+// can't silently clobber an existing file.
+func (a *App) CreateFile(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("already exists: %s", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", path, err)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	return f.Close()
+}
+
+// CreateFolder makes a new directory at path (and any parents).
+// Idempotent — calling it on an existing folder succeeds silently
+// since MkdirAll's semantics match the in-app new-folder UX.
+func (a *App) CreateFolder(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", path, err)
+	}
+	return nil
+}
+
+// DeleteFileNode removes a file or directory tree at path. Use with
+// the same caution as rm -rf — the caller (UI) is responsible for
+// confirming with the user.
+func (a *App) DeleteFileNode(path string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("delete %s: %w", path, err)
+	}
+	return nil
+}
+
+// RenameFileNode renames/moves a file or directory. Rejects the
+// rename if dest already exists so two siblings can't silently
+// collide and lose data.
+func (a *App) RenameFileNode(oldPath, newPath string) error {
+	if oldPath == newPath {
+		return nil
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("already exists: %s", newPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", newPath, err)
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("rename %s → %s: %w", oldPath, newPath, err)
+	}
+	return nil
+}
+
 // ─── System info ──────────────────────────────────────────────────
 
 // GetPlatform returns "darwin" | "windows" | "linux".

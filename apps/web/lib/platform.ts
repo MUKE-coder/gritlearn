@@ -80,7 +80,7 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.2";
+export const FALLBACK_VERSION = "0.4.3";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
@@ -88,7 +88,7 @@ export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
   releasedAt: "2026-06-16T09:00:00Z",
   releaseNotes:
-    "JEditor v0.4.2 — login redirect bug fixed (token-shape mismatch in the desktop client), forgot-password / reset-password flow added end-to-end (6-digit OTP via Resend), Sentinel WAF no longer false-positives on auth payloads, Phase 4 Batches 1-4 curriculum content shipped.",
+    "JEditor v0.4.3 — Boot.dev-style learning shell. /app now lands on a Phase Picker (Web Frontend, Backend, …) with per-phase progress bars. Each phase opens a focused two-pane view: lesson content on the left, editor on the right, with a draggable splitter to resize. Top bar has chapter + lesson dropdowns and a Next button; the dot row shows progress through the current chapter. The misleading folder-plus button in the file tree is gone — replaced by inline New File / New Folder + a right-click menu for rename/delete that actually works in-app.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

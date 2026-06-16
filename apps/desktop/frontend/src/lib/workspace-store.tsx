@@ -38,6 +38,11 @@ interface WorkspaceState {
   activeTabIndex: number;
   /** Whether the right-hand preview pane is showing. */
   previewVisible: boolean;
+  /** Bumped every time a file/folder is created, renamed, or deleted.
+   *  The file tree subscribes to this and re-fetches affected branches
+   *  so the UI stays in sync with disk without us needing a real
+   *  filesystem watcher in Go. */
+  treeVersion: number;
 }
 
 const initialState: WorkspaceState = {
@@ -45,6 +50,7 @@ const initialState: WorkspaceState = {
   tabs: [],
   activeTabIndex: -1,
   previewVisible: false,
+  treeVersion: 0,
 };
 
 type Action =
@@ -54,7 +60,9 @@ type Action =
   | { type: "select-tab"; index: number }
   | { type: "update-content"; index: number; content: string }
   | { type: "mark-saved"; index: number; savedContent: string }
-  | { type: "set-preview"; visible: boolean };
+  | { type: "set-preview"; visible: boolean }
+  | { type: "bump-tree" }
+  | { type: "rename-tab"; oldPath: string; newPath: string };
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
   switch (action.type) {
@@ -102,6 +110,19 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
 
     case "set-preview":
       return { ...state, previewVisible: action.visible };
+
+    case "bump-tree":
+      return { ...state, treeVersion: state.treeVersion + 1 };
+
+    case "rename-tab":
+      return {
+        ...state,
+        tabs: state.tabs.map((t) => {
+          if (t.path !== action.oldPath) return t;
+          const name = action.newPath.split(/[\\/]/).pop() ?? action.newPath;
+          return { ...t, path: action.newPath, name, language: languageForPath(action.newPath) };
+        }),
+      };
   }
 }
 
@@ -117,6 +138,17 @@ export interface WorkspaceContextValue extends WorkspaceState {
   saveActiveTab: () => Promise<void>;
   setPreviewVisible: (visible: boolean) => void;
   togglePreview: () => void;
+  /** Create an empty file at parentDir/name. Bumps treeVersion + opens it.
+   *  Throws if the name already exists in that folder. */
+  createFile: (parentDir: string, name: string) => Promise<void>;
+  /** Create a new folder at parentDir/name. Bumps treeVersion. */
+  createFolder: (parentDir: string, name: string) => Promise<void>;
+  /** Rename or move a file/folder. Bumps treeVersion + retitles any
+   *  open tab for that path. */
+  renameNode: (oldPath: string, newName: string) => Promise<void>;
+  /** Delete a file or folder tree. Bumps treeVersion + closes any open
+   *  tabs whose path lived underneath it. */
+  deleteNode: (path: string) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -182,6 +214,82 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "set-preview", visible: !state.previewVisible });
   }, [state.previewVisible]);
 
+  // joinPath glues a parent directory + child segment without us having
+  // to import path on the client. Windows accepts forward slashes for
+  // path APIs, but the file tree reads ListDirectory output (OS-native
+  // separator) so we mirror whatever the parent already used.
+  const joinPath = useCallback((parent: string, child: string) => {
+    const sep = parent.includes("\\") ? "\\" : "/";
+    const trimmed = parent.endsWith(sep) ? parent.slice(0, -1) : parent;
+    return `${trimmed}${sep}${child}`;
+  }, []);
+
+  const dirOf = useCallback((path: string) => {
+    const sep = path.includes("\\") ? "\\" : "/";
+    const idx = path.lastIndexOf(sep);
+    return idx === -1 ? path : path.slice(0, idx);
+  }, []);
+
+  const createFile = useCallback(
+    async (parentDir: string, name: string) => {
+      const full = joinPath(parentDir, name);
+      await App.CreateFile(full);
+      dispatch({ type: "bump-tree" });
+      const content = await App.ReadFile(full);
+      const tabName = name;
+      dispatch({
+        type: "open-tab",
+        tab: {
+          path: full,
+          name: tabName,
+          savedContent: content,
+          content,
+          language: languageForPath(full),
+        },
+      });
+    },
+    [joinPath],
+  );
+
+  const createFolder = useCallback(
+    async (parentDir: string, name: string) => {
+      const full = joinPath(parentDir, name);
+      await App.CreateFolder(full);
+      dispatch({ type: "bump-tree" });
+    },
+    [joinPath],
+  );
+
+  const renameNode = useCallback(
+    async (oldPath: string, newName: string) => {
+      const parent = dirOf(oldPath);
+      const newPath = joinPath(parent, newName);
+      await App.RenameFileNode(oldPath, newPath);
+      dispatch({ type: "rename-tab", oldPath, newPath });
+      dispatch({ type: "bump-tree" });
+    },
+    [dirOf, joinPath],
+  );
+
+  const deleteNode = useCallback(
+    async (path: string) => {
+      await App.DeleteFileNode(path);
+      // Close tabs whose file lived under the deleted path. We iterate
+      // back-to-front so the indices don't shift mid-loop.
+      const isUnder = (tabPath: string) =>
+        tabPath === path || tabPath.startsWith(path + "/") || tabPath.startsWith(path + "\\");
+      const indicesToClose: number[] = [];
+      state.tabs.forEach((t, i) => {
+        if (t.path && isUnder(t.path)) indicesToClose.push(i);
+      });
+      for (let i = indicesToClose.length - 1; i >= 0; i--) {
+        dispatch({ type: "close-tab", index: indicesToClose[i] });
+      }
+      dispatch({ type: "bump-tree" });
+    },
+    [state.tabs],
+  );
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       ...state,
@@ -195,6 +303,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       saveActiveTab,
       setPreviewVisible,
       togglePreview,
+      createFile,
+      createFolder,
+      renameNode,
+      deleteNode,
     }),
     [
       state,
@@ -207,6 +319,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       saveActiveTab,
       setPreviewVisible,
       togglePreview,
+      createFile,
+      createFolder,
+      renameNode,
+      deleteNode,
     ],
   );
 
@@ -228,6 +344,10 @@ const noopWorkspaceContext: WorkspaceContextValue = {
   saveActiveTab:       async () => {},
   setPreviewVisible:   () => {},
   togglePreview:       () => {},
+  createFile:          async () => {},
+  createFolder:        async () => {},
+  renameNode:          async () => {},
+  deleteNode:          async () => {},
 };
 
 export function useWorkspace(): WorkspaceContextValue {
