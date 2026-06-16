@@ -90,15 +90,18 @@ apiClient.interceptors.response.use(
         const refreshToken = await getToken("refresh_token");
         if (!refreshToken) throw new Error("No refresh token");
 
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken });
+        const { data: envelope } = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken });
+        // Server returns { data: { tokens: { access_token, refresh_token } }, message }
+        const tokens = envelope?.data?.tokens;
+        if (!tokens?.access_token) throw new Error("Refresh response missing tokens");
 
-        await setToken("access_token", data.access_token);
-        await setToken("refresh_token", data.refresh_token);
+        await setToken("access_token", tokens.access_token);
+        await setToken("refresh_token", tokens.refresh_token);
 
-        refreshQueue.forEach((cb) => cb(data.access_token));
+        refreshQueue.forEach((cb) => cb(tokens.access_token));
         refreshQueue = [];
 
-        if (original.headers) original.headers.Authorization = `Bearer ${data.access_token}`;
+        if (original.headers) original.headers.Authorization = `Bearer ${tokens.access_token}`;
         return apiClient(original);
       } catch (refreshErr) {
         await deleteToken("access_token");

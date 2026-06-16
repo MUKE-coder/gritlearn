@@ -22,9 +22,11 @@ interface RegisterInput {
 }
 
 interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
   user: User;
+  tokens: {
+    access_token: string;
+    refresh_token: string;
+  };
 }
 
 export function useMe() {
@@ -46,8 +48,8 @@ export function useLogin() {
       return data.data;
     },
     onSuccess: async (data) => {
-      await setToken("access_token", data.access_token);
-      await setToken("refresh_token", data.refresh_token);
+      await setToken("access_token", data.tokens.access_token);
+      await setToken("refresh_token", data.tokens.refresh_token);
       await setToken(IDENTITY_KEY, JSON.stringify(data.user));
       qc.setQueryData(["me"], data.user);
     },
@@ -89,8 +91,8 @@ export function useVerifyOTP() {
       return data.data;
     },
     onSuccess: async (data) => {
-      await setToken("access_token", data.access_token);
-      await setToken("refresh_token", data.refresh_token);
+      await setToken("access_token", data.tokens.access_token);
+      await setToken("refresh_token", data.tokens.refresh_token);
       await setToken(IDENTITY_KEY, JSON.stringify(data.user));
       qc.setQueryData(["me"], data.user);
     },
