@@ -213,8 +213,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
 
+// Inert no-op shape returned by useWorkspace when no provider is
+// mounted. See sync-provider.tsx for the pattern + the v0.3.x
+// post-mortem.
+const noopWorkspaceContext: WorkspaceContextValue = {
+  ...initialState,
+  activeTab:           null,
+  openFolder:          async () => {},
+  setRoot:             () => {},
+  openFile:            async () => {},
+  closeTab:            () => {},
+  selectTab:           () => {},
+  updateActiveContent: () => {},
+  saveActiveTab:       async () => {},
+  setPreviewVisible:   () => {},
+  togglePreview:       () => {},
+};
+
 export function useWorkspace(): WorkspaceContextValue {
   const ctx = useContext(WorkspaceContext);
-  if (!ctx) throw new Error("useWorkspace must be used inside <WorkspaceProvider>");
-  return ctx;
+  return ctx ?? noopWorkspaceContext;
 }

@@ -88,8 +88,18 @@ export function CurriculumProvider({ children }: { children: ReactNode }) {
   return <CurriculumContext.Provider value={value}>{children}</CurriculumContext.Provider>;
 }
 
+// Inert no-op shape returned by useCurriculum when no provider is
+// mounted. See sync-provider.tsx for the pattern + the v0.3.x
+// post-mortem.
+const noopCurriculumContext: CurriculumContextValue = {
+  manifest:      null,
+  loading:       false,
+  error:         null,
+  selectedSlug:  null,
+  selectConcept: () => {},
+};
+
 export function useCurriculum(): CurriculumContextValue {
   const ctx = useContext(CurriculumContext);
-  if (!ctx) throw new Error("useCurriculum must be used inside <CurriculumProvider>");
-  return ctx;
+  return ctx ?? noopCurriculumContext;
 }

@@ -132,8 +132,21 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
 
+// Inert no-op shape returned by useProgress when no provider is mounted
+// (e.g. inside the /auth layout, which renders before ProgressProvider
+// from /app). Lets components like the TitleBar render anywhere without
+// crashing the whole tree. See sync-provider.tsx for the same pattern.
+const noopProgressContext: ProgressContextValue = {
+  rows:                 {},
+  loading:              false,
+  recordViewed:         async () => {},
+  recordExampleOpened:  async () => {},
+  markCompleted:        async () => {},
+  markUncompleted:      async () => {},
+  clearAll:             async () => {},
+};
+
 export function useProgress(): ProgressContextValue {
   const ctx = useContext(ProgressContext);
-  if (!ctx) throw new Error("useProgress must be used inside <ProgressProvider>");
-  return ctx;
+  return ctx ?? noopProgressContext;
 }
