@@ -1,0 +1,276 @@
+## What Node.js is
+
+In Phase 1 you learned JavaScript — but every snippet ran in the browser. JavaScript started its life as the language for "what happens when the user clicks something" — embedded inside web pages, sandboxed away from the file system, the network, and anything that might let it run as a real program.
+
+**Node.js** is JavaScript pulled out of the browser. Same language. Same syntax. Same standard library for arrays, strings, objects. But it runs as a *standalone program* — it can read files, open sockets, talk to databases, listen on a port for HTTP requests. Everything a server needs.
+
+This concept is about what Node *is*, why it's good at building APIs, and how the runtime model (the event loop, async I/O) shapes the code you write.
+
+<Analogy>
+Node.js is **a single very fast cook who never waits for the oven**.
+
+Imagine a busy diner. A customer orders pancakes; the cook tells the kitchen "pancakes for table 3" and immediately turns to the next customer in line. The pancake batter goes on the griddle, and the cook moves on. Three minutes later a buzzer dings. The cook flips the pancake without missing a beat on whatever they were doing right then. Eventually pancakes come up — the cook hands them off to the runner who brings them to table 3.
+
+This is **non-blocking, single-threaded, event-driven** in action.
+
+- **Single-threaded**: one cook. There aren't two cooks working the same line; everything is one human handling many orders.
+- **Non-blocking**: the cook never stands waiting for the griddle. The instant a task can wait on its own, the cook moves on.
+- **Event-driven**: a buzzer (a timer, a callback, a "data ready" signal from the disk or network) tells the cook when to come back to finish a task.
+
+What the cook is doing — quickly accepting orders, dispatching them, accepting the *results* when they're ready, dispatching the next thing — is what the **Node event loop** does. Node has exactly one main thread executing JavaScript, and it spends 99% of its time accepting requests, kicking off I/O, and handling responses. The actual I/O (reading a file, fetching a URL, querying Postgres) is handed off to the OS or a worker pool and Node picks the result up *when it's done* — without blocking.
+
+This is why Node is fast for the kind of work APIs do — almost every API request is "wait for the database" or "wait for an upstream HTTP call." A traditional server (one thread per request) would have the thread sit idle waiting. Node uses *one* thread for thousands of in-flight requests because almost no request is actually using CPU — they're all sitting in the "wait for the network" state. The cook handles 200 orders an hour by never standing still.
+
+Where Node is **bad**: if your work is heavy CPU (image processing, encryption rounds, big data transforms), the single cook becomes a bottleneck because there's no second cook to switch to. Languages with multi-threaded runtimes (Go, Rust, Java) shine for CPU-bound work. Node shines for I/O-bound work — which is most web APIs.
+
+In code:
+
+- **The browser's JavaScript** sees `window`, `document`, `localStorage`. No file system. No raw sockets.
+- **Node.js's JavaScript** sees `fs`, `http`, `net`, `process`. No `window`. No `document`. (You can polyfill, but you wouldn't.)
+
+Same language. Different I/O surface. The skills overlap massively — you read the same MDN docs for `Array.prototype.map`, `JSON.parse`, `Promise.all`. Only the *runtime APIs* change.
+</Analogy>
+
+### The runtime, the standard library, and the package ecosystem
+
+When you install Node.js you get three things bundled:
+
+1. **The V8 JavaScript engine** — the same JIT-compiled engine Chrome uses. Runs your JS, fast.
+2. **Node's standard library** — `fs` for files, `http` for HTTP, `path`, `os`, `crypto`, `stream`, `child_process`. A few dozen modules covering what a server-side program needs.
+3. **`npm`** — the package manager. Lets you install third-party libraries. Express, Prisma, Zod, dotenv — everything in `node_modules`.
+
+A typical Node program imports from all three layers:
+
+```js
+import fs from "node:fs/promises";   // ← stdlib
+import express from "express";        // ← npm
+import { hashPassword } from "./auth";// ← your own code
+```
+
+The `node:` prefix is the modern way to mark a stdlib import (so a third-party package can't shadow `node:fs`).
+
+### Hello, Node — the smallest server you can write
+
+```js
+// server.js
+import http from "node:http";
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify({ message: "Hello from Node" }));
+});
+
+server.listen(3000, () => {
+  console.log("Server running at http://localhost:3000");
+});
+```
+
+Save the file. Run `node server.js`. The terminal prints `Server running at...`. Open the URL in your browser; you get `{"message": "Hello from Node"}` back.
+
+You just wrote a working HTTP server with the stdlib alone. No frameworks. ~10 lines.
+
+Production Node apps don't usually use `http.createServer` directly — Express (next concept) is a thin layer on top that adds routing, middleware, body parsing. But it's worth knowing that *Node's stdlib already has* an HTTP server. Express is convenience, not magic.
+
+### Modules — CommonJS vs ESM
+
+Node has *two* module systems that coexist in 2026:
+
+- **CommonJS** (`require()` / `module.exports`) — the original. Most older packages still ship in this format.
+- **ES Modules** (`import` / `export`) — the modern standard, same as the browser, same as Phase 1.
+
+The default for new projects today is ESM. You opt in by adding `"type": "module"` to your `package.json`:
+
+```json
+{
+  "name": "my-api",
+  "type": "module"
+}
+```
+
+After that, `.js` files are parsed as ES modules. Old habit dies hard — you may still see `require()` in tutorials. For new code in 2026 use ESM unless a dependency forces you to use CommonJS.
+
+### How Node handles I/O — the event loop
+
+The thing that makes Node feel different from synchronous languages is that almost every I/O call is *asynchronous* — it returns a Promise (or in old APIs, takes a callback) instead of blocking the thread.
+
+```js
+import fs from "node:fs/promises";
+
+// SYNC — blocks the thread until the file is read
+import fsSync from "node:fs";
+const content = fsSync.readFileSync("data.txt", "utf-8");
+console.log(content);   // doesn't run until disk read completes
+
+// ASYNC — returns a Promise immediately, thread free to do other work
+const content2 = await fs.readFile("data.txt", "utf-8");
+console.log(content2);  // runs after disk read completes
+```
+
+The async version is what you almost always use. While the disk is reading, the Node event loop can handle 50 other requests. When the disk finishes, the loop comes back, runs the next line.
+
+In code-shape terms, this means **everything is `async`/`await`**:
+
+```js
+import express from "express";
+import { db } from "./lib/db.js";
+
+const app = express();
+
+app.get("/users", async (req, res) => {
+  const users = await db.user.findMany();   // async — frees the loop
+  res.json(users);
+});
+
+app.listen(3000);
+```
+
+If you forget the `await` on `db.user.findMany()`, you'd send `res.json(somePendingPromise)` and the response would be `{}` — a common beginner bug. Always await your I/O.
+
+### Where Node falls short
+
+Knowing what Node is *bad* at saves you from picking the wrong tool:
+
+- **CPU-bound work** — image resizing, video encoding, large JSON parses, ML inference. Node will technically run it, but during the work the entire event loop blocks. Other requests pile up behind it. For these, either offload to a worker thread (Node has `worker_threads`) or use a different language for the hot path.
+- **Long-running scientific computation.** Python with NumPy, Julia, or C++ are dramatically better here.
+- **Hard real-time** (control systems, embedded). Node's GC pauses make it unsuitable.
+
+For an API that mostly does "validate input → talk to the database → return JSON," Node is excellent and what most modern startups choose.
+
+### Versions and LTS
+
+Node.js follows a release schedule with **Long-Term Support (LTS)** versions. Even-numbered versions become LTS; odd ones are short-lived "current" lines used by package maintainers.
+
+Today's LTS is **Node 22**. For production, use whatever LTS is current. For learning, use the latest LTS — it's what the docs assume.
+
+Install via:
+
+- **macOS**: `brew install node@22` or download from nodejs.org.
+- **Windows**: installer from nodejs.org, or via `winget install OpenJS.NodeJS.LTS`.
+- **Linux**: NodeSource repo (`curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -` then `sudo apt install -y nodejs`).
+- **Anywhere**: `nvm` (Node Version Manager) — lets you have multiple Node versions side by side and switch between them per project.
+
+After install, two commands prove it works:
+
+```bash
+node --version    # → v22.x.y
+npm --version     # → 10.x.y
+```
+
+`npm` comes bundled with Node. There's also `pnpm` and `yarn` (alternative package managers); we'll use npm by default in this phase because it's what comes pre-installed.
+
+### Node vs. Bun, Deno, and the alternatives
+
+Three other JavaScript runtimes are worth knowing about:
+
+- **Bun** — fast JavaScript runtime + package manager + bundler from Oven. Dramatically faster boot time. Compatible with most of Node's API. As of 2026 it's a credible alternative; many startups have switched.
+- **Deno** — secure-by-default JavaScript runtime from the creator of Node. Uses TypeScript natively. Smaller npm ecosystem reach.
+- **Node** — the incumbent. Battle-tested. Every package on npm runs on it. Boring, dependable.
+
+We use **Node** in this phase because it's what 95% of jobs assume you know. The patterns transfer cleanly to Bun/Deno if you decide to move.
+
+### What `npm init` actually does
+
+To start a Node project:
+
+```bash
+mkdir my-api
+cd my-api
+npm init -y
+```
+
+This writes a `package.json` — your project's manifest. It contains:
+
+```json
+{
+  "name": "my-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev":   "node --watch server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
+```
+
+- **`type: "module"`** — opts into ESM (mentioned above).
+- **`scripts`** — shortcut commands you can run with `npm run <name>`. `npm run dev` runs the file with `--watch` (auto-restart on save). `npm start` is the production one.
+- **`dependencies`** + **`devDependencies`** — packages your code imports. The next concept (`node-modules-npm`) covers this in depth.
+
+You'll see this file in every Node project you ever touch.
+
+<ExampleProject
+  src="event-loop"
+  title="Watch the event loop"
+  description="Click 'Add file read' / 'Add HTTP fetch' / 'Add timer' and see Node's event loop process each one. Visual animation of how I/O is queued, how the main thread stays free, and how non-blocking I/O lets one thread serve thousands of requests."
+/>
+
+<Exercise
+  title="Build a 3-endpoint API with just Node's stdlib"
+  starter={`Before reaching for Express, prove to yourself that Node's stdlib
+already has an HTTP server. Build a small JSON API with the
+stdlib only.
+
+  1. Create a fresh dir, run 'npm init -y'.
+  2. Add "type": "module" to package.json.
+  3. Create server.js with this skeleton:
+
+       import http from "node:http";
+       import { URL } from "node:url";
+
+       const tasks = [
+         { id: 1, title: "Buy milk",       done: false },
+         { id: 2, title: "Write API spec", done: true  },
+       ];
+
+       const server = http.createServer((req, res) => {
+         res.setHeader("content-type", "application/json");
+         const url = new URL(req.url, "http://localhost");
+
+         if (req.method === "GET" && url.pathname === "/tasks") {
+           res.writeHead(200);
+           res.end(JSON.stringify(tasks));
+           return;
+         }
+
+         if (req.method === "POST" && url.pathname === "/tasks") {
+           let body = "";
+           req.on("data", (chunk) => (body += chunk));
+           req.on("end", () => {
+             const parsed = JSON.parse(body);
+             const task = { id: tasks.length + 1, ...parsed, done: false };
+             tasks.push(task);
+             res.writeHead(201);
+             res.end(JSON.stringify(task));
+           });
+           return;
+         }
+
+         res.writeHead(404);
+         res.end(JSON.stringify({ error: "Not found" }));
+       });
+
+       server.listen(3000, () => console.log("→ http://localhost:3000"));
+
+  4. Run with 'node --watch server.js'. The --watch flag auto-
+     restarts when you edit the file.
+
+  5. Hit it with curl:
+       curl http://localhost:3000/tasks
+       curl -X POST http://localhost:3000/tasks \\
+            -H "Content-Type: application/json" \\
+            -d '{"title":"Phase 4 milestone"}'
+
+  6. Notice what's awkward:
+     - You're manually reading the body chunk-by-chunk (Express
+       solves this with body-parser middleware)
+     - URL matching is a giant if/else (Express has a routing table)
+     - No validation of the POST body (Express + Zod combo solves this)
+     - No way to share state cleanly between handlers
+
+This is why Express exists — it's a thin layer that fixes every one
+of those awkward bits while staying close to Node's underlying
+http.createServer model. Knowing what you'd do without Express makes
+Express feel like a natural improvement instead of magic.`}
+/>

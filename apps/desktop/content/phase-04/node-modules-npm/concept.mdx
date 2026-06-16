@@ -1,0 +1,317 @@
+## Node modules and npm
+
+JavaScript on its own is small. To build a real API you need libraries — for HTTP routing, for database access, for validation, for date math, for password hashing. **npm** (Node Package Manager) is how those libraries reach your machine. **`node_modules/`** is where they live once they get there. **`package.json`** is the manifest that says which ones you need.
+
+This is the boring infrastructure of every Node project — but bad habits here cause real pain later. Let's get them right from day one.
+
+<Analogy>
+`npm` and the package ecosystem are **a global hardware store where the inventory is free and every shelf has version numbers.**
+
+Imagine you're building a piece of furniture. You need screws, brackets, hinges, a specific kind of glue. You don't make those yourself — you walk to the hardware store, find the aisle, grab what you need, take it home. When the project's done, the parts stay on the furniture; you don't return them.
+
+Three things make a *programming* hardware store different from the lumber-yard one:
+
+1. **Every part has a version number** stamped on it. You bought screw type 7.4.0 — there might be a 7.4.1, an 8.0.0, eventually a 9.0.0. Old ones stay available; new ones come out without your asking. The store keeps every version on the shelf indefinitely.
+
+2. **Most parts depend on other parts.** When you grab "kitchen drawer slide v2.3," the package quietly comes with the matching screws, rails, and rubber bumpers it needs to work. Each of *those* parts comes with their own dependencies. Your one drawer slide might pull in a tree of 40 sub-parts. You don't have to think about it; the store handles the assembly.
+
+3. **It's free**, but the cost is in *trust*. Anyone in the world can publish parts. A part you grabbed last year might get an update that quietly does something it shouldn't. You vet what you depend on — at minimum, glance at the maintainer, the download count, the last release date — before locking yourself in.
+
+In Node terms:
+
+- **The hardware store** = npm's registry (npmjs.com). Holds millions of packages.
+- **The shelf** = a package's history of versions, each immutable once published.
+- **Your project's `package.json`** = the receipt — the list of parts you asked for, with the version range you're willing to accept.
+- **`node_modules/`** = the assembled tree of parts now installed in your project, including all transitive dependencies.
+- **`package-lock.json`** = the exact serial numbers of every part you actually installed. Lets you (or a teammate) reproduce the exact same tree later by running `npm install` against the lock file.
+
+Three habits the analogy implies:
+
+- **Keep the receipt clean.** Don't list parts in `package.json` you don't actually use. Stale dependencies are security debt.
+- **Commit the lock file.** Same lock file → same installed tree → same behavior on every machine. Without it, two developers can get different versions of the same dependency and one app works while the other crashes.
+- **Trust thoughtfully.** Before adding a package: check the weekly download count, the GitHub stars, the most recent commit. A 200-download-a-week package maintained by one person who hasn't responded to issues in two years is a liability.
+</Analogy>
+
+### `package.json` — the manifest you'll touch most
+
+Created by `npm init`, edited by every package install. Key fields:
+
+```json
+{
+  "name": "my-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev":   "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test":  "vitest run",
+    "lint":  "eslint src"
+  },
+  "dependencies": {
+    "express":         "^4.19.2",
+    "pg":              "^8.13.0",
+    "zod":             "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "typescript":     "^5.5.3",
+    "vitest":         "^2.0.4"
+  }
+}
+```
+
+Walk through:
+
+- **`name`** + **`version`**: project metadata. If you publish this to npm, both matter. For an app, only `version` matters (or no one cares — your CI just looks at the commit hash).
+- **`type: "module"`** — opts into ES Modules so `.js` files are parsed as ESM (covered in `what-is-nodejs`).
+- **`scripts`** — shortcut commands. Run with `npm run <name>` (or just `npm start`/`npm test`/`npm install`, which don't need `run`).
+- **`dependencies`** — libraries your *runtime* code imports. Shipped to production.
+- **`devDependencies`** — only needed during development or build. TypeScript, test runners, linters. NOT shipped to production.
+
+The difference between `dependencies` and `devDependencies` matters because `npm install --omit=dev` (the production install command) skips devDependencies. Smaller container images, fewer security surfaces.
+
+### Semantic versioning — the `^` and `~` characters
+
+The version strings have prefixes:
+
+- **`^4.19.2`** — "compatible with 4.19.2, install anything `>=4.19.2 <5.0.0`." Accepts minor + patch updates, blocks major. The default for `npm install <pkg>`.
+- **`~4.19.2`** — "patch-compatible, install anything `>=4.19.2 <4.20.0`." Only patch updates. More conservative.
+- **`4.19.2`** — exact pin. No automatic updates.
+- **`*`** or **`latest`** — anything goes. Never use this for production deps.
+
+Semantic versioning (semver) splits versions into **MAJOR.MINOR.PATCH**:
+
+- **PATCH** bumps for bug fixes (`4.19.2 → 4.19.3`). Should be safe to take.
+- **MINOR** bumps for new features that don't break existing usage (`4.19.2 → 4.20.0`). Should be safe.
+- **MAJOR** bumps for breaking changes (`4.x → 5.0.0`). May require code changes.
+
+`^` and `~` rely on package authors following semver correctly. Most do. When they don't (a "minor" release breaks your code), that's where lock files save you.
+
+### `package-lock.json` — the exact serial numbers
+
+When you `npm install`, npm picks specific versions from the ranges in `package.json` and writes them all — including transitive deps — into `package-lock.json`. The next person to run `npm install` against the same lock file gets the *exact same tree*, byte for byte.
+
+**Always commit `package-lock.json`.** Yes, even for libraries. Yes, even if it's huge. Especially if it's huge — the size is proof of how many sub-dependencies you're trusting.
+
+Skipping the lock file means:
+
+- Developer A installs Friday, gets `express@4.19.2` (latest patch on Friday).
+- Developer B installs Monday, gets `express@4.19.3` (Friday-evening patch release).
+- App breaks on Monday for Dev B; works for Dev A. They spend an hour finding the diff.
+
+Commit the lock. The first time you save a friend two hours of debugging, you'll thank yourself.
+
+### `node_modules/` — the installed tree
+
+After `npm install`, you get a `node_modules/` folder. Inside it:
+
+```
+node_modules/
+├── express/
+│   ├── package.json
+│   ├── index.js
+│   └── ...
+├── body-parser/         ← express depends on this
+│   └── ...
+├── pg/
+│   └── ...
+└── zod/
+    └── ...
+```
+
+Each package is unpacked into a folder named after it. When your code does `import express from "express"`, Node looks in `./node_modules/express/`, reads its `package.json`'s `main` (or `exports`) field, and loads that file.
+
+**Don't commit `node_modules/`.** Your `.gitignore` should always include it. The lock file is enough to reproduce the tree — committing the folder bloats the repo by hundreds of megabytes.
+
+```gitignore
+# .gitignore
+node_modules/
+.env
+.env.local
+```
+
+### Installing packages — the day-to-day commands
+
+```bash
+# Install everything package.json declares (uses lock file for exact versions)
+npm install
+
+# Add a new dependency (writes to package.json + lock + downloads to node_modules)
+npm install express
+
+# Add a dev dependency
+npm install --save-dev typescript
+npm install -D typescript        # short form
+
+# Install an exact version
+npm install express@4.19.2
+
+# Upgrade a single package within its declared range
+npm update express
+
+# Upgrade a single package to the latest, including past the declared range
+npm install express@latest
+
+# Remove a package
+npm uninstall express
+
+# Audit for known vulnerabilities
+npm audit
+npm audit fix      # try to auto-upgrade vulnerable deps
+```
+
+`npm install` (with no args) is what teammates run after pulling fresh code. It's what your CI runs at the start of every build. It's the command you'll type 5,000 times in your career.
+
+### Running scripts
+
+The `scripts` block in `package.json` makes commands discoverable. Anything in there runs with:
+
+```bash
+npm run dev      # → node --watch src/server.js
+npm run lint     # → eslint src
+npm test         # → vitest run    (test, start, install, etc. don't need 'run')
+npm start        # → node src/server.js
+```
+
+The point isn't that `npm run dev` saves typing over the full command. The point is that *any developer* on the team can clone the repo and immediately see what runs the app by reading `package.json`. The script names become the team's shared vocabulary.
+
+Conventional names:
+- **`dev`** — start the app in development mode (file-watching, verbose logs).
+- **`start`** — start the app in production mode.
+- **`build`** — produce the bundle / compiled output / Docker image.
+- **`test`** — run the test suite.
+- **`lint`** — run the linter.
+- **`format`** — auto-format the code.
+
+When in doubt, pick names that match your tools and your team's defaults. There's no enforcement; only convention.
+
+### `npx` — run a CLI without installing it globally
+
+Some packages are tools you run from the command line, not libraries you import. `prisma`, `tsx`, `nodemon`, `vitest`. You can install them globally with `npm install -g`, but that's an anti-pattern — global installs drift between machines, miss the lock file, and cause "works on my laptop" bugs.
+
+**`npx`** runs the binary from a package without a permanent install:
+
+```bash
+npx prisma init          # runs the prisma CLI
+npx tsx server.ts        # runs server.ts via tsx (TS without compile)
+npx eslint --init        # runs the eslint init wizard
+```
+
+If the package is in `node_modules` (local install), `npx` uses that. If not, it downloads it to a cache, runs it, and forgets about it. Same behavior across machines.
+
+### Lockstep with semantic versioning — when upgrades break
+
+Even with `^` ranges and a lock file, things eventually break. A package author publishes a "minor" version that turns out to break a thing your code depends on. Symptoms:
+
+- `npm install` works.
+- App fails to boot, or works locally but fails in CI.
+- The diff between yesterday's tree and today's tree (compare git log of `package-lock.json`) shows a single sub-dependency bumped.
+
+Fix path:
+
+1. **Pin the broken dep.** Find the package that broke, set its version explicitly in `package.json` (drop the `^`, write the exact version that worked).
+2. **Run `npm install`.** Confirms the lock file goes back to the working state.
+3. **File an issue on the package's GitHub.** If they confirm the regression, they'll patch it. You can then unpin.
+
+The lock file is your safety net. The pin is your hot-fix. Pull both when needed.
+
+### Security — `npm audit`, but also a brain
+
+`npm audit` scans your installed tree against the public vulnerability database and reports issues:
+
+```bash
+npm audit
+# found 3 high severity vulnerabilities
+#   ↳ run `npm audit fix` to update
+
+npm audit fix
+# upgraded body-parser 1.18.0 → 1.20.3 — 1 high resolved
+```
+
+Run it weekly. Run it on CI. Don't ignore "low" warnings forever; review them.
+
+For higher-stakes projects (anything with user data), supplement with:
+
+- **`npm outdated`** — what versions are behind their latest.
+- **GitHub Dependabot** — auto-opens PRs to upgrade vulnerable deps.
+- **Snyk** or **Socket** — paid scanners that catch supply-chain attacks `npm audit` misses (malicious packages, typosquatted names).
+
+The discipline is "react to vulnerabilities the same week they're disclosed, not the same month."
+
+### A note on monorepos — workspaces
+
+If your project has both `apps/frontend` and `apps/backend` sharing types, you can either:
+
+- Keep them as separate repos with their own `node_modules` (simple, slower onboarding).
+- Use **npm workspaces**, **pnpm workspaces**, or **Turborepo** to share a single `node_modules` at the root with each sub-project as a workspace.
+
+Workspaces let `apps/backend` import from `packages/shared` directly without publishing the shared package. You'll meet this in real codebases; this curriculum's own repo (`gritlearn/`) is a pnpm workspace monorepo.
+
+For learning, build each side as its own `npm init` project. Reach for workspaces when sharing types / utility code across multiple apps becomes painful.
+
+<ExampleProject
+  src="dependency-tree"
+  title="What 'npm install express' actually installs"
+  description="Tree visualisation of the dependencies pulled in when you run `npm install express` — Express's direct deps, their deps, all the way down. Click any node to see what the package does. Shows why npm packages are so small but transitive trees are so big."
+/>
+
+<Exercise
+  title="Bootstrap a tiny Node project from scratch"
+  starter={`Run through the full ritual of a new Node project so the motions
+become muscle memory.
+
+  1. Make a fresh folder, init the project:
+       mkdir my-first-api
+       cd my-first-api
+       npm init -y
+
+  2. Open package.json. Edit it to add:
+       "type": "module",
+     and update "scripts" to:
+       "scripts": { "dev": "node --watch server.js" }
+
+  3. Install three things:
+       npm install express              # runtime dep
+       npm install -D typescript         # dev dep
+       npm install -D @types/express     # dev dep
+
+  4. Open the generated package.json. Notice:
+       - dependencies has express
+       - devDependencies has typescript + @types/express
+       - You did NOT type version numbers — npm filled them in with
+         '^' ranges.
+
+  5. ls node_modules/ — count the folders. (Expect 60-100, even though
+     you only asked for 3. That's the transitive dep tree.)
+
+  6. Check the lock file size: ls -lh package-lock.json
+     (Probably 70-150 KB. That's the entire serial-numbered receipt
+     for every installed sub-package.)
+
+  7. Add node_modules and .env to .gitignore. Commit package.json AND
+     package-lock.json.
+
+  8. Create server.js:
+       import express from "express";
+       const app = express();
+       app.get("/", (req, res) => res.json({ ok: true, runtime: "node" }));
+       app.listen(3000, () => console.log("→ http://localhost:3000"));
+
+  9. Run it:
+       npm run dev
+     Hit http://localhost:3000 in the browser — you should get
+     { ok: true, runtime: "node" }.
+
+ 10. Add a script that prints the dependency tree:
+       npm ls --all > deps.txt
+     Open deps.txt and look. This is what your one 'npm install
+     express' actually pulled in.
+
+ 11. Run an audit:
+       npm audit
+     Should be clean for a freshly-installed Express. If you see
+     warnings, run 'npm audit fix' and verify the app still boots.
+
+That's the day-1 ritual for every Node project from now on. From this
+foundation the next concept (express-routing) builds the real API.`}
+/>

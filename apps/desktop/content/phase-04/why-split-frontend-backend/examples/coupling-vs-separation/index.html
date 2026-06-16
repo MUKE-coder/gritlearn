@@ -1,0 +1,189 @@
+<!--
+  Side-by-side comparison of the SAME 'list user's tasks' feature in
+  two architectures:
+   - Phase 3 (coupled, Next.js full-stack): server component reads
+     Prisma directly, no HTTP boundary
+   - Phase 4 (split, React + Express): React component fetches from
+     an Express endpoint, JSON crosses the wire
+  Same data on screen. Different code shape under the hood.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Same feature, two architectures</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .toggle { display: flex; gap: 0.5rem; margin: 1rem 0; }
+      .toggle button {
+        padding: 0.55rem 1rem; border: 1px solid #d4d4d8; background: #fff;
+        cursor: pointer; font-size: 0.85rem; border-radius: 6px; font-weight: 600;
+      }
+      .toggle button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0.5rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .type    { color: #c084fc; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+
+      .ui-card {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px; padding: 0.7rem 0.9rem;
+        margin-bottom: 0.4rem; font-size: 0.86rem;
+      }
+      .ui-card .meta { font-size: 0.72rem; color: #71717a; margin-top: 0.2rem; font-family: ui-monospace, monospace; }
+
+      .wire {
+        margin: 0.6rem 0; padding: 0.55rem 0.85rem; background: #fef3c7;
+        border-left: 3px solid #f59e0b; border-radius: 4px;
+        font-size: 0.78rem; color: #92400e; font-family: ui-monospace, monospace;
+      }
+      .annot {
+        margin-top: 0.6rem; font-size: 0.82rem; padding: 0.55rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      .file-tag {
+        font-family: ui-monospace, monospace; font-size: 0.72rem; color: #71717a;
+        margin: 0.3rem 0 0.2rem; display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Same feature. Two architectures.</h1>
+    <p>The data on screen is identical. Click each tab to compare the implementation: Phase 3 (coupled monolith) vs Phase 4 (split frontend + backend).</p>
+
+    <div class="toggle" id="toggle">
+      <button data-arch="coupled" class="active">Phase 3 — Coupled (Next.js)</button>
+      <button data-arch="split">Phase 4 — Split (React + Express)</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>What the user sees (both)</h2>
+        <div class="ui-card"><strong>Write the API spec</strong><div class="meta">in_progress · due tomorrow</div></div>
+        <div class="ui-card"><strong>Review the deploy logs</strong><div class="meta">open</div></div>
+        <div class="ui-card"><strong>Email the design review</strong><div class="meta">done</div></div>
+        <div class="ui-card"><strong>Renew the SSL cert</strong><div class="meta">open · due next week</div></div>
+
+        <div class="annot" id="ui-annot"></div>
+      </div>
+
+      <div class="col">
+        <h2 id="code-title">Code</h2>
+        <div id="code"></div>
+      </div>
+    </div>
+
+    <script>
+      const variants = {
+        coupled: {
+          title: "Code (Phase 3 — coupled)",
+          uiAnnot: "Same React DOM. Same JSX. Same five lines of card markup. Under the hood: one Next.js process, one Prisma call, one round trip from browser to render — but ZERO round trips from the rendered page back to the database after.",
+          code: [
+            {
+              tag: "app/dashboard/page.tsx  (server component)",
+              code:
+`<span class="keyword">import</span> { auth } <span class="keyword">from</span> <span class="string">"@/auth"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+<span class="keyword">import</span> { redirect } <span class="keyword">from</span> <span class="string">"next/navigation"</span>;
+
+<span class="keyword">export default async function</span> Dashboard() {
+  <span class="keyword">const</span> session = <span class="keyword">await</span> auth();
+  <span class="keyword">if</span> (!session?.user) <span class="keyword">redirect</span>(<span class="string">"/login"</span>);
+
+  <span class="comment">// Prisma call runs IN THIS PROCESS. No HTTP. No JSON parse.</span>
+  <span class="comment">// One TCP connection to Postgres. ~5ms.</span>
+  <span class="keyword">const</span> tasks = <span class="keyword">await</span> db.task.findMany({
+    where:   { userId: session.user.id },
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+  });
+
+  <span class="keyword">return</span> &lt;<span class="type">TaskList</span> tasks={tasks} /&gt;;
+}`,
+            },
+          ],
+        },
+        split: {
+          title: "Code (Phase 4 — split)",
+          uiAnnot: "Same React DOM. Same JSX. Same five lines of card markup. But now the page sits in a React app and the data crosses an HTTP boundary to reach a separate Express server, which does the Prisma call. The user can't tell. The architecture is different.",
+          code: [
+            {
+              tag: "frontend: src/pages/Dashboard.tsx  (React app)",
+              code:
+`<span class="keyword">import</span> { useEffect, useState } <span class="keyword">from</span> <span class="string">"react"</span>;
+<span class="keyword">import</span> { api } <span class="keyword">from</span> <span class="string">"@/lib/api"</span>;
+<span class="keyword">import</span> { TaskList } <span class="keyword">from</span> <span class="string">"./TaskList"</span>;
+
+<span class="keyword">export function</span> Dashboard() {
+  <span class="keyword">const</span> [tasks, setTasks] = useState&lt;<span class="type">Task</span>[]&gt;([]);
+
+  useEffect(() =&gt; {
+    <span class="comment">// Browser fires HTTP request to the API.</span>
+    <span class="comment">// Bearer token from localStorage proves identity.</span>
+    api.get(<span class="string">"/tasks"</span>).then((r) =&gt; setTasks(r.data.data));
+  }, []);
+
+  <span class="keyword">return</span> &lt;<span class="type">TaskList</span> tasks={tasks} /&gt;;
+}`,
+            },
+            {
+              wire: "GET /api/tasks   Authorization: Bearer eyJhbGc...",
+            },
+            {
+              tag: "backend: src/routes/tasks.ts  (Express)",
+              code:
+`<span class="keyword">import</span> { Router } <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"../lib/db"</span>;
+<span class="keyword">import</span> { requireAuth } <span class="keyword">from</span> <span class="string">"../middleware/auth"</span>;
+
+<span class="keyword">export const</span> tasksRouter = Router();
+
+tasksRouter.get(<span class="string">"/tasks"</span>, requireAuth, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="comment">// Same Prisma call as Phase 3 — just lives in a different</span>
+  <span class="comment">// process. userId comes from the verified JWT middleware.</span>
+  <span class="keyword">const</span> tasks = <span class="keyword">await</span> db.task.findMany({
+    where:   { userId: req.user.id },
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+  });
+
+  res.json({ data: tasks });
+});`,
+            },
+          ],
+        },
+      };
+
+      function renderArch(arch) {
+        const v = variants[arch];
+        document.querySelectorAll(".toggle button").forEach(b => b.classList.toggle("active", b.dataset.arch === arch));
+        document.getElementById("code-title").textContent = v.title;
+        document.getElementById("ui-annot").textContent = v.uiAnnot;
+        document.getElementById("code").innerHTML = v.code.map((c) => {
+          if (c.wire) return `<div class="wire">${c.wire}</div>`;
+          return `<span class="file-tag">${c.tag}</span><pre>${c.code}</pre>`;
+        }).join("");
+      }
+
+      document.getElementById("toggle").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        renderArch(b.dataset.arch);
+      });
+
+      renderArch("coupled");
+    </script>
+  </body>
+</html>

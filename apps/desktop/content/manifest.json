@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "phases": [
     {
       "id": "phase-01",
@@ -115,9 +115,9 @@
       "title": "Separate Backend",
       "subtitle": "Node.js + Express",
       "concepts": [
-        { "slug": "phase-04/why-split-frontend-backend", "title": "Why split frontend and backend", "available": false },
-        { "slug": "phase-04/what-is-nodejs", "title": "What Node.js is", "available": false },
-        { "slug": "phase-04/node-modules-npm", "title": "Node modules and npm", "available": false },
+        { "slug": "phase-04/why-split-frontend-backend", "title": "Why split frontend and backend", "available": true },
+        { "slug": "phase-04/what-is-nodejs", "title": "What Node.js is", "available": true },
+        { "slug": "phase-04/node-modules-npm", "title": "Node modules and npm", "available": true },
         { "slug": "phase-04/express-routing", "title": "What Express is and routing basics", "available": false },
         { "slug": "phase-04/request-response", "title": "Request and response objects", "available": false },
         { "slug": "phase-04/middleware", "title": "Middleware", "available": false },

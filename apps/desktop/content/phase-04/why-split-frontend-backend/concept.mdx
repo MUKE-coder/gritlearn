@@ -1,0 +1,185 @@
+## Why split frontend and backend
+
+Phase 3 ended with a working full-stack Next.js app. That setup was *intentional*: Next.js bundles the frontend, the API routes, the server actions, and the build pipeline into one repo so a solo developer can ship fast. For a lot of apps that's the right shape forever.
+
+But the second your product grows past "one team, one frontend, one database," the same monolith starts pushing back. You want a mobile app that talks to the same data. You want a Slack bot. You want to scale the API independently from the marketing site. You want one team to own the backend while another iterates on the UI.
+
+This concept covers the architectural pivot — when and *why* you split — and the next batch (`what-is-nodejs` onward) covers *how* you build the new backend service from scratch with Node.js and Express.
+
+<Analogy>
+A coupled app is a **food truck**. A separated frontend + backend is a **restaurant with a central commissary kitchen serving multiple outlets**.
+
+The food truck works because everything is in one place. The cook, the till, the menu, the cleanup — same human, same six square metres, same brand. You can launch a food truck in a weekend. You can change the menu mid-service. Customers walk up, order, eat, leave. The whole operation has one moving part.
+
+That model has hard limits. You can't serve two locations from one truck. You can't have a chef in the central kitchen developing new dishes while the truck still serves lunch. The cook is also the cashier; if the cashier is slow, the line backs up; if the cook gets sick, the truck closes.
+
+Some businesses outgrow this. They open a second truck, then a third. Eventually they realise the dish prep is being repeated in every truck. They build a **central commissary kitchen**:
+
+- The kitchen does the heavy work — sourcing ingredients, cooking sauces, prepping proteins, packaging portions.
+- Each outlet — Truck A in the park, Truck B at the office complex, the new sit-down spot downtown, the catering operation — receives prepped food and assembles+serves it.
+- The kitchen runs to its own clock (early mornings, big batches). The outlets run to their customers' clock (lunch rush, dinner shift, late night).
+- If they open a fourth outlet, the kitchen doesn't change. They build new outlets without changing the recipes.
+- If the kitchen needs a new oven, the outlets don't notice.
+
+That's the **frontend / backend separation** in code:
+
+- The **commissary kitchen = the backend API.** Owns the data, the business rules, the integrations with payments / email / auth. Runs on its own schedule. Reused by every client.
+- Each **outlet = a frontend client.** A web app. A mobile app. An admin dashboard. A CLI tool. Each just *displays* the data + collects user input + asks the backend to do work.
+
+The trade is real. You give up the food truck's speed-of-iteration in exchange for the kitchen's reuse + independence. For one app, one team, one product — the truck is right. For two apps, two teams, or a roadmap that includes mobile/CLI/integrations — the commissary becomes inevitable.
+
+Three shifts that come with the split:
+
+1. **Contracts replace function calls.** In the monolith, your frontend imports `db.user.findMany()` and calls it. In the split, your frontend hits `GET /api/users` and parses JSON. The contract between the two is the API spec. Breaking it breaks every client.
+
+2. **Two deploy pipelines instead of one.** The kitchen redeploys when recipes change. The outlets redeploy when the menu board design changes. Each can ship independently — as long as the contract holds.
+
+3. **Authentication crosses a wire now.** No more reading `auth()` from a server component; the frontend has to *prove* identity on every request via a token (JWT) or session cookie. The backend has to *verify* that proof on its side. This is where every new project messes up — and where we'll spend real time in this phase.
+</Analogy>
+
+### When to split — the honest checklist
+
+The split has a cost. Don't pay it for free. Reach for separation when at least one of these is true:
+
+1. **You need a second client soon.** Mobile app. CLI. Public API for partners. Anything beyond a single web frontend means a shared API behind both is cheaper than maintaining two versions of the logic.
+
+2. **The team is growing past one squad.** When the frontend team and the backend team start blocking each other in PRs and deploys, the API contract becomes the negotiation surface and they unblock.
+
+3. **The backend has different operational requirements than the UI.** A backend that processes payments, runs background jobs, holds connection pools to multiple data stores has different scaling/monitoring needs than a marketing page. Splitting lets each scale on its own.
+
+4. **You're migrating off something else.** Replacing a legacy PHP / Rails / Django app one module at a time goes much smoother when the new frontend can talk to the old backend and the new backend in parallel via a single API surface.
+
+5. **Your hosting strategy demands it.** You want the API on a long-running EC2 instance + the frontend on Vercel's edge CDN. Different deploy targets → different repos / different containers.
+
+When none of these is true, **keep the monolith.** A Next.js full-stack app with server components + server actions can serve a real product all the way to product-market fit. Twitter's first stable release was a Rails monolith.
+
+### What changes architecturally
+
+```
+   ── PHASE 3 ──  Next.js full-stack         ── PHASE 4 ──  Split
+
+   ┌──────────────────────────┐               ┌─────────────────┐
+   │   Next.js (one process)  │               │   React app     │   ← frontend
+   │  ┌────────────────────┐  │               │   (any tech)    │
+   │  │ Pages              │  │               └────────┬────────┘
+   │  │ Server components  │  │                        │
+   │  │ Route handlers     │  │                       HTTP / JSON
+   │  │ Server actions     │  │                        │
+   │  │ Prisma             │◄─┼──┐            ┌────────▼────────┐
+   │  └────────────────────┘  │  │            │   Express API   │   ← backend
+   └──────────────────────────┘  │            │   (Node.js)     │
+                                 │            │  ┌────────────┐ │
+                                 │            │  │ Routes     │ │
+                              ┌──▼───┐        │  │ Middleware │ │
+                              │  DB  │        │  │ Validators │ │
+                              └──────┘        │  │ Services   │ │
+                                              │  └────────────┘ │
+                                              └────────┬────────┘
+                                                       │
+                                                    ┌──▼───┐
+                                                    │  DB  │
+                                                    └──────┘
+```
+
+The same database. The same domain model. But now there's an HTTP boundary in the middle, and the frontend is a separate program that just *consumes* the API.
+
+### What you gain
+
+- **Reuse.** Build a mobile app: same API. Build a CLI: same API. Internal admin dashboard: same API. You write the data + business logic once.
+- **Independent deploys.** Push a CSS fix at 3pm without touching the backend. Push a database migration at 3am without touching the frontend.
+- **Tech flexibility.** Frontend can be React / Vue / Svelte / Flutter / SwiftUI / a CLI in Go. As long as it can speak HTTP + JSON, it can talk to the same API.
+- **Specialised scaling.** The API might run on 4 CPU containers; the marketing site might run on Vercel's CDN. Each gets the resources its workload wants.
+- **Team autonomy.** Frontend team and backend team agree on the contract, then iterate behind it. One team's refactor doesn't break the other.
+
+### What it costs
+
+- **More moving parts.** Two repos (or two folders, depending on monorepo discipline). Two CI pipelines. Two deploy steps. Two sets of env vars.
+- **HTTP isn't free.** A `findUnique` that took 5ms in a Next.js server component takes 5ms + the network round trip when it's an API call. Add latency for every page render.
+- **Contract drift.** When the backend renames a field and the frontend forgets, the UI breaks in production. The discipline to version contracts (or at least keep them backward-compatible during deploys) is on you.
+- **Auth becomes non-trivial.** Sessions across a domain boundary. CORS. CSRF. Refresh tokens. We'll spend several concepts on this in this phase.
+- **Local dev gets fancier.** You either run two processes (`npm run dev` for the frontend, `npm run dev` for the backend) or you use `concurrently` / Docker Compose to orchestrate them.
+
+### REST, GraphQL, RPC — which contract style?
+
+When you split, the interface between frontend and backend is some kind of API. The shapes:
+
+- **REST** (HTTP + JSON, resource-oriented URLs like `/api/posts/123`). The default. Universally understood. Easy to test with curl. Limited expressiveness — fetching a post and its author and its comments often takes multiple round trips.
+- **GraphQL** (one endpoint, query language for arbitrary nested data). Great when the frontend wants to combine fields from many resources. Heavier to set up; the schema discipline is more work.
+- **tRPC / typed RPC** (function-call shape over HTTP, with TypeScript types shared end to end). Best in monorepos where both sides are TS — feels like calling a function across the wire.
+
+We'll build REST in this phase because it's the foundation; GraphQL and tRPC are pattern variations you reach for later.
+
+### What this phase will cover
+
+By the end of Phase 4 you'll have:
+
+1. A Node.js runtime understanding — the event loop, why Node is fast for I/O, how it differs from running scripts in the browser.
+2. Express as a routing + middleware framework — the building block under almost every Node API.
+3. A working REST API with auth, validation, error handling, file uploads, and the database layer (both Postgres and MongoDB so you know the patterns).
+4. The deployment shape — how you ship a backend independently from a frontend.
+5. The integration: how a real React frontend (which you built in Phase 3) consumes the API you've now built.
+
+The last concept of Phase 4 will be the milestone: take a fresh React frontend and a fresh Express backend, wire them together, deploy both, and ship a real product to a URL.
+
+### A note on "API-first" thinking
+
+Even if you stay full-stack for years, the *mental model* of "design the API first, build the frontend against it" pays off in a monolith too. When a server component calls `db.user.findMany()` directly, you can sketch what the equivalent route would be — `GET /api/users?role=admin&limit=20`. That sketch is your future API for when you do split.
+
+Some teams start "API-first" from day one even in a monolith — every server component calls an internal route handler instead of touching Prisma directly. The trade: a little more ceremony in dev. The win: you have the API the day you decide to add a mobile client. There's no "rewrite phase."
+
+For Phase 4 we go all the way to a separate process so the seams are visible. In production you'll dial that in to whatever blend works for your team — monolith with internal API discipline, full split, or somewhere in between.
+
+<ExampleProject
+  src="coupling-vs-separation"
+  title="The same feature, both architectures"
+  description="A 'list of tasks' feature shown two ways: as a Phase-3 Next.js server component pulling from Prisma directly, and as a Phase-4 split where a React app fetches from a separate Express endpoint. The data on screen is identical; the code shape is dramatically different. Visual map of what crosses the HTTP boundary."
+/>
+
+<Exercise
+  title="Sketch the API for an app you've built"
+  starter={`Pick one of your Phase-3 apps (the task manager, or any other
+full-stack Next.js project you shipped). Open it up.
+
+Walk through every page that reads or writes data. For each:
+
+  1. What data does the page show? Which Prisma calls power it?
+     (e.g. db.task.findMany({ where: { userId } }) on /dashboard)
+
+  2. If that page were a REST API endpoint, what would the URL be?
+       GET    /api/tasks                    → list mine
+       GET    /api/tasks/:id                → one task
+       POST   /api/tasks                    → create
+       PATCH  /api/tasks/:id                → update
+       DELETE /api/tasks/:id                → delete
+
+  3. What request body / query params would each endpoint need?
+       POST /api/tasks
+         body: { title: string, dueAt?: string (ISO) }
+
+  4. What does the response look like?
+       200 OK
+       { id: 1, title: "Buy milk", done: false, dueAt: null,
+         createdAt: "2026-01-15T10:00:00Z" }
+
+Do this for every action — toggle, delete, filter, mark done.
+
+By the time you finish, you have a complete API spec for the app you
+already shipped. You haven't written any backend code yet — you've
+just translated the implicit contract (Prisma calls embedded in
+pages) into an explicit contract (URLs and JSON shapes).
+
+This document is what you'd hand to a backend engineer who's
+implementing the API while you build the React frontend separately.
+It's also the document Phase 4 is teaching you to *build* — the
+remaining concepts in this phase walk through implementing each kind
+of endpoint with Express.
+
+Bonus: write the spec in OpenAPI / Swagger format. That document
+auto-generates a documentation site, types for the frontend, and a
+test harness. Tools like 'swagger-typescript-api' read it and emit a
+typed API client.
+
+Even if you never split, you now have a documented contract for the
+boundary between your UI code and your data code. The team you grow
+into in 2027 will thank you.`}
+/>

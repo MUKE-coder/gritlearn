@@ -1,0 +1,252 @@
+<!--
+  Interactive visualisation of Node.js's event loop. Click buttons
+  to enqueue different kinds of work (a file read, an HTTP fetch, a
+  setTimeout, a CPU loop). Watch how the main thread accepts each
+  one, dispatches the I/O, and picks up results when they complete.
+  Shows why Node can handle many concurrent requests on one thread.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The Node.js event loop, in motion</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .controls { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0; }
+      .controls button {
+        padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-size: 0.84rem;
+        font-weight: 600;
+      }
+      .controls button.secondary { background: #fff; color: #18181b; border-color: #d4d4d8; }
+
+      .stage {
+        border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa;
+        margin-top: 0.8rem;
+      }
+      .stage h2 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      /* Main thread cell */
+      .thread {
+        height: 56px; border-radius: 8px; background: #18181b; color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-family: ui-monospace, monospace; font-size: 0.85rem;
+        position: relative; overflow: hidden;
+      }
+      .thread.busy { background: #b45309; }
+      .thread.idle { background: #166534; }
+
+      /* I/O pool (off-thread) */
+      .pool {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+        margin-top: 0.6rem;
+      }
+      .lane {
+        border: 1px dashed #d4d4d8; border-radius: 6px; padding: 0.55rem 0.7rem;
+        background: #fff; min-height: 80px;
+      }
+      .lane h3 {
+        margin: 0 0 0.35rem; font-size: 0.7rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .task {
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        padding: 0.3rem 0.5rem; background: #f4f4f5; border-radius: 4px;
+        margin-bottom: 0.25rem; display: flex; justify-content: space-between;
+      }
+      .task.completing { background: #dcfce7; color: #166534; animation: pulse 0.6s ease; }
+      @keyframes pulse {
+        0% { background: #fef3c7; }
+        100% { background: #dcfce7; }
+      }
+
+      /* Log */
+      .log {
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        background: #0a0a0d; color: #ededee; border-radius: 6px;
+        padding: 0.65rem 0.85rem; max-height: 14rem; overflow-y: auto;
+        line-height: 1.4;
+      }
+      .log .ts { color: #71717a; margin-right: 0.6rem; }
+      .log .ok { color: #4ade80; }
+      .log .info { color: #38bdf8; }
+      .log .warn { color: #fbbf24; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <h1>The Node.js event loop, in motion</h1>
+    <p>Click buttons to schedule different kinds of work. Watch the main thread accept each one, dispatch the I/O to its lane, and pick up results when they complete. Try the "CPU loop" button last and notice what happens.</p>
+
+    <div class="controls">
+      <button data-kind="fs">+ File read</button>
+      <button data-kind="http">+ HTTP fetch</button>
+      <button data-kind="timer">+ setTimeout 2s</button>
+      <button data-kind="cpu" class="secondary">+ CPU loop (blocks!)</button>
+      <button data-kind="reset" class="secondary">Reset</button>
+    </div>
+
+    <div class="stage">
+      <h2>Main thread (single-threaded JS execution)</h2>
+      <div class="thread idle" id="thread">idle — accepting events</div>
+
+      <h2 style="margin-top: 0.8rem;">I/O pool (handled off the main thread)</h2>
+      <div class="pool" id="pool">
+        <div class="lane"><h3>FS</h3><div class="lane-body" data-kind="fs"></div></div>
+        <div class="lane"><h3>HTTP</h3><div class="lane-body" data-kind="http"></div></div>
+        <div class="lane"><h3>Timers</h3><div class="lane-body" data-kind="timer"></div></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="stage">
+        <h2>Event loop log</h2>
+        <div class="log" id="log"></div>
+      </div>
+      <div class="stage">
+        <h2>What's happening</h2>
+        <p style="font-size: 0.86rem; color: #71717a;" id="annot">
+          The main thread is idle. Click any of the buttons above to enqueue I/O — Node's event loop will accept the request,
+          hand off the work to the right lane, and stay free to accept more.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      let counter = 1;
+      let cpuBlocked = false;
+      const tasks = []; // active tasks
+
+      const thread = document.getElementById("thread");
+      const annot = document.getElementById("annot");
+      const log = document.getElementById("log");
+
+      const annots = {
+        idle: "Main thread idle. The event loop is waiting for events (incoming requests, completed I/O). This is where 99% of a Node API's wall-clock time is spent.",
+        accept: "Main thread is briefly busy ACCEPTING an event — registering the callback, dispatching the I/O to its lane. Microseconds. Then back to idle.",
+        complete: "An I/O finished in its lane. The main thread executes the callback (your code that handles the result). Microseconds again. Then back to idle.",
+        cpu: "CPU LOOP IS RUNNING. The main thread can't accept new events or complete existing ones. Every other I/O sits in its lane waiting. This is the Node anti-pattern — never do heavy CPU work on the main thread.",
+      };
+
+      function nowTs() {
+        return new Date().toLocaleTimeString("en-GB", { hour12: false }) + "." + String(Date.now() % 1000).padStart(3, "0").slice(0, 3);
+      }
+
+      function setAnnot(key) {
+        annot.textContent = annots[key];
+      }
+
+      function setThread(state, label) {
+        thread.className = "thread " + state;
+        thread.textContent = label;
+      }
+
+      function addLog(text, kind = "info") {
+        const div = document.createElement("div");
+        div.innerHTML = `<span class="ts">${nowTs()}</span><span class="${kind}">${text}</span>`;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function renderTasks() {
+        ["fs", "http", "timer"].forEach((k) => {
+          const lane = document.querySelector(`.lane-body[data-kind="${k}"]`);
+          lane.innerHTML = tasks.filter((t) => t.kind === k && t.state !== "done").map((t) => `
+            <div class="task ${t.state === "completing" ? "completing" : ""}">
+              <span>${t.label}</span>
+              <span>${t.state === "completing" ? "✓" : "…"}</span>
+            </div>
+          `).join("");
+        });
+      }
+
+      function schedule(kind) {
+        if (kind === "reset") {
+          counter = 1;
+          tasks.length = 0;
+          log.innerHTML = "";
+          cpuBlocked = false;
+          setThread("idle", "idle — accepting events");
+          setAnnot("idle");
+          renderTasks();
+          return;
+        }
+        if (kind === "cpu") {
+          if (cpuBlocked) return;
+          cpuBlocked = true;
+          setThread("busy", "CPU loop running — main thread blocked!");
+          setAnnot("cpu");
+          addLog(`#${counter++}  Started CPU loop — main thread is now BLOCKED`, "warn");
+          // Simulate a 3-second CPU block. During this, no other lanes
+          // can have their completion callbacks run because they need
+          // the main thread.
+          setTimeout(() => {
+            cpuBlocked = false;
+            setThread("idle", "idle — accepting events");
+            setAnnot("idle");
+            addLog(`CPU loop ended. Main thread back to idle.`, "ok");
+          }, 3000);
+          return;
+        }
+        const id = counter++;
+        const labelMap = {
+          fs:    `fs.readFile data-${id}.json`,
+          http:  `fetch /api/upstream/${id}`,
+          timer: `setTimeout 2000ms #${id}`,
+        };
+        const durationMap = { fs: 800, http: 1500, timer: 2000 };
+        const task = { id, kind, label: labelMap[kind], state: "pending" };
+
+        // Briefly mark the thread "accepting"
+        if (!cpuBlocked) {
+          setThread("busy", `Accepting: ${labelMap[kind]}`);
+          setAnnot("accept");
+          addLog(`#${id}  Accepted ${labelMap[kind]} → dispatched to ${kind.toUpperCase()} lane`, "info");
+          setTimeout(() => {
+            if (!cpuBlocked) {
+              setThread("idle", "idle — accepting events");
+              setAnnot("idle");
+            }
+          }, 80);
+        } else {
+          addLog(`#${id}  Queued ${labelMap[kind]} → waiting for main thread (CPU loop is blocking)`, "warn");
+        }
+
+        tasks.push(task);
+        renderTasks();
+
+        // Schedule completion
+        setTimeout(() => {
+          // If CPU is blocked at completion time, the callback waits.
+          const tick = () => {
+            if (cpuBlocked) { setTimeout(tick, 100); return; }
+            task.state = "completing";
+            renderTasks();
+            setThread("busy", `Completing: ${labelMap[kind]}`);
+            setAnnot("complete");
+            addLog(`#${id}  ${labelMap[kind]} completed`, "ok");
+            setTimeout(() => {
+              task.state = "done";
+              renderTasks();
+              setThread("idle", "idle — accepting events");
+              setAnnot("idle");
+            }, 120);
+          };
+          tick();
+        }, durationMap[kind]);
+      }
+
+      document.querySelectorAll(".controls button").forEach((b) =>
+        b.addEventListener("click", () => schedule(b.dataset.kind))
+      );
+
+      setAnnot("idle");
+    </script>
+  </body>
+</html>
