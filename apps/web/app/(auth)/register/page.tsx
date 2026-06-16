@@ -148,15 +148,25 @@ export default function RegisterPage() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-secondary">
               Confirm password
             </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className={inputClass}
-              placeholder="Repeat your password"
-              required
-            />
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputClass + " pr-12"}
+                placeholder="Repeat your password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-muted hover:text-text-secondary transition-colors"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <button

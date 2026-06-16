@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRegister } from "@/hooks/use-auth";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { AuthSplitLayout } from "@/components/auth-split-layout";
@@ -23,6 +24,7 @@ type RegisterInput = z.infer<typeof RegisterSchema>;
 function RegisterPage() {
   const navigate = useNavigate();
   const { mutate: registerUser, isPending, error } = useRegister();
+  const [showPassword, setShowPassword] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterInput>({
     resolver: zodResolver(RegisterSchema),
@@ -82,7 +84,23 @@ function RegisterPage() {
 
           <div className="space-y-1.5">
             <label className="block text-[13px] font-medium text-foreground-secondary">Password</label>
-            <input type="password" placeholder="Min 8 characters" className={input} {...register("password")} />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Min 8 characters"
+                className={input + " pr-10"}
+                autoComplete="new-password"
+                {...register("password")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-foreground-muted hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.password && <p className="text-[12px] text-danger">{errors.password.message}</p>}
           </div>
 

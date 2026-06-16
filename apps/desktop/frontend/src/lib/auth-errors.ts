@@ -8,10 +8,16 @@ import { AxiosError } from "axios";
 export function authErrorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (err instanceof AxiosError) {
     // No response at all = the request never reached the server — the
-    // student's offline, or the API is down. First-launch needs the
-    // network, so we tell them clearly.
+    // student's offline, the API is down, OR a CORS preflight passed
+    // but the actual call was blocked. Include the axios code so the
+    // user can screenshot something specific in a bug report; without
+    // it the message is identical for "offline", "DNS broken", "CORS
+    // rejected" — which made the v0.4.0 install report indebuggable.
     if (!err.response) {
-      return "Can't reach the server. Check your internet connection and try again.";
+      const code = err.code ? ` (${err.code})` : "";
+      // eslint-disable-next-line no-console
+      console.error("[auth] network error — no response from API", err);
+      return `Can't reach the server${code}. Check your internet connection and try again.`;
     }
     const { status, data } = err.response;
     // Grit API returns { error: { code, message } } per the project's
