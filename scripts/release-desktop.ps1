@@ -41,7 +41,11 @@ param(
   [switch]$SlimOnly
 )
 
-$ErrorActionPreference = "Stop"
+# Use Continue (the default), NOT Stop. With Stop, PowerShell promotes
+# any native-exe stderr line into a terminating error — git push, gh,
+# makensis, wails all routinely write progress to stderr on success.
+# We check $LASTEXITCODE explicitly after each native call instead.
+$ErrorActionPreference = "Continue"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
@@ -75,17 +79,27 @@ $installerFull    = "JEditor-Setup-v$Version.exe"
 $installerSlim    = "JEditor-Setup-Slim-v$Version.exe"
 
 # ─── guard rails ─────────────────────────────────────────────────────
+# Native exes (gh, git) write to stderr on the "not found" path. With
+# $ErrorActionPreference = "Stop" those get promoted to terminating
+# errors even when the exit code is non-zero (= "good, doesn't exist
+# yet"). Temporarily lift ErrorAction for the probes so we can read
+# $LASTEXITCODE cleanly.
 if (-not $DryRun) {
-  $existing = & gh release view $tag 2>$null
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  & gh release view $tag *> $null
   if ($LASTEXITCODE -eq 0) {
-    Write-Error "GitHub release $tag already exists. Aborting."
+    $ErrorActionPreference = $prev
+    Write-Host "ERROR: GitHub release $tag already exists. Aborting." -ForegroundColor Red
     exit 1
   }
-  $tagCheck = & git rev-parse $tag 2>$null
+  & git rev-parse $tag *> $null
   if ($LASTEXITCODE -eq 0) {
-    Write-Error "Git tag $tag already exists. Aborting."
+    $ErrorActionPreference = $prev
+    Write-Host "ERROR: Git tag $tag already exists. Aborting." -ForegroundColor Red
     exit 1
   }
+  $ErrorActionPreference = $prev
 }
 
 # ─── bump wails.json if needed ───────────────────────────────────────
