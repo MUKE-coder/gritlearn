@@ -24,6 +24,10 @@ COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
 
+# NEXT_PUBLIC_API_URL is still accepted for client-side fetches in
+# other pages (login, register, components). The download page used
+# to require it too, but now uses API_INTERNAL_URL server-side so the
+# fetch doesn't need to be reachable from the browser at all.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
@@ -52,5 +56,13 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# API_INTERNAL_URL is read at request time by the /download server
+# component. Set this via docker-compose to the in-network API host
+# (e.g. http://api:8080) so the page can reach the API without going
+# through the public domain (no hairpin NAT, no CORS). Falls back to
+# NEXT_PUBLIC_API_URL when not set; falls back to localhost:8080 when
+# neither is set.
+# ENV API_INTERNAL_URL=http://api:8080
 
 CMD ["node", "apps/web/server.js"]

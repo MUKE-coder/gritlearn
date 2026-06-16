@@ -38,7 +38,12 @@ param(
   [string]$Notes,
   [switch]$DryRun,
   [switch]$NoInstaller,
-  [switch]$SlimOnly
+  [switch]$SlimOnly,
+  # -Force re-uploads assets to an existing release. Use when a prior
+  # release succeeded at tag/push but failed mid-upload, or when you
+  # need to swap in a corrected asset. Skips the "already exists"
+  # guard rails AND uses `gh release upload --clobber` to overwrite.
+  [switch]$Force
 )
 
 # Use Continue (the default), NOT Stop. With Stop, PowerShell promotes
@@ -84,22 +89,30 @@ $installerSlim    = "JEditor-Setup-Slim-v$Version.exe"
 # errors even when the exit code is non-zero (= "good, doesn't exist
 # yet"). Temporarily lift ErrorAction for the probes so we can read
 # $LASTEXITCODE cleanly.
+$releaseExists = $false
+$tagExists = $false
 if (-not $DryRun) {
   $prev = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   & gh release view $tag *> $null
-  if ($LASTEXITCODE -eq 0) {
-    $ErrorActionPreference = $prev
-    Write-Host "ERROR: GitHub release $tag already exists. Aborting." -ForegroundColor Red
-    exit 1
-  }
+  if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
   & git rev-parse $tag *> $null
-  if ($LASTEXITCODE -eq 0) {
-    $ErrorActionPreference = $prev
-    Write-Host "ERROR: Git tag $tag already exists. Aborting." -ForegroundColor Red
+  if ($LASTEXITCODE -eq 0) { $tagExists = $true }
+  $ErrorActionPreference = $prev
+
+  if ($releaseExists -and -not $Force) {
+    Write-Host "ERROR: GitHub release $tag already exists. Aborting." -ForegroundColor Red
+    Write-Host "       Re-run with -Force to re-upload assets to the existing release." -ForegroundColor Yellow
     exit 1
   }
-  $ErrorActionPreference = $prev
+  if ($tagExists -and -not $Force -and -not $releaseExists) {
+    Write-Host "ERROR: Git tag $tag already exists. Aborting." -ForegroundColor Red
+    Write-Host "       Re-run with -Force to re-use the tag and create the release." -ForegroundColor Yellow
+    exit 1
+  }
+  if ($Force) {
+    Write-Host "==> -Force: will re-use tag $tag and clobber existing assets" -ForegroundColor Yellow
+  }
 }
 
 # ─── bump wails.json if needed ───────────────────────────────────────
@@ -197,14 +210,19 @@ try {
   }
 
   # Slim installer flavour — a second makensis pass with -DSLIM_INSTALLER.
+  # Surface makensis output instead of piping through Out-Null — when
+  # the slim build fails (e.g. missing brand BMPs, missing WebView2
+  # cache, wrong path), the operator needs to SEE the makensis log to
+  # diagnose. The previous Out-Null suppression hid the actual cause
+  # of every silent slim-installer failure.
   if (-not $NoInstaller) {
     Write-Host "==> Building slim installer (online WebView2 bootstrapper)" -ForegroundColor Cyan
     Push-Location build/windows/installer
     try {
       $rawExeForNsis = "..\\..\\bin\\jeditor.exe"
-      & makensis -DSLIM_INSTALLER "-DARG_WAILS_AMD64_BINARY=$rawExeForNsis" project.nsi | Out-Null
+      & makensis -DSLIM_INSTALLER "-DARG_WAILS_AMD64_BINARY=$rawExeForNsis" project.nsi
       if ($LASTEXITCODE -ne 0) {
-        Write-Error "makensis (slim) failed"
+        Write-Error "makensis (slim) failed — see output above"
         exit 1
       }
     } finally {
@@ -249,7 +267,14 @@ if (-not $NoInstaller -and -not $SlimOnly) {
   # the parser. {0} / -f bypasses it.
   Write-Host ("==> Full setup:   {0} ({1} MB)" -f $installerFullPath, $fullSizeMB) -ForegroundColor Green
 }
-if (-not $NoInstaller -and (Test-Path $installerSlimPath)) {
+if (-not $NoInstaller) {
+  if (-not (Test-Path $installerSlimPath)) {
+    Write-Error "Expected $installerSlimPath — slim makensis pass did not produce it."
+    Write-Host "       Check the makensis log above. Common causes:" -ForegroundColor Yellow
+    Write-Host "         * brand BMPs (header.bmp / welcome.bmp) missing — delete them and re-run" -ForegroundColor Yellow
+    Write-Host "         * project.nsi has a syntax error or missing macro" -ForegroundColor Yellow
+    exit 1
+  }
   $slimSizeMB = [Math]::Round((Get-Item $installerSlimPath).Length / 1MB, 1)
   Write-Host ("==> Slim setup:   {0} ({1} MB)" -f $installerSlimPath, $slimSizeMB) -ForegroundColor Green
 }
@@ -268,10 +293,15 @@ if ($status) {
 }
 
 # ─── tag + push ──────────────────────────────────────────────────────
-Write-Host "==> Tagging $tag" -ForegroundColor Cyan
-& git tag $tag
+if (-not $tagExists) {
+  Write-Host "==> Tagging $tag" -ForegroundColor Cyan
+  & git tag $tag
+  if ($LASTEXITCODE -ne 0) { Write-Error "git tag failed"; exit 1 }
+} else {
+  Write-Host "==> Tag $tag already present locally — skipping create" -ForegroundColor Yellow
+}
 & git push origin HEAD
-& git push origin $tag
+& git push origin $tag *> $null  # silent re-push is fine when tag already on remote
 
 # ─── assemble release assets ─────────────────────────────────────────
 $assets = @()
@@ -279,15 +309,40 @@ if (-not $NoInstaller -and (Test-Path $installerFullPath)) { $assets += $install
 if (-not $NoInstaller -and (Test-Path $installerSlimPath)) { $assets += $installerSlimPath }
 $assets += $targetExe
 
-# ─── gh release create ───────────────────────────────────────────────
+# ─── gh release create / upload ──────────────────────────────────────
 $notesArg = if ($Notes) { @("--notes", $Notes) } else { @("--generate-notes") }
-Write-Host "==> Creating GitHub release $tag with $($assets.Count) asset(s)" -ForegroundColor Cyan
-& gh release create $tag --title "JEditor $tag" @notesArg @assets
+if ($releaseExists) {
+  # Release already on GitHub (came in via -Force) → upload assets
+  # to it instead of trying to create a duplicate. --clobber replaces
+  # any same-named asset that's already attached so re-runs are
+  # idempotent.
+  Write-Host "==> Re-uploading $($assets.Count) asset(s) to existing release $tag" -ForegroundColor Cyan
+  & gh release upload $tag --clobber @assets
+  if ($LASTEXITCODE -ne 0) { Write-Error "gh release upload failed"; exit 1 }
+} else {
+  Write-Host "==> Creating GitHub release $tag with $($assets.Count) asset(s)" -ForegroundColor Cyan
+  & gh release create $tag --title "JEditor $tag" @notesArg @assets
+  if ($LASTEXITCODE -ne 0) { Write-Error "gh release create failed"; exit 1 }
+}
 
 Write-Host ""
 Write-Host "Released $tag" -ForegroundColor Green
 Write-Host "  The API will pick it up within 10 minutes (or hit"
 Write-Host "  https://api.jbeditor.com/api/desktop/latest?refresh=1 to bust the cache)."
 Write-Host ""
-Write-Host "Next: build for macOS / Linux on their host machines and run:"
-Write-Host "  gh release upload $tag <file>"
+Write-Host "================================================================" -ForegroundColor Yellow
+Write-Host " IMPORTANT: This script only ships the Windows build." -ForegroundColor Yellow
+Write-Host " macOS and Linux tiles on the download page will read 'Coming soon'" -ForegroundColor Yellow
+Write-Host " until you build on those hosts and attach the artefacts:" -ForegroundColor Yellow
+Write-Host "" -ForegroundColor Yellow
+Write-Host "   # On a Mac (arm64):" -ForegroundColor Yellow
+Write-Host "   wails build -platform darwin/arm64" -ForegroundColor Yellow
+Write-Host "   gh release upload $tag build/bin/jeditor.app.zip --clobber" -ForegroundColor Yellow
+Write-Host "" -ForegroundColor Yellow
+Write-Host "   # On Linux:" -ForegroundColor Yellow
+Write-Host "   wails build -platform linux/amd64" -ForegroundColor Yellow
+Write-Host "   gh release upload $tag build/bin/jeditor-linux-amd64.AppImage --clobber" -ForegroundColor Yellow
+Write-Host "" -ForegroundColor Yellow
+Write-Host " Re-run this script with -Force if you also need to fix the Windows" -ForegroundColor Yellow
+Write-Host " assets on an existing release." -ForegroundColor Yellow
+Write-Host "================================================================" -ForegroundColor Yellow

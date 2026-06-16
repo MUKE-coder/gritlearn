@@ -1,50 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   Calendar,
   ExternalLink,
   Github,
-  Loader2,
   ShieldCheck,
 } from "lucide-react";
-import {
-  fallbackRelease,
-  fetchRelease,
-  type ReleaseInfo,
-} from "@/lib/platform";
+import { type ReleaseInfo } from "@/lib/platform";
 import { DownloadGrid } from "@/components/download-grid";
 
-// Client component. We fetch from the browser, not the server, for one
-// blunt reason: the production web container can't always reach
-// https://api.jbeditor.com from inside Docker (hairpin NAT — the host's
-// public domain routes back through Traefik, and the container's
-// loopback often refuses it). The browser doesn't have that problem.
+// Display-only client component. The server component (page.tsx)
+// fetches /api/desktop/latest once, server-side, and hands the
+// already-shaped ReleaseInfo down here so the page hydrates with real
+// numbers on first paint — no loading skeleton, no client fetch, no
+// CORS / NEXT_PUBLIC_API_URL exposure.
 //
-// Trade-off: there's a small skeleton on first paint while the fetch
-// completes. We seed state with the static fallback so the layout
-// renders immediately and just swaps in the real data when it arrives.
-export function DownloadPageClient({ apiUrl }: { apiUrl: string }) {
-  const [release, setRelease] = useState<ReleaseInfo>(fallbackRelease);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    fetchRelease(apiUrl).then((r) => {
-      if (alive) {
-        setRelease(r);
-        setLoading(false);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, [apiUrl]);
-
+// "use client" is still needed because the surface includes hover
+// animations, OS detection for the "Recommended" badge, and the
+// release-notes expand interaction — none of which work in a pure
+// server component.
+export function DownloadPageClient({ release }: { release: ReleaseInfo }) {
   const released = formatReleaseDate(release.releasedAt);
-  const couldntReach = !loading && release.source === "fallback";
+  const couldntReach = release.source === "fallback";
 
   return (
     <div className="relative flex flex-col">
@@ -72,20 +51,11 @@ export function DownloadPageClient({ apiUrl }: { apiUrl: string }) {
       <section className="border-b border-border/50">
         <div className="mx-auto max-w-4xl px-6 pt-24 pb-14 text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-sm border border-accent/30 bg-accent/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent backdrop-blur">
-            {loading ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>resolving release…</span>
-              </>
-            ) : (
-              <>
-                <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
-                <span>
-                  v{release.version}
-                  {released && <> · released {released}</>}
-                </span>
-              </>
-            )}
+            <span className="h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
+            <span>
+              v{release.version}
+              {released && <> · released {released}</>}
+            </span>
           </div>
 
           <h1 className="text-balance text-[42px] font-bold leading-[1.04] tracking-tight sm:text-[56px]">
@@ -112,7 +82,7 @@ export function DownloadPageClient({ apiUrl }: { apiUrl: string }) {
       {/* ─── Per-OS tiles ─────────────────────────────────────────── */}
       <section className="border-b border-border/40">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          {loading ? <DownloadGridSkeleton /> : <DownloadGrid release={release} />}
+          <DownloadGrid release={release} />
 
           <div className="mt-12 flex flex-col items-center justify-center gap-3 text-[12px] text-text-muted sm:flex-row">
             <div className="flex items-center gap-2">
@@ -137,7 +107,7 @@ export function DownloadPageClient({ apiUrl }: { apiUrl: string }) {
       </section>
 
       {/* ─── Release notes ────────────────────────────────────────── */}
-      {!loading && release.releaseNotes && (
+      {release.releaseNotes && (
         <section className="border-b border-border/40 bg-bg-secondary/30">
           <div className="mx-auto max-w-3xl px-6 py-20">
             <div className="mb-6 flex items-center gap-2 text-sm text-text-secondary">
@@ -189,26 +159,6 @@ export function DownloadPageClient({ apiUrl }: { apiUrl: string }) {
           </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function DownloadGridSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {[0, 1, 2, 3].map((i) => (
-        <div
-          key={i}
-          className="flex items-start gap-4 rounded-md border border-border bg-bg-secondary p-5"
-        >
-          <div className="h-11 w-11 shrink-0 rounded-sm border border-border/60 bg-bg-elevated animate-pulse" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-32 rounded bg-bg-elevated animate-pulse" />
-            <div className="h-3 w-48 rounded bg-bg-elevated animate-pulse" />
-            <div className="h-3 w-40 rounded bg-bg-elevated animate-pulse" />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
