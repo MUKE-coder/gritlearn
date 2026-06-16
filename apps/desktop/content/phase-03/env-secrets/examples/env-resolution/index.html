@@ -1,0 +1,256 @@
+<!--
+  Interactive playground for env-var resolution in Next.js. The student
+  picks an env var name and a context (server / client / build), and the
+  panel walks through which .env file was used, whether the value is
+  exposed in the resulting context, and what the read returns.
+
+  Aims to make the NEXT_PUBLIC_* boundary + file-priority rules concrete.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Where does process.env.X come from?</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1020px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-top: 1rem; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .panel h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      .row { display: flex; align-items: center; gap: 0.4rem; margin: 0.4rem 0; font-size: 0.85rem; }
+      select, input[type="text"] {
+        font-size: 0.83rem; padding: 0.25rem 0.5rem; border: 1px solid #d4d4d8;
+        border-radius: 4px; background: #fff; font-family: ui-monospace, monospace;
+      }
+      select { min-width: 11rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8rem;
+        line-height: 1.55; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .step {
+        margin: 0.4rem 0; padding: 0.55rem 0.85rem; background: #fff;
+        border-radius: 4px; border: 1px solid #e4e4e7; font-size: 0.85rem;
+      }
+      .step .num {
+        display: inline-block; background: #f4f4f5; color: #71717a;
+        font-family: ui-monospace, monospace; font-size: 0.7rem;
+        padding: 1px 6px; border-radius: 3px; margin-right: 0.5rem;
+      }
+      .step.ok    { border-left: 3px solid #16a34a; }
+      .step.miss  { border-left: 3px solid #f87171; }
+      .step.info  { border-left: 3px solid #2563eb; }
+      .outcome {
+        margin-top: 0.7rem; padding: 0.7rem 0.85rem; border-radius: 4px; font-size: 0.85rem;
+      }
+      .outcome.ok    { background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534; }
+      .outcome.fail  { background: #fee2e2; border-left: 3px solid #dc2626; color: #7f1d1d; }
+      .files {
+        display: grid; grid-template-columns: 1fr; gap: 0.4rem; margin: 0.4rem 0;
+      }
+      .files .file {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        padding: 0.4rem 0.6rem; background: #fff; border: 1px solid #e4e4e7; border-radius: 4px;
+        display: flex; align-items: center; gap: 0.6rem;
+      }
+      .files .file .name { flex: 1; }
+      .files .file .value { color: #15803d; }
+      .files .file.committed { background: #fef3c7; }
+      .files .file.gitignored { background: #fce7f3; }
+      .files .file .tag {
+        font-size: 0.66rem; padding: 1px 7px; border-radius: 999px;
+        background: #f4f4f5; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+      }
+      .files .file.committed  .tag { background: #fef3c7; color: #92400e; }
+      .files .file.gitignored .tag { background: #fce7f3; color: #9f1239; }
+    </style>
+  </head>
+  <body>
+    <h1>Where does <code>process.env.X</code> come from?</h1>
+    <p>Pick an env var, then pick where the code reads it. The panel below traces which file the value came from and whether the context can see it.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Pick an env var</h2>
+        <div class="row">
+          <select id="var">
+            <option value="DATABASE_URL">DATABASE_URL</option>
+            <option value="AUTH_SECRET">AUTH_SECRET</option>
+            <option value="STRIPE_SECRET_KEY">STRIPE_SECRET_KEY</option>
+            <option value="NEXT_PUBLIC_APP_URL">NEXT_PUBLIC_APP_URL</option>
+            <option value="NEXT_PUBLIC_STRIPE_PK">NEXT_PUBLIC_STRIPE_PK</option>
+            <option value="MISSING_VAR">MISSING_VAR (not defined)</option>
+          </select>
+        </div>
+
+        <h2 style="margin-top: 0.8rem;">Read from where?</h2>
+        <div class="row">
+          <select id="ctx">
+            <option value="server">Server component / route handler</option>
+            <option value="client">Client component ('use client')</option>
+            <option value="build">During next build (bundling)</option>
+          </select>
+        </div>
+
+        <h2 style="margin-top: 0.8rem;">.env files (what we have)</h2>
+        <div class="files">
+          <div class="file gitignored">
+            <span class="name">.env.local</span>
+            <span class="value">→ real secrets</span>
+            <span class="tag">gitignored</span>
+          </div>
+          <div class="file committed">
+            <span class="name">.env</span>
+            <span class="value">→ committed defaults</span>
+            <span class="tag">committed</span>
+          </div>
+          <div class="file committed">
+            <span class="name">.env.example</span>
+            <span class="value">→ shape only</span>
+            <span class="tag">committed</span>
+          </div>
+        </div>
+        <p style="font-size: 0.78rem; color: #71717a; margin-top: 0.4rem;">
+          Priority: <code>.env.local</code> &gt; <code>.env</code>.
+          Each context only sees a subset based on whether the var is
+          <code>NEXT_PUBLIC_*</code>.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Trace</h2>
+        <pre id="code"></pre>
+        <div id="steps"></div>
+        <div id="outcome"></div>
+      </div>
+    </div>
+
+    <script>
+      // Simulated env values across files. In a real project, .env.local
+      // overrides .env for the same key. .env.example is shape only —
+      // never read at runtime.
+      const envFiles = {
+        ".env.local": {
+          DATABASE_URL:          "postgresql://localhost:5432/myapp_dev",
+          AUTH_SECRET:           "9f3kL...32 random chars...x7H",
+          STRIPE_SECRET_KEY:     "sk_test_51N...XYZ",
+          NEXT_PUBLIC_APP_URL:   "http://localhost:3000",
+          NEXT_PUBLIC_STRIPE_PK: "pk_test_51N...ABC",
+        },
+        ".env": {
+          // Committed defaults — overridden by .env.local in dev.
+          NEXT_PUBLIC_APP_URL: "https://placeholder.example.com",
+        },
+      };
+
+      function resolveValue(varName) {
+        if (envFiles[".env.local"][varName] !== undefined) {
+          return { value: envFiles[".env.local"][varName], from: ".env.local" };
+        }
+        if (envFiles[".env"][varName] !== undefined) {
+          return { value: envFiles[".env"][varName], from: ".env" };
+        }
+        return { value: undefined, from: null };
+      }
+
+      function trace() {
+        const varName = document.getElementById("var").value;
+        const ctx     = document.getElementById("ctx").value;
+        const resolved = resolveValue(varName);
+        const isPublic = varName.startsWith("NEXT_PUBLIC_");
+
+        // Code shown — varies by context.
+        const codeByCtx = {
+          server: `<span class="comment">// app/page.tsx — server component</span>
+<span class="keyword">export default async function</span> Page() {
+  <span class="keyword">const</span> value = process.env.<span class="string">${varName}</span>;
+  <span class="keyword">return</span> &lt;<span class="keyword">pre</span>&gt;{value}&lt;/<span class="keyword">pre</span>&gt;;
+}`,
+          client: `<span class="string">"use client"</span>;
+<span class="comment">// components/profile.tsx — runs in the browser</span>
+<span class="keyword">export function</span> Profile() {
+  <span class="keyword">const</span> value = process.env.<span class="string">${varName}</span>;
+  <span class="keyword">return</span> &lt;<span class="keyword">div</span>&gt;{value}&lt;/<span class="keyword">div</span>&gt;;
+}`,
+          build: `<span class="comment">// During 'next build' — Next.js bakes NEXT_PUBLIC_* into</span>
+<span class="comment">// the client bundle at this stage. Non-public vars stay</span>
+<span class="comment">// on the server and are read live per request.</span>
+$ next build`,
+        };
+
+        document.getElementById("code").innerHTML = codeByCtx[ctx];
+
+        const steps = [];
+
+        // 1. File resolution
+        if (resolved.from) {
+          steps.push({ kind: "ok",   num: "1", text: `Found <code>${varName}</code> in <code>${resolved.from}</code>` });
+          if (resolved.from === ".env.local") {
+            steps.push({ kind: "info", num: "1b", text: `<code>.env.local</code> wins over <code>.env</code> when both define the key.` });
+          }
+        } else {
+          steps.push({ kind: "miss", num: "1", text: `<code>${varName}</code> not defined in any .env file → resolves to <code>undefined</code>.` });
+        }
+
+        // 2. Context check
+        if (ctx === "server") {
+          steps.push({ kind: "ok", num: "2", text: "Server context can read every env var (public + private)." });
+          if (resolved.value !== undefined) {
+            steps.push({ kind: "ok", num: "3", text: `<code>process.env.${varName}</code> returns the literal string.` });
+          }
+        } else if (ctx === "client") {
+          if (isPublic) {
+            steps.push({ kind: "ok", num: "2", text: `<code>${varName}</code> is prefixed <code>NEXT_PUBLIC_</code> → inlined into the client bundle at build time.` });
+            if (resolved.value !== undefined) {
+              steps.push({ kind: "ok", num: "3", text: `The browser sees the value — but anyone with devtools can read it. Don't store secrets behind this prefix.` });
+            }
+          } else {
+            steps.push({ kind: "miss", num: "2", text: `<code>${varName}</code> is NOT prefixed <code>NEXT_PUBLIC_</code> → Next.js strips it from the client bundle.` });
+            steps.push({ kind: "miss", num: "3", text: `<code>process.env.${varName}</code> in the browser returns <code>undefined</code>, even though it's set on the server.` });
+          }
+        } else if (ctx === "build") {
+          if (isPublic && resolved.value !== undefined) {
+            steps.push({ kind: "ok",   num: "2", text: `<code>${varName}</code> is baked into the client JS bundle as a string literal.` });
+            steps.push({ kind: "info", num: "3", text: `Changing it later requires a NEW build — runtime env changes do nothing to <code>NEXT_PUBLIC_*</code>.` });
+          } else if (!isPublic) {
+            steps.push({ kind: "info", num: "2", text: `Server-only var. Not baked into the bundle — read live per request at runtime.` });
+            steps.push({ kind: "ok",   num: "3", text: `Restart the server with a new value and the next request sees it.` });
+          }
+        }
+
+        document.getElementById("steps").innerHTML = steps.map(s => `
+          <div class="step ${s.kind}">
+            <span class="num">${s.num}</span>${s.text}
+          </div>
+        `).join("");
+
+        // Final outcome
+        let outcome;
+        if (resolved.value === undefined) {
+          outcome = { kind: "fail", text: `<code>process.env.${varName}</code> returns <code>undefined</code> — most likely a missing var.` };
+        } else if (ctx === "client" && !isPublic) {
+          outcome = { kind: "fail", text: `<code>process.env.${varName}</code> returns <code>undefined</code> in the browser (server-only var). To access it client-side, either prefix it <code>NEXT_PUBLIC_</code> (only if it's safe to expose) or proxy through a server-side fetch.` };
+        } else if (ctx === "build") {
+          outcome = { kind: "ok", text: isPublic
+            ? `Value is inlined into the client bundle. Same value travels to every browser.`
+            : `Value stays on the server. Each runtime read picks up whatever's set at that moment.` };
+        } else {
+          outcome = { kind: "ok", text: `Returns the string <code>"${resolved.value}"</code>.` };
+        }
+        document.getElementById("outcome").innerHTML =
+          `<div class="outcome ${outcome.kind}"><strong>Result:</strong> ${outcome.text}</div>`;
+      }
+
+      document.getElementById("var").addEventListener("change", trace);
+      document.getElementById("ctx").addEventListener("change", trace);
+      trace();
+    </script>
+  </body>
+</html>

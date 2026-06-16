@@ -1,0 +1,426 @@
+## Protecting routes and sessions
+
+You have a working sign-in (`authjs`). The user logs in, a cookie lands in their browser, you can read it via `auth()` on the server. Now: how do you stop unauthenticated users from reaching protected pages? And once they're in, how do you keep certain pages restricted to certain roles?
+
+There are three layers of protection in a Next.js + Auth.js app. Each runs at a different stage of the request, with different trade-offs.
+
+<Analogy>
+Authentication answered "who are you?" — **authorisation** answers "**are you allowed to be here?**"
+
+Back to the nightclub. You showed your ID, got a wristband, and you're now inside. But there are still **rules about where you can go.**
+
+- **The front door** — the bouncer who checked your ID. Already covered by `authjs`. This is the boundary between "outside" and "anywhere in the venue."
+
+- **The VIP-room rope** — a second checker who verifies your wristband AND looks at the colour. Gold wristband? Welcome to VIP. Plain wristband? Sorry, members-only. This is **role-based access** — a wristband is necessary but not sufficient.
+
+- **The hallway camera that records who walks past** — a passive watcher. Doesn't block anyone. Just logs the event. This is **audit / observability** — separate from blocking decisions.
+
+In Next.js, the three checking layers map to three places in your code:
+
+1. **`middleware.ts`** — runs on **every** request before any page or route handler. The bouncer at every internal door. Fastest, but it can only see the cookie (not the user object) and only run lightweight checks. Best for "is there ANY session?" gating across whole URL trees.
+
+2. **`auth()` in the server component / route handler** — runs once the request has reached a specific page. The VIP-rope checker. Slower (one DB call per page if you use the database adapter), but you have the full user object: roles, plan, email-verified status, anything you put in callbacks.
+
+3. **Layout-level protection** — a single `auth()` check in a layout that wraps a whole route segment. The hallway monitor. Every page inside that layout is protected once. Less code than checking each page individually.
+
+The pattern most modern Next.js apps land on:
+
+- **Middleware**: cheap "do they have ANY session cookie?" check. Redirects unauthenticated traffic away from `/dashboard/*`, `/admin/*`, `/settings/*` before any server component even mounts.
+
+- **Layout `auth()`**: in `app/dashboard/layout.tsx`, call `await auth()` and stash the user on context. Every dashboard page below it can trust the user exists.
+
+- **Per-page `auth()`** with role check: on `/admin/*` pages specifically, layer in an `if (session.user.role !== "admin") notFound()` check.
+
+The same wristband (the session JWT cookie) passes through all three checks. The decisions are layered, not redundant.
+</Analogy>
+
+### `middleware.ts` — the cheap front gate
+
+```ts
+// middleware.ts  (at the repo root, next to package.json)
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { auth } from "@/auth";
+
+const PROTECTED = ["/dashboard", "/settings", "/admin"];
+
+export default auth((req) => {
+  const { pathname } = req.nextUrl;
+  const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
+  if (!isProtected) return NextResponse.next();
+
+  const isAuthed = !!req.auth?.user;
+  if (!isAuthed) {
+    const signInUrl = new URL("/login", req.url);
+    signInUrl.searchParams.set("from", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  return NextResponse.next();
+});
+
+// Limit middleware to URL trees that need protection. Skip static
+// assets and the API routes — the API has its own auth checks.
+export const config = {
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+```
+
+What this does:
+
+1. **Wraps the default export with `auth(...)`.** Auth.js v5 exposes a special middleware wrapper that injects `req.auth` — the decoded session (or null). No DB roundtrip; the JWT is decoded inline.
+
+2. **Matches a list of protected URL prefixes.** Adjust `PROTECTED` to your app's shape. URLs not in the list are pass-through.
+
+3. **Redirects unauthenticated users to `/login?from=...`.** The `from` query param lets your login page redirect back after a successful sign-in:
+
+```ts
+// Inside login/page.tsx
+const params = useSearchParams();
+const next = params.get("from") ?? "/dashboard";
+// ... after successful signIn:
+window.location.href = next;
+```
+
+4. **`config.matcher`** — Next.js skips middleware for matched patterns. Excluding `api`, `_next/static`, `_next/image`, and `favicon.ico` means middleware doesn't run on every CSS file load (a real perf footgun if you forget).
+
+### What middleware CAN'T do well
+
+- **Database lookups.** The Edge runtime middleware runs in doesn't have full Node.js — no Prisma `findUnique`. You can only read what's already in the JWT.
+- **Per-user permission checks.** If you need "is this user the owner of post 47?", that has to happen in the page (which has full Node access).
+- **Complex logic.** Middleware runs on every request; anything you put here adds latency to every page load.
+
+Keep middleware tight. It's a coarse gate, not a permissions engine.
+
+### Per-page `auth()` — the precise check
+
+```tsx
+// app/dashboard/notes/[id]/page.tsx
+import { auth } from "@/auth";
+import { redirect, notFound } from "next/navigation";
+import { db } from "@/lib/db";
+
+export default async function NotePage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  const note = await db.note.findUnique({
+    where: { id: Number(params.id) },
+  });
+  if (!note) notFound();
+
+  // Authorisation check — is this user's note?
+  if (note.authorId !== Number(session.user.id)) {
+    notFound();    // Pretend it doesn't exist (don't 403 — that leaks the row exists)
+  }
+
+  return <NoteView note={note} />;
+}
+```
+
+Three patterns to internalise:
+
+1. **`redirect("/login")` over `throw`.** It generates a clean 307 redirect; the user lands on the login page, not an error boundary.
+
+2. **`notFound()` over `403`** for "you don't own this resource." Returning 403 confirms the resource exists; `notFound()` makes it indistinguishable from "no such ID." A small but meaningful security hardening.
+
+3. **Re-check on every page** even though middleware checked already. Belt-and-suspenders: a bug in middleware shouldn't silently expose data. The cost is one decoded JWT per page, which is microseconds.
+
+### Layout-level — protect a whole tree
+
+If every page under `/dashboard/*` needs auth, lift the check to the layout:
+
+```tsx
+// app/dashboard/layout.tsx
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  return (
+    <div>
+      <DashboardSidebar user={session.user} />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+Now `/dashboard`, `/dashboard/notes`, `/dashboard/settings`, every page below this layout, is protected. You don't need to repeat `await auth()` in each one (though many teams still do for clarity).
+
+### Role-based access — beyond "logged in"
+
+Once you have a `role` field on `users` (added via the Prisma schema), you can layer in role checks:
+
+```ts
+// auth.ts — add a callback so the session sees the role
+callbacks: {
+  async jwt({ token, user }) {
+    if (user) token.role = (user as any).role;
+    return token;
+  },
+  async session({ session, token }) {
+    if (token?.role) (session.user as any).role = token.role as string;
+    return session;
+  },
+},
+```
+
+Then in a protected page:
+
+```tsx
+import { auth } from "@/auth";
+import { notFound } from "next/navigation";
+
+export default async function AdminPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  if (session.user.role !== "admin") notFound();   // hide its existence
+
+  return <AdminDashboard />;
+}
+```
+
+For more than a handful of role checks, pull the logic out:
+
+```ts
+// lib/can.ts
+import type { Session } from "next-auth";
+
+export type Role = "admin" | "editor" | "viewer";
+
+export function can(session: Session | null, action: "edit" | "delete" | "view"): boolean {
+  const role = (session?.user as { role?: Role } | undefined)?.role;
+  if (!role) return false;
+  if (role === "admin") return true;
+  if (role === "editor" && action !== "delete") return true;
+  if (role === "viewer" && action === "view") return true;
+  return false;
+}
+```
+
+```tsx
+const session = await auth();
+if (!can(session, "edit")) notFound();
+```
+
+A single function the whole codebase can call. When the policy changes, you edit one place.
+
+### Server actions — the same check
+
+Server actions are mutations; they MUST verify the session.
+
+```ts
+// app/dashboard/notes/actions.ts
+"use server";
+
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+
+export async function deleteNote(noteId: number) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  // Verify ownership before the destructive op.
+  const note = await db.note.findUnique({ where: { id: noteId } });
+  if (!note || note.authorId !== Number(session.user.id)) {
+    throw new Error("Not found");
+  }
+
+  await db.note.delete({ where: { id: noteId } });
+}
+```
+
+Calling a server action from a client component:
+
+```tsx
+"use client";
+import { deleteNote } from "./actions";
+
+<button onClick={() => deleteNote(note.id)}>Delete</button>
+```
+
+The action runs on the server with the user's cookie automatically attached. The first thing it does is `await auth()`. **Never** trust a client-supplied user ID in an action — always read the session.
+
+### Route handlers — same shape, different surface
+
+```ts
+// app/api/notes/[id]/route.ts
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const note = await db.note.findUnique({ where: { id: Number(params.id) } });
+  if (!note) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (note.authorId !== Number(session.user.id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await db.note.delete({ where: { id: Number(params.id) } });
+  return NextResponse.json({ ok: true });
+}
+```
+
+Returns proper HTTP status codes (vs redirecting / `notFound()`) because clients calling the API care about distinguishing 401 from 404.
+
+### Reading the session on the client
+
+In a client component:
+
+```tsx
+"use client";
+import { useSession } from "next-auth/react";
+
+export function ProfileButton() {
+  const { data: session, status } = useSession();
+
+  if (status === "loading") return <Skeleton />;
+  if (!session?.user) return <SignInLink />;
+
+  return <Avatar src={session.user.image} name={session.user.name} />;
+}
+```
+
+The hook re-runs on tab focus (so a sign-in in another tab is picked up) and shows three states: `loading`, `authenticated`, `unauthenticated`.
+
+For the hook to work, wrap the app in `<SessionProvider>` in the root layout:
+
+```tsx
+// app/layout.tsx
+import { SessionProvider } from "next-auth/react";
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Session timeout & sliding expiry
+
+The default JWT session expires after 30 days. If a user signs in once and uses the app daily, you probably want the session to extend with use, not hard-expire 30 days later. Auth.js does this automatically — every request through middleware refreshes the JWT's expiry. Tunable in `auth.ts`:
+
+```ts
+NextAuth({
+  session: {
+    strategy: "jwt",
+    maxAge:    60 * 60 * 24 * 30,   // 30 days max
+    updateAge: 60 * 60 * 24,        // re-sign once a day if seen
+  },
+});
+```
+
+`updateAge` is how often Auth.js bothers to re-sign. Setting it to 0 re-signs on every request (more secure, more CPU); the default of 24 hours is the right balance for most apps.
+
+### The "remember me" pattern
+
+For sites that want the user to choose between "remember me" (long session) and "no remember me" (browser-close session), pass a custom `maxAge`:
+
+```ts
+// In the credentials provider:
+async authorize(creds) {
+  // ... usual checks ...
+  return { id, email, name, remember: creds.remember === "true" };
+},
+
+// In callbacks:
+jwt({ token, user }) {
+  if (user) token.exp = user.remember ? undefined : Math.floor(Date.now() / 1000) + 60 * 60 * 8; // 8h
+  return token;
+}
+```
+
+Tweaks the JWT's `exp` claim per-user. The cookie then either persists or dies with the browser session.
+
+### Anti-patterns to avoid
+
+- **Reading the cookie manually** with `cookies()` and decoding the JWT yourself. Always use `auth()` — it verifies the signature; manual decode would let a forged cookie slip through.
+
+- **Trusting `useSession()` for authorisation** in a client component. The client is *adversarial*; a user can mock the hook in devtools. Use it only for UI display; always re-check on the server before sensitive operations.
+
+- **Long-lived sessions without rotation.** A six-month session that doesn't re-sign means a stolen cookie is valid for six months. Rotate by reducing `updateAge`, or sliding-window the expiry.
+
+- **Doing role checks in middleware that depend on DB data.** Middleware can't reach Prisma reliably. Push role-aware authorisation to the page; keep middleware to "any cookie" gates.
+
+<ExampleProject
+  src="middleware-gate"
+  title="middleware.ts running on a real request"
+  description="Animated trace of what middleware sees for four different requests: anonymous to a public page, anonymous to /dashboard, authenticated to /dashboard, and authenticated user navigating after a session expires. Visual map of each path through the middleware decision tree."
+/>
+
+<Exercise
+  title="Lock down dashboard + add an admin-only page"
+  starter={`Continuing from the project where you wired Auth.js with GitHub
+(previous concept), add two protection layers.
+
+  1. Create middleware.ts at the repo root. Match the URL trees
+     /dashboard and /admin. Redirect unauthenticated requests to
+     /login with ?from=<original-path>.
+
+       export default auth((req) => {
+         const isProtected = ["/dashboard", "/admin"]
+           .some(p => req.nextUrl.pathname.startsWith(p));
+         if (!isProtected || req.auth?.user) return NextResponse.next();
+         const url = new URL("/login", req.url);
+         url.searchParams.set("from", req.nextUrl.pathname);
+         return NextResponse.redirect(url);
+       });
+
+       export const config = {
+         matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+       };
+
+  2. Update your login page to read ?from and navigate there on
+     success instead of hard-coding /dashboard.
+
+  3. Add a 'role' column to User in prisma/schema.prisma:
+       role  String  @default("user")
+     Then: npx prisma migrate dev --name add_user_role
+
+  4. Add the role to the session via callbacks in auth.ts (the jwt +
+     session callbacks from the concept above).
+
+  5. Create app/admin/page.tsx as a server component that:
+       - calls await auth()
+       - if no session, redirects /login (middleware would catch it but
+         belt-and-suspenders)
+       - if session.user.role !== "admin", calls notFound()
+       - renders something boring like <h1>Admin</h1>
+
+  6. Manually set your own user's role to "admin" via Prisma Studio
+     (npx prisma studio → User table → edit role → save). Refresh
+     /admin. Should render.
+
+  7. Open a private/incognito window. Try /admin. Should redirect to
+     /login. Sign in with GitHub from your other account (or a friend's).
+     Their role is "user". They see 404, not "Access denied" — a real
+     hardening choice.
+
+If you want to go further: implement a lib/can.ts permissions module
+and replace inline role checks with can(session, "view-admin"). Single
+place to change the policy.`}
+/>

@@ -1,0 +1,193 @@
+<!--
+  Trace what middleware does on four different request shapes:
+    1. Anonymous → /  (public, pass-through)
+    2. Anonymous → /dashboard  (redirect to /login?from=/dashboard)
+    3. Authenticated → /dashboard  (pass)
+    4. Authenticated user role=user → /admin  (middleware allows, page 404s)
+  Each scenario walks through the middleware decision tree step by step.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>middleware.ts — see the decisions it makes</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .scenarios { display: flex; gap: 0.4rem; margin: 1rem 0 0.7rem; flex-wrap: wrap; }
+      .scenarios button {
+        padding: 0.5rem 0.9rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.83rem; text-align: left;
+        max-width: 260px;
+      }
+      .scenarios button.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .scenarios button .label-detail { display: block; font-size: 0.72rem; opacity: 0.7; margin-top: 0.1rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword  { color: #38bdf8; }
+      .string   { color: #7fff5b; }
+      .type     { color: #c084fc; }
+      .comment  { color: #71717a; font-style: italic; }
+      .number   { color: #fbbf24; }
+      .ok       { color: #4ade80; }
+      .miss     { color: #f87171; }
+      .step {
+        margin: 0.45rem 0; padding: 0.55rem 0.85rem; background: #fff;
+        border-radius: 4px; border: 1px solid #e4e4e7; font-size: 0.85rem;
+      }
+      .step .stepnum {
+        display: inline-block; background: #f4f4f5; color: #71717a;
+        font-family: ui-monospace, monospace; font-size: 0.7rem;
+        padding: 1px 6px; border-radius: 3px; margin-right: 0.5rem;
+      }
+      .step.true  { border-left: 3px solid #16a34a; }
+      .step.false { border-left: 3px solid #dc2626; }
+      .step.info  { border-left: 3px solid #2563eb; }
+      .outcome {
+        margin-top: 0.7rem; padding: 0.65rem 0.85rem; border-radius: 4px;
+        font-size: 0.88rem;
+      }
+      .outcome.pass     { background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534; }
+      .outcome.redirect { background: #fef3c7; border-left: 3px solid #f59e0b; color: #92400e; }
+      .outcome.deny     { background: #fee2e2; border-left: 3px solid #dc2626; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>What middleware sees on each request</h1>
+    <p>Pick a scenario. The left panel shows the request shape; the right walks through the middleware's decision tree and ends with what the browser sees.</p>
+
+    <div class="scenarios" id="scenarios">
+      <button data-id="anon-public" class="active">
+        Anonymous → <code>/</code>
+        <span class="label-detail">no cookie, public URL</span>
+      </button>
+      <button data-id="anon-dashboard">
+        Anonymous → <code>/dashboard</code>
+        <span class="label-detail">no cookie, protected URL</span>
+      </button>
+      <button data-id="auth-dashboard">
+        Authenticated → <code>/dashboard</code>
+        <span class="label-detail">valid cookie, protected URL</span>
+      </button>
+      <button data-id="user-admin">
+        Authenticated user → <code>/admin</code>
+        <span class="label-detail">middleware passes, page 404s</span>
+      </button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Request</h2>
+        <pre id="request"></pre>
+        <h2 style="margin-top: 0.9rem;">middleware.ts (re-printed)</h2>
+        <pre id="code"></pre>
+      </div>
+      <div class="col">
+        <h2>Decision trace</h2>
+        <div id="trace"></div>
+        <div id="outcome"></div>
+      </div>
+    </div>
+
+    <script>
+      const codeBlock =
+`<span class="keyword">export default</span> auth((req) =&gt; {
+  <span class="keyword">const</span> { pathname } = req.nextUrl;
+  <span class="keyword">const</span> isProtected = [<span class="string">"/dashboard"</span>, <span class="string">"/admin"</span>]
+    .some(p =&gt; pathname.startsWith(p));
+  <span class="keyword">if</span> (!isProtected)        <span class="keyword">return</span> NextResponse.next();
+  <span class="keyword">if</span> (req.auth?.user)     <span class="keyword">return</span> NextResponse.next();
+  <span class="keyword">const</span> url = <span class="keyword">new</span> URL(<span class="string">"/login"</span>, req.url);
+  url.searchParams.set(<span class="string">"from"</span>, pathname);
+  <span class="keyword">return</span> NextResponse.redirect(url);
+});`;
+
+      const scenarios = {
+        "anon-public": {
+          request:
+`<span class="keyword">GET</span> /
+<span class="comment">// No Cookie header (anonymous visitor)</span>`,
+          trace: [
+            { kind: "info",  step: "1", text: "pathname = '/'" },
+            { kind: "false", step: "2", text: "isProtected = false (pathname doesn't start with /dashboard or /admin)" },
+            { kind: "true",  step: "3", text: "return NextResponse.next() — the public homepage renders normally" },
+          ],
+          outcome: { kind: "pass", text: "200 OK — the homepage. Middleware did roughly nothing." },
+        },
+        "anon-dashboard": {
+          request:
+`<span class="keyword">GET</span> /dashboard
+<span class="comment">// No Cookie header</span>`,
+          trace: [
+            { kind: "info",  step: "1", text: "pathname = '/dashboard'" },
+            { kind: "true",  step: "2", text: "isProtected = true (starts with /dashboard)" },
+            { kind: "false", step: "3", text: "req.auth?.user is undefined — no session cookie to decode" },
+            { kind: "info",  step: "4", text: "Build redirect URL: /login?from=/dashboard" },
+            { kind: "info",  step: "5", text: "return NextResponse.redirect(url)" },
+          ],
+          outcome: { kind: "redirect", text: "307 Redirect → /login?from=/dashboard. Browser navigates to login; after sign-in your login page reads ?from and bounces back to /dashboard." },
+        },
+        "auth-dashboard": {
+          request:
+`<span class="keyword">GET</span> /dashboard
+<span class="keyword">Cookie</span>: authjs.session-token=eyJhbGc...
+<span class="comment">// JWT decodes to: { id: "4", email: "ava@studio.io", role: "user" }</span>`,
+          trace: [
+            { kind: "info",  step: "1", text: "pathname = '/dashboard'" },
+            { kind: "true",  step: "2", text: "isProtected = true" },
+            { kind: "true",  step: "3", text: "req.auth?.user is { id: '4', ... } — valid cookie decoded" },
+            { kind: "true",  step: "4", text: "return NextResponse.next() — request continues to /dashboard's server component" },
+          ],
+          outcome: { kind: "pass", text: "200 OK — /dashboard page renders. The server component re-checks session via auth() (belt-and-suspenders) then renders the user's data." },
+        },
+        "user-admin": {
+          request:
+`<span class="keyword">GET</span> /admin
+<span class="keyword">Cookie</span>: authjs.session-token=eyJhbGc...
+<span class="comment">// JWT decodes to: { id: "9", role: "user" }   ← not "admin"</span>`,
+          trace: [
+            { kind: "info",  step: "1", text: "pathname = '/admin'" },
+            { kind: "true",  step: "2", text: "isProtected = true" },
+            { kind: "true",  step: "3", text: "req.auth?.user is { id: '9', ... } — middleware sees the cookie is valid" },
+            { kind: "true",  step: "4", text: "return NextResponse.next() — middleware lets the request through (it doesn't know about roles)" },
+            { kind: "info",  step: "5", text: "→ /admin/page.tsx runs. await auth() returns session. session.user.role !== 'admin'." },
+            { kind: "false", step: "6", text: "Page calls notFound() — Next.js serves the 404 page" },
+          ],
+          outcome: { kind: "deny", text: "404 Not Found — the user can't tell whether /admin exists or whether they're forbidden. notFound() is the right call here over a 403 because it hides the route's existence." },
+        },
+      };
+
+      function renderScenario(id) {
+        const s = scenarios[id];
+        document.querySelectorAll(".scenarios button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+        document.getElementById("request").innerHTML = s.request;
+        document.getElementById("code").innerHTML    = codeBlock;
+        document.getElementById("trace").innerHTML = s.trace.map(t => `
+          <div class="step ${t.kind}">
+            <span class="stepnum">${t.step}</span>${t.text}
+          </div>
+        `).join("");
+        document.getElementById("outcome").innerHTML =
+          `<div class="outcome ${s.outcome.kind}"><strong>Outcome:</strong> ${s.outcome.text}</div>`;
+      }
+
+      document.getElementById("scenarios").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        renderScenario(b.dataset.id);
+      });
+
+      renderScenario("anon-public");
+    </script>
+  </body>
+</html>

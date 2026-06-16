@@ -1,0 +1,248 @@
+<!--
+  Step-through animation of the Vercel preview-deploy lifecycle. Click
+  Next to advance through the six stages of a PR's life on Vercel:
+    1. git push to feature branch
+    2. CI build kicks off
+    3. Preview URL appears
+    4. PR review on the preview
+    5. Merge to main
+    6. Production deploy
+  Each stage shows what's happening on the developer's side, what's
+  happening on Vercel's side, and what artefacts appear (URLs, logs,
+  env scope).
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The life of a PR on Vercel</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .strip {
+        display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.35rem; margin: 1.1rem 0;
+      }
+      .stage {
+        padding: 0.5rem 0.6rem; background: #f4f4f5; border: 1px solid #e4e4e7;
+        border-radius: 6px; text-align: center; font-size: 0.74rem;
+      }
+      .stage .num {
+        font-family: ui-monospace, monospace; font-size: 0.66rem; color: #71717a;
+        text-transform: uppercase; letter-spacing: 0.08em;
+      }
+      .stage.done   { background: #dcfce7; border-color: #16a34a; color: #166534; }
+      .stage.active { background: #fef3c7; border-color: #f59e0b; color: #92400e; box-shadow: 0 0 0 2px #fde68a; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.8rem; }
+      .col  { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.79rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .yellow  { color: #fbbf24; }
+
+      .vercel-card {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px; padding: 0.7rem 0.9rem;
+        margin-top: 0.5rem; font-size: 0.84rem;
+      }
+      .vercel-card .badge {
+        display: inline-block; font-size: 0.66rem; padding: 1px 7px; border-radius: 999px;
+        font-family: ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-left: 0.4rem;
+      }
+      .badge.queued      { background: #f4f4f5; color: #71717a; }
+      .badge.building    { background: #fef3c7; color: #92400e; }
+      .badge.ready       { background: #dcfce7; color: #166534; }
+      .badge.preview     { background: #dbeafe; color: #1e40af; }
+      .badge.production  { background: #ede9fe; color: #6b21a8; }
+      .url {
+        font-family: ui-monospace, monospace; font-size: 0.76rem;
+        background: #f4f4f5; padding: 2px 7px; border-radius: 3px;
+      }
+
+      .actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
+      .actions button {
+        padding: 0.45rem 0.95rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.82rem;
+      }
+      .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .actions button.secondary { background: #fff; color: #52525b; border-color: #d4d4d8; }
+
+      .annot {
+        margin-top: 0.55rem; font-size: 0.83rem; padding: 0.6rem 0.8rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>A PR's life on Vercel</h1>
+    <p>Six stages from "push to a feature branch" to "live on production." Click <strong>Next</strong> to walk through each.</p>
+
+    <div class="strip" id="strip"></div>
+
+    <div class="grid">
+      <div class="col">
+        <h2 id="dev-tag">On your machine</h2>
+        <pre id="dev"></pre>
+      </div>
+      <div class="col">
+        <h2 id="vercel-tag">Vercel dashboard</h2>
+        <div id="vercel"></div>
+      </div>
+    </div>
+
+    <div class="annot" id="annot"></div>
+
+    <div class="actions">
+      <button id="prev-btn" class="secondary" type="button">← Previous</button>
+      <button id="next-btn" type="button">Next →</button>
+      <button id="reset-btn" class="secondary" type="button">Reset</button>
+    </div>
+
+    <script>
+      const stages = [
+        {
+          name: "Push branch",
+          dev:
+`<span class="comment"># Branch off, change something, push it.</span>
+$ git checkout -b add-stripe-checkout
+$ <span class="comment"># ... write code, add a /api/checkout route ...</span>
+$ git add -A
+$ git commit -m <span class="string">"feat: stripe checkout endpoint"</span>
+$ git push origin add-stripe-checkout`,
+          vercel: { state: "queued", url: null, env: null },
+          annot: "Vercel's GitHub webhook fires on every push. Within seconds, the deploy is queued on Vercel's side — but no URL exists yet.",
+        },
+        {
+          name: "Build starts",
+          dev:
+`<span class="comment"># GitHub UI:</span>
+$ <span class="yellow">●</span> 1 check running — Vercel — Preview
+
+<span class="comment"># Vercel logs (tail):</span>
+[<span class="number">12:04:11</span>] Cloning github.com/you/your-app (Branch: add-stripe-checkout, Commit: 3a7c2f4)
+[<span class="number">12:04:14</span>] Restored build cache
+[<span class="number">12:04:15</span>] Running <span class="string">"pnpm install"</span>...
+[<span class="number">12:04:42</span>] Running <span class="string">"pnpm build"</span>...
+[<span class="number">12:04:43</span>]   ▲ Next.js 14.2.5
+[<span class="number">12:04:43</span>]   Creating an optimized production build ...`,
+          vercel: { state: "building", url: null, env: "preview" },
+          annot: "Vercel runs pnpm install + pnpm build in their CI. Logs stream live. Build cache between deploys means subsequent builds are much faster — 40s instead of 2 min.",
+        },
+        {
+          name: "Preview ready",
+          dev:
+`<span class="comment"># GitHub bot adds a PR comment with the preview URL:</span>
+
+<span class="string">"Visit the deployment preview:"</span>
+<span class="string">"https://your-app-git-add-stripe-checkout-you.vercel.app"</span>
+
+<span class="comment"># Click → fully working copy of YOUR branch's code,</span>
+<span class="comment"># hitting the production database (or whatever you</span>
+<span class="comment"># scoped your env vars to in the Preview environment).</span>`,
+          vercel: { state: "ready", url: "your-app-git-add-stripe-checkout-you.vercel.app", env: "preview" },
+          annot: "Every PR gets its own URL automatically. Share it with the designer, QA, the stakeholder asking about the new flow. No 'works on my machine'.",
+        },
+        {
+          name: "PR review",
+          dev:
+`<span class="comment"># Reviewer's perspective:</span>
+
+Alex left a review (Approved):
+  ✓ Tested checkout against the preview link — \$0.50 charge went through.
+  ✓ The Stripe webhook signature verification looks right.
+  ✓ One nit: rename CHECKOUT_SECRET → STRIPE_WEBHOOK_SECRET for clarity.
+
+You pushed one small commit. New preview URL auto-rolls.`,
+          vercel: { state: "ready", url: "your-app-git-add-stripe-checkout-you.vercel.app", env: "preview", rebuilt: true },
+          annot: "Each push to the branch rebuilds the preview. The URL stays the same — same branch, same URL — so links in PR comments stay live.",
+        },
+        {
+          name: "Merge to main",
+          dev:
+`<span class="comment"># PR approved — squash-merge to main.</span>
+
+$ git checkout main
+$ git pull
+$ <span class="comment"># Latest main now includes the squashed commit:</span>
+$ git log -1
+  feat: stripe checkout endpoint (#142)
+
+<span class="comment"># Vercel's webhook fires again on the new main commit.</span>`,
+          vercel: { state: "building", url: null, env: "production" },
+          annot: "The merge triggers a brand new build — this time scoped to the PRODUCTION environment. Different env vars (real Stripe live keys instead of test) get applied.",
+        },
+        {
+          name: "Production live",
+          dev:
+`<span class="comment"># Vercel dashboard:</span>
+
+your-app.com   →   ✓ Live   3a7c2f4   30 seconds ago
+
+<span class="comment"># A few minutes later, the Slack alert fires:</span>
+
+[deploy] yourapp/main → production
+Commit: feat: stripe checkout endpoint (#142)
+URL: https://your-app.com
+Build: 42s   Status: ready`,
+          vercel: { state: "ready", url: "your-app.com", env: "production" },
+          annot: "The custom domain (your-app.com) now serves the new code. Users see it immediately. The previous preview URL is still alive at its own subdomain — useful for rolling back: 'Promote to production' on yesterday's deployment swaps it back in two clicks.",
+        },
+      ];
+
+      let step = 0;
+
+      function renderStrip() {
+        document.getElementById("strip").innerHTML = stages.map((s, i) => {
+          const cls = i < step ? "done" : i === step ? "active" : "";
+          return `<div class="stage ${cls}"><div class="num">Stage ${i+1}</div>${s.name}</div>`;
+        }).join("");
+      }
+
+      function renderVercel(v) {
+        const stateBadge = `<span class="badge ${v.state}">${v.state}</span>`;
+        const envBadge   = v.env ? `<span class="badge ${v.env}">${v.env}</span>` : "";
+        const url        = v.url ? `<div class="url" style="margin-top:0.4rem;">${v.url}</div>` : "";
+        const rebuilt    = v.rebuilt ? `<div style="font-size:0.74rem;color:#71717a;margin-top:0.35rem;">(rebuilt — same URL, fresh commit)</div>` : "";
+        return `
+          <div class="vercel-card">
+            <strong>your-app</strong>${envBadge}${stateBadge}
+            ${url}
+            ${rebuilt}
+          </div>
+        `;
+      }
+
+      function render() {
+        const s = stages[step];
+        document.getElementById("dev").innerHTML = s.dev;
+        document.getElementById("vercel").innerHTML = renderVercel(s.vercel);
+        document.getElementById("annot").innerHTML = `<strong>What just happened:</strong> ${s.annot}`;
+        document.getElementById("prev-btn").disabled = step === 0;
+        document.getElementById("next-btn").disabled = step === stages.length - 1;
+        renderStrip();
+      }
+
+      document.getElementById("next-btn").addEventListener("click", () => {
+        if (step < stages.length - 1) { step += 1; render(); }
+      });
+      document.getElementById("prev-btn").addEventListener("click", () => {
+        if (step > 0) { step -= 1; render(); }
+      });
+      document.getElementById("reset-btn").addEventListener("click", () => {
+        step = 0; render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

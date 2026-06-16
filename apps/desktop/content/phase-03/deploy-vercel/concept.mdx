@@ -1,0 +1,272 @@
+## Deploying to Vercel
+
+Up until now, your app has only existed on `localhost:3000`. To ship — to put a URL in someone's hands they can visit from anywhere — you need a host. **Vercel** is Next.js's home: they build it, they host it, they wrote the App Router, and their deployment pipeline knows about every Next.js feature out of the box.
+
+This concept walks the path from "git push to GitHub" to "real URL on real DNS." It's mostly *not coding* — it's clicking through forms, setting env vars, connecting domains. Twenty minutes the first time you do it; under five minutes for every subsequent project. The hard part is having done it once.
+
+Vercel isn't the only place to host Next.js — Netlify, Cloudflare, Railway, AWS Amplify, your own server, all work. But for learning, Vercel is the lowest-friction path with zero feature mismatches, so that's what we'll cover.
+
+<Analogy>
+Deploying is **handing your set list to the venue manager and trusting them with the show.**
+
+Until now, you've been rehearsing in your bedroom — `next dev` running on your laptop, no audience but you. To go live, you need a venue that has stage, lights, sound, ticketing, and a door staff. You don't want to be the one running cables.
+
+A venue (Vercel) handles four things you'd otherwise have to wire yourself:
+
+1. **The build crew.** Every time you push code, the venue rebuilds your app. They run `next build`, package the result, and put it on their servers. You don't run any commands; the venue's CI does it.
+
+2. **The PA system and lights.** The venue serves your built files from edge locations close to your audience. A user in Tokyo gets your homepage from a Tokyo data center; a user in Berlin gets it from Frankfurt. You didn't configure any of that.
+
+3. **Soundchecks before each show.** Every pull request gets its own private preview venue — same set list, smaller audience. Your team can click around the PR's live preview before merging.
+
+4. **The ticket booth at the door.** Custom domains, HTTPS certificates, redirects, basic edge security — all configured through the venue's dashboard. No nginx config, no certbot, no DNS-CNAME debug fests at 11 PM.
+
+The trade: you give up some control. The build crew runs THEIR pipeline, not yours. If they're slow that day, your deploy is slow. If your code uses a Node API they don't support on the edge, you have to refactor. For Next.js apps the trade is almost always worth it.
+
+In code terms, deploying to Vercel is:
+
+- **One-time setup**: connect your GitHub repo to a Vercel project, paste env vars into the dashboard, point a domain at their nameservers.
+- **Every release after that**: `git push origin main`. Vercel sees the push, runs `next build`, ships the result globally, sends you a Slack message with the URL. Five seconds of human work per release.
+</Analogy>
+
+### Step 1 — Connect the repo
+
+1. Sign in at **vercel.com** with GitHub. Lets Vercel see your repos and listen for pushes.
+2. Click **Add New** → **Project**. Pick the GitHub repo your Next.js app lives in.
+3. Vercel auto-detects "Next.js" and pre-fills:
+   - **Framework**: Next.js
+   - **Root directory**: `./` (or your monorepo subdir like `apps/web`)
+   - **Build command**: `next build`
+   - **Output directory**: `.next` (default — leave alone)
+   - **Install command**: `npm install` (or `pnpm install` / `yarn install` depending on your `package.json`)
+
+4. **Don't click Deploy yet.** Expand the **Environment Variables** section and paste your env values first. The first build will fail without them — better to set them up front.
+
+### Step 2 — Environment variables
+
+Every env var your code reads needs a value in Vercel.
+
+- **DATABASE_URL** → your production Postgres URL (Neon, Supabase, Railway, etc.).
+- **AUTH_SECRET** → a fresh `openssl rand -base64 32` value, different from dev.
+- **GITHUB_CLIENT_ID** / **GITHUB_CLIENT_SECRET** → from a *new* OAuth app you create just for production with the production callback URL.
+- **NEXT_PUBLIC_APP_URL** → `https://your-app.vercel.app` (or your custom domain — see Step 4).
+- ...and anything else your code reads from `process.env`.
+
+Three environments Vercel scopes vars to:
+
+| Environment | When it's used |
+|---|---|
+| **Production** | The default branch (`main`). Hits your real domain. |
+| **Preview** | Every other branch / PR. Each preview gets its own URL. |
+| **Development** | When you run `vercel dev` locally (rare; most teams skip this and use `next dev`). |
+
+Most vars are the same for Production and Preview. Some differ — e.g., your Stripe keys are `sk_live_...` in production and `sk_test_...` in preview. Vercel lets you scope each var to specific environments.
+
+### Step 3 — Deploy
+
+Click **Deploy**. Vercel runs your build. You watch logs stream in real time. After ~60–120 seconds, you get a URL like `https://your-app-abc123.vercel.app`.
+
+If the build fails:
+
+- **Most common**: env var missing → typed runtime error. Fix the var, redeploy.
+- **Build step fails**: TypeScript error you got away with locally. Push a fix.
+- **Wrong root directory**: you didn't tell Vercel about your monorepo subfolder. Edit Project Settings → Root Directory.
+
+Vercel's CI doesn't run `next dev` mode — it runs a strict production build. Catch errors locally with `pnpm build` before pushing. (See your auto-memory: "Run prod builds before pushing.")
+
+### Preview deployments — the workflow-saver
+
+Every push to a non-main branch creates a **preview deployment**. The URL looks like:
+
+```
+https://your-app-git-add-payments-username.vercel.app
+```
+
+The preview is a fully running copy of your app with the branch's code. You can share it with anyone (the URL is unguessable but public). Your designer reviews the new component on the preview before you merge. Stakeholders check the new dashboard on the preview before you go live.
+
+Comments on a PR? Vercel posts a link to the preview automatically. Your `main` branch's "Production" deployment is the only thing your real users see.
+
+This pattern alone — "PR + preview" instead of "merge + hope" — changes how teams ship.
+
+### Step 4 — Custom domain
+
+Vercel gives you `your-app.vercel.app` for free. To add your own domain:
+
+1. Buy a domain (Namecheap, Cloudflare, Porkbun, Google Domains — all work).
+2. In Vercel: **Project Settings** → **Domains** → **Add** → type your domain.
+3. Vercel tells you which DNS records to add:
+   - For the apex (`yourdomain.com`): an `A` record to a Vercel IP, or use Vercel's nameservers.
+   - For `www.yourdomain.com`: a `CNAME` to `cname.vercel-dns.com`.
+4. Add the records at your DNS provider. Wait 5 minutes (sometimes up to 24 hours for full propagation).
+5. Vercel auto-provisions an HTTPS certificate via Let's Encrypt. No certbot needed.
+
+Now `https://yourdomain.com` serves your app, with a real cert, on a real CDN.
+
+Update **`NEXT_PUBLIC_APP_URL`** in Vercel env vars to the new domain and redeploy so your code emits absolute URLs that match.
+
+### Step 5 — Connect a production database
+
+Your Postgres needs to be reachable from Vercel's data centers. Two patterns:
+
+**Same region as your Vercel deployment.** Vercel deploys to a "primary region" you pick. Your Postgres should live in the same region (or same continent at minimum) to keep latency low. Neon and Supabase both let you pick.
+
+**Connection pooling.** Serverless functions spin up many instances; each opens a connection. Postgres caps connections at ~100 by default. Without a pooler, you'll hit "too many connections" errors at peak traffic. Use:
+
+- **Neon**: their pooled URL variant (the URL with `-pooler.` in the hostname).
+- **Supabase**: PgBouncer-fronted URL (port 6543 in their connection string).
+- **Other**: deploy PgBouncer yourself, or use `@neondatabase/serverless` (HTTP-based, no TCP pool needed).
+
+In your Prisma config:
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")    // pooled — used by runtime queries
+  directUrl = env("DIRECT_URL")       // direct — used by migrations
+}
+```
+
+Two env vars: `DATABASE_URL` = pooled, `DIRECT_URL` = direct. Prisma uses the direct connection for migrations and the pooled one for everyday queries. Cleanly handles both patterns.
+
+### Runtime — Node vs edge
+
+Vercel runs your code in two possible runtimes:
+
+- **Node.js (default)**: the runtime you're used to. Full Node API, longer cold starts (~500ms), supports any npm package.
+- **Edge**: a stripped-down V8 runtime running on Vercel's CDN nodes. Faster cold start (~50ms), much closer to users, smaller API surface (no Node-specific packages, no `fs`, no native TCP).
+
+You opt into edge per route handler:
+
+```ts
+export const runtime = "edge";
+
+export async function GET() {
+  return Response.json({ ok: true });
+}
+```
+
+When edge is worth it: ultra-low-latency public endpoints (geolocation lookup, A/B-test bucketing, health checks). When Node is right: anything that uses Prisma (currently — Prisma edge support is improving but still has caveats), anything with heavy npm dependencies.
+
+Default: stay on Node. Reach for edge for specific endpoints.
+
+### Logs, monitoring, alerts
+
+Vercel gives you basic observability out of the box:
+
+- **Runtime logs**: every server-side `console.log` is captured. Visible per-deployment in the dashboard.
+- **Function metrics**: invocation count, duration, error rate per route.
+- **Build logs**: the full output of every `next build` run.
+
+For real production monitoring (alerting, query traces, error grouping), wire in Sentry / Datadog / Logflare. Vercel's built-ins are enough to debug; you grow into a dedicated tool when you have customers.
+
+Set up a Slack webhook for failed deploys in Project Settings → Notifications. "Deploy failed on main" should ping you within seconds, not be discovered by a customer.
+
+### What can break (and the fix)
+
+The boring-but-real ways production deploys go sideways:
+
+- **`next build` fails on TypeScript errors that `next dev` ignored.** Run `pnpm build` before pushing. Configure `tsc --noEmit` in CI.
+- **Env var changed in Vercel, frontend bundle still has the old value.** `NEXT_PUBLIC_*` is baked at build. Redeploy.
+- **`P1001 Can't reach database server`** at runtime. Pool exhaustion, wrong region, or your DB provider's free-tier sleeping. Inspect Vercel function logs.
+- **Auth.js `[next-auth][error]` on the very first sign-in**. Callback URL mismatch — the GitHub OAuth App is set to `localhost:3000` but you're hitting prod. Add the prod callback URL to your OAuth App.
+- **404 on a route that works locally**. Dynamic route param naming mismatch, or root directory wrong. Check Vercel project settings.
+
+Each of these is a 30-second fix once you know what to look for. The first time you hit one in production, it feels apocalyptic. By the third deploy, you'll spot the pattern in the logs.
+
+### Rollback — the parachute
+
+Every deploy is permanent in Vercel's history. If today's deploy broke production, you can promote yesterday's to production in two clicks:
+
+**Deployments** tab → find the last green deploy → **... menu** → **Promote to Production**.
+
+Faster than reverting in git + waiting for a new build. Use it.
+
+For full rollback (revert the code too), the pattern:
+
+```bash
+git revert HEAD              # creates a new commit that undoes the breaking one
+git push origin main         # Vercel builds the revert, ships it
+```
+
+Reverting is preferred over `git reset --hard` + force-push — it keeps the history honest and is safer for other team members who pulled.
+
+### CLI — for power users
+
+```bash
+npm install -g vercel
+vercel login                 # one-time auth
+vercel                       # deploy from the current dir
+vercel --prod                # deploy directly to production (skip preview)
+vercel env pull              # download production env vars into .env.production.local
+vercel logs <deployment>     # stream logs
+```
+
+You'll rarely need the CLI for normal flow (just push to git). It's useful for `env pull` (sync prod envs to your laptop) and for one-off deploys outside git.
+
+<ExampleProject
+  src="preview-flow"
+  title="A PR's life on Vercel — animated"
+  description="Walks through the full preview-deploy lifecycle: commit → push → CI build → preview URL → PR review → merge → production deploy. Each stage shows what's happening on Vercel's side and what artefacts appear (logs, URLs, env scope). Visual map of the workflow."
+/>
+
+<Exercise
+  title="Ship the project to a real URL"
+  starter={`Take the Next.js + Prisma + Auth.js project you've been building and
+deploy it.
+
+  1. Push your branch + main up to GitHub. Make sure both:
+       - prisma/schema.prisma is committed
+       - prisma/migrations/ is committed
+       - .env.local is NOT committed (.gitignore should cover this)
+
+  2. Sign in to vercel.com with GitHub. Click 'Add New' → 'Project'.
+     Pick your repo.
+
+  3. Provision a production Postgres database (Neon free tier is the
+     fastest):
+       - https://neon.tech → New project
+       - Copy the POOLED connection string (the one with -pooler in
+         the hostname) → this goes in DATABASE_URL
+       - Copy the DIRECT connection string → this goes in DIRECT_URL
+
+  4. Update prisma/schema.prisma's datasource block:
+       url       = env("DATABASE_URL")
+       directUrl = env("DIRECT_URL")
+     Push the change to git.
+
+  5. Add a production GitHub OAuth app:
+       - https://github.com/settings/developers → New OAuth App
+       - Callback URL: https://<your-app>.vercel.app/api/auth/callback/github
+       - Note the new Client ID + Secret (these are different from your
+         dev OAuth app)
+
+  6. In Vercel, paste env vars (scope to Production + Preview):
+       DATABASE_URL=<pooled neon URL>
+       DIRECT_URL=<direct neon URL>
+       AUTH_SECRET=<fresh openssl rand -base64 32 value>
+       GITHUB_CLIENT_ID=<prod app client id>
+       GITHUB_CLIENT_SECRET=<prod app client secret>
+       NEXT_PUBLIC_APP_URL=https://<your-app>.vercel.app
+
+  7. Click Deploy. Watch the logs. First build often takes ~90 seconds.
+
+  8. When it succeeds, visit your Vercel URL. Sign in with GitHub. You
+     should land on /dashboard.
+
+  9. Bonus — add a custom domain:
+       - In Vercel: Settings → Domains → Add → type your domain
+       - At your DNS provider: add the records Vercel shows you
+       - Wait 5 minutes. https://yourdomain.com now serves your app.
+       - Update NEXT_PUBLIC_APP_URL in Vercel to the new domain.
+       - Add the new callback URL to your GitHub OAuth app.
+
+If anything breaks, the deploy logs are usually explicit. Common
+first-deploy issues:
+  - "Environment variable not found" → typo'd var name in Vercel
+  - "Callback URL mismatch" → GitHub OAuth app needs the prod URL
+  - "Too many connections" → DATABASE_URL pointed at non-pooled URL,
+    switch to the pooler variant
+
+Once your app is live: take a screenshot, post it somewhere. This is
+the moment when "I'm learning Next.js" becomes "I shipped a web app."`}
+/>

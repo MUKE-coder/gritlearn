@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 15,
   "phases": [
     {
       "id": "phase-01",
@@ -103,10 +103,10 @@
         { "slug": "phase-03/postgres-prisma", "title": "Connecting Postgres with Prisma", "available": true },
         { "slug": "phase-03/prisma-schema-migrations", "title": "Prisma schema and migrations", "available": true },
         { "slug": "phase-03/crud-prisma", "title": "CRUD with Prisma", "available": true },
-        { "slug": "phase-03/authjs", "title": "Authentication with Auth.js / NextAuth", "available": false },
-        { "slug": "phase-03/protecting-routes", "title": "Protecting routes and sessions", "available": false },
-        { "slug": "phase-03/env-secrets", "title": "Environment variables and secrets", "available": false },
-        { "slug": "phase-03/deploy-vercel", "title": "Deploying to Vercel", "available": false },
+        { "slug": "phase-03/authjs", "title": "Authentication with Auth.js / NextAuth", "available": true },
+        { "slug": "phase-03/protecting-routes", "title": "Protecting routes and sessions", "available": true },
+        { "slug": "phase-03/env-secrets", "title": "Environment variables and secrets", "available": true },
+        { "slug": "phase-03/deploy-vercel", "title": "Deploying to Vercel", "available": true },
         { "slug": "phase-03/milestone-task-manager", "title": "Milestone: Full-stack task manager", "available": false }
       ]
     },

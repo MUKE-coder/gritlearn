@@ -1,0 +1,287 @@
+## Environment variables and secrets
+
+Your code reaches outside the codebase a lot — the database connection string, the OAuth client secret, the Stripe API key, the OpenAI key, the email sender's API token. None of these belong in your repo. They're per-environment (different in dev, staging, prod), they're sensitive (committing them is a security incident), and they change without code changes (key rotation, swapping providers).
+
+**Environment variables** are the answer. Your code reads `process.env.STRIPE_SECRET_KEY`; the value lives in a file outside git (in dev) or in your hosting platform's secret manager (in prod). Same code, different values.
+
+This concept covers the rules: where envs live, what stays public vs server-only, how Next.js handles them at build time vs runtime, how to rotate secrets safely, and the common bugs.
+
+<Analogy>
+Environment variables are **the safe behind the bar.**
+
+The bar staff need keys: a stockroom key, a register key, a back-door key, the password for the booking system. They can't write the keys on a sticky note next to the till — that's a security incident waiting to happen. They can't keep them in their own pockets — staff rotate, keys get lost. So there's a **safe** at each location (this bar, the sister bar two doors down, the practice bar in the training centre): same shape, same labels, different keys inside.
+
+When a bartender opens the till, they don't carry the key out of the building. They walk over to the safe, take the key, do the thing, return the key. The key is **referenced**, not transported.
+
+In code:
+
+- The **safe at each location** is the environment.
+- The **shape of the safe** — same labels every time — is your `.env` schema. Every environment has a `STRIPE_SECRET_KEY` slot. Each has a different *value* inside.
+- The **code** doesn't store the keys. It says "give me the value at `process.env.STRIPE_SECRET_KEY`" and trusts the safe to provide.
+- **Rotating** is unlocking the safe, swapping in a new key, locking it. Code doesn't change.
+
+Three properties that matter:
+
+1. **The safe stays in the building.** `.env.local` doesn't leave your laptop. The production safe doesn't leave Vercel / Dokploy / your cloud. The only sanctioned way for a key to move is via the platform's secret-share UI (and even that should be done sparingly, ideally never).
+
+2. **The code knows the *shape*, not the *value*.** Every developer reads the same `.env.example` (the shape) when onboarding. The actual values they fill in differ — each runs against their own dev database, their own test Stripe keys.
+
+3. **Some keys are okay to share with customers.** The "we're open until 2 AM" sign is fine on the front door. The till-register password is not. The same distinction in code: `NEXT_PUBLIC_*` variables are *intentionally* visible to the browser; everything else stays server-only.
+
+The threat model: a secret committed to git is **gone**. Even if you delete the commit. The repo is now public on a thousand mirrors, the secret is in archives, in CI logs, in build histories. Treat a leaked secret as compromised, full stop — generate a new one and rotate.
+</Analogy>
+
+### Where envs live, per environment
+
+- **Local dev**: `.env.local` in the project root. Gitignored. Each developer has their own.
+- **Staging / preview**: set in the hosting platform's UI (Vercel "Preview Environment Variables", Dokploy "Environment" tab on the service).
+- **Production**: same place as staging but in the "Production" scope. Often *different values* than staging (real Stripe keys vs test keys).
+- **Tests / CI**: set in GitHub Actions secrets (or your CI's equivalent), injected into the test runner.
+
+Each of these is independent. A secret in `.env.local` doesn't ride along to staging — you have to set it again there. That's a feature, not a bug.
+
+### `.env.local` and the file family
+
+Next.js reads several `.env` files in a specific order:
+
+```
+.env.local       ← always loaded, gitignored, highest priority
+.env.development ← when NODE_ENV=development
+.env.production  ← when NODE_ENV=production
+.env             ← always loaded, committed (lowest priority)
+```
+
+Practical convention:
+
+- **`.env.local`** — secrets for dev. Gitignored. Real Stripe test keys, real OAuth client IDs for your dev OAuth app.
+- **`.env`** — committed defaults. Holds things like `LOG_LEVEL=info` and `DATABASE_URL=postgres://localhost/myapp_dev` that aren't secret.
+- **`.env.example`** — committed *template*. Shows new developers what they need to fill in. Has placeholder values like `STRIPE_SECRET_KEY=sk_test_...`.
+
+**Never edit `.env` to hold secrets.** It's committed. Whatever you put there ships in your repo. The `.local` suffix is what marks the file as private; that's the one that's gitignored.
+
+The default `.gitignore` from `create-next-app` already ignores `*.local`:
+
+```gitignore
+# .gitignore
+.env.local
+.env*.local
+```
+
+If you don't see this in your `.gitignore`, add it before doing anything else. The 30 seconds of paranoia pays itself off the first time someone copy-pastes their `.env.local` into a chat window thinking it's `.env.example`.
+
+### `NEXT_PUBLIC_*` — the bright-line distinction
+
+Next.js inlines any env var prefixed `NEXT_PUBLIC_` into the client bundle at build time. Anything else is server-only.
+
+```ts
+// Server side (server component, route handler, server action):
+process.env.STRIPE_SECRET_KEY      // ✅ available
+process.env.NEXT_PUBLIC_API_URL    // ✅ available
+process.env.DATABASE_URL           // ✅ available
+
+// Client side ('use client' component):
+process.env.STRIPE_SECRET_KEY      // ❌ undefined — would be a leak
+process.env.NEXT_PUBLIC_API_URL    // ✅ available — inlined at build
+process.env.DATABASE_URL           // ❌ undefined
+```
+
+The rule:
+
+- **Public** (`NEXT_PUBLIC_*`) — URLs you want the browser to know about, third-party publishable keys (Stripe's `pk_test_...`, Algolia's search-only key), feature flags that don't matter if a competitor reads them.
+- **Server-only** (no prefix) — every secret. Every key marked "secret" by the third party. Database URLs. JWT signing secrets.
+
+If you ever feel like you "need to make this NEXT_PUBLIC to access it on the client," **the answer is almost always a server-side proxy.** Read the secret on the server, do whatever needs the secret, return a result the client can use.
+
+### Build time vs request time — the deploy pipeline gotcha
+
+Two different stages read env vars:
+
+1. **`next build`** — when the bundle is built. `NEXT_PUBLIC_*` vars are *inlined* here. They are *frozen* into the JS files. Changing them later (in production) does nothing until you rebuild.
+
+2. **Per request** (server runtime) — non-public env vars are read live by your code. Change them, restart the server, new value takes effect.
+
+This trips up every team eventually. Symptoms:
+
+```
+We deployed a fix to NEXT_PUBLIC_API_URL via Vercel's UI but the
+browser is still hitting the old URL.
+```
+
+Cause: the bundle was built with the old value. Updating the env var in the UI updates the runtime, but the client bundle still has the bake-time value. Fix: re-deploy (Vercel "Redeploy" button) so the build re-runs.
+
+The mental model:
+
+- Server reads env at the moment your code runs. Restart = new env.
+- Client reads env at the moment the bundle was built. Rebuild = new env.
+
+For server-only secrets (your DB URL, your JWT secret, your Stripe key), changes take effect on the next request after the container restarts. For `NEXT_PUBLIC_*`, you need a build.
+
+### `next.config.js` — typed env validation
+
+Next.js will run with whatever env vars are set (or unset). That's permissive. Production discovers missing vars by crashing at request time on `undefined.toLowerCase()`. Better: fail fast at boot if something's missing.
+
+```ts
+// env.ts — Zod-validated env, imported once at boot
+import { z } from "zod";
+
+const envSchema = z.object({
+  // Server-only
+  DATABASE_URL:        z.string().url(),
+  AUTH_SECRET:         z.string().min(32),
+  STRIPE_SECRET_KEY:   z.string().startsWith("sk_"),
+  RESEND_API_KEY:      z.string().min(1),
+
+  // Public — duplicated so client + server both validate
+  NEXT_PUBLIC_APP_URL: z.string().url(),
+});
+
+export const env = envSchema.parse({
+  DATABASE_URL:        process.env.DATABASE_URL,
+  AUTH_SECRET:         process.env.AUTH_SECRET,
+  STRIPE_SECRET_KEY:   process.env.STRIPE_SECRET_KEY,
+  RESEND_API_KEY:      process.env.RESEND_API_KEY,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+});
+```
+
+In your code:
+
+```ts
+import { env } from "@/env";
+
+stripe = new Stripe(env.STRIPE_SECRET_KEY);   // ✅ typed, validated
+```
+
+Missing key → Zod throws at boot with the exact field name. No more "why is my app crashing on the third request? oh, RESEND_API_KEY is empty."
+
+This is the **t3-env pattern** in spirit. There's a polished version of this — `@t3-oss/env-nextjs` — that handles the client/server split automatically. For learning, the hand-rolled Zod version above is clear and ~30 lines.
+
+### Secret rotation — the safer-than-you-think habit
+
+Secret rotation is generating a new value and replacing the old one. You should be able to rotate any secret in under five minutes with zero downtime.
+
+The pattern:
+
+1. **Generate a new key** in the third party's dashboard. Don't revoke the old one yet.
+2. **Update the env var** in your hosting platform to the new value.
+3. **Deploy / restart**. New requests use the new key.
+4. **Wait a beat** (maybe 5 minutes, maybe an hour) to make sure nothing's still using the old one.
+5. **Revoke** the old key.
+
+The "don't revoke yet" step is what makes this zero-downtime. If you revoke first, any in-flight request still holding the old key will fail.
+
+Some secrets are harder to rotate — `AUTH_SECRET` invalidates every active session because it's used to sign JWTs. For those, plan it: cleared with an "everyone has to sign in again" maintenance window.
+
+### The `.env.example` file — onboarding's best friend
+
+Commit this. It's not secret. It's the shape:
+
+```env
+# .env.example
+DATABASE_URL=postgresql://user:pass@localhost:5432/db_dev
+AUTH_SECRET=run-openssl-rand-base64-32-to-generate
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+GITHUB_CLIENT_ID=Ov23...
+GITHUB_CLIENT_SECRET=
+RESEND_API_KEY=re_...
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+A new contributor does `cp .env.example .env.local`, fills in the blanks, runs the app. Day-1 onboarding goes from "ask someone on Slack for the keys" (terrible) to a self-service checklist (good).
+
+Pair it with a `README.md` section that says **where to get each value**. "STRIPE_SECRET_KEY: dashboard.stripe.com → developers → API keys → 'reveal test key' → copy."
+
+### A leaked secret — what to do in the next 60 seconds
+
+You committed a `.env.local`. Or pasted a key in a chat. Or it's in a deploy log. Whatever the route, treat the secret as gone.
+
+1. **Generate a new secret** in the third party's dashboard.
+2. **Update the env in every environment** (local, staging, prod) to the new value.
+3. **Revoke the old secret** immediately. Don't wait.
+4. **Check the audit log** of the third party for any unexpected use during the leak window. Stripe, AWS, GitHub all show "this key was used from IP X at time Y."
+5. **Tell your team.** A 5-minute Slack message saying "I rotated DB_URL because it leaked, here's the new one, please pull" is way better than the silent fear that someone might still be using the old one.
+
+If the secret was for a third party that bills you (AWS, OpenAI), monitor the bill for the next week. Bad actors who scrape git for AWS keys can rack up $10k in crypto mining before you wake up the next morning.
+
+### Secrets in Docker / docker-compose
+
+For self-hosted production (Dokploy, Coolify, raw VM), secrets live in `docker-compose.yml` env vars or — better — in `.env` files referenced by compose:
+
+```yaml
+# docker-compose.prod.yml
+services:
+  api:
+    image: jeditor-api
+    env_file: .env.prod        # ← lives on the host, NEVER committed
+    environment:
+      LOG_LEVEL: info          # ← non-secret, fine to commit
+```
+
+The `.env.prod` file is on the production host's disk. Permissions `600` (rw for the deploying user only). Generated by your secrets management process; never copied via the wire as plain text.
+
+For Vercel / Netlify / hosted platforms: their UI is the secrets store. No `.env` files at runtime.
+
+### Anti-patterns to skip
+
+- **`NEXT_PUBLIC_STRIPE_SECRET_KEY`.** The prefix isn't a magic word; it's a deliberate "ship this to the browser" marker. Putting a secret behind the prefix leaks it.
+- **Hard-coding "just for a test."** Tests get committed. Hard-coding gets committed.
+- **Sharing `.env.local` over Slack / email.** It can stay in chat history for years. Use a dedicated secret-share tool (1Password Share, Vercel's "share env" UI, your team's password manager) — those have expiry.
+- **Committing `.env` files** with `git add -A`. Always check `git status` before staging. Set up a git hook (`pre-commit`) that refuses commits containing strings like `BEGIN PRIVATE KEY` or known secret patterns.
+
+<ExampleProject
+  src="env-resolution"
+  title="Where Next.js reads each variable from"
+  description="Interactive trace: pick an env var name and a context (server / client / build), see whether it's available and where the value came from in the file hierarchy. Shows exactly which file beats which when multiple .env files exist."
+/>
+
+<Exercise
+  title="Build a Zod-validated env module"
+  starter={`In your existing Next.js project, replace scattered process.env.X
+reads with a single validated module.
+
+  1. Create env.ts at the repo root:
+
+       import { z } from "zod";
+
+       const Schema = z.object({
+         DATABASE_URL:        z.string().url(),
+         AUTH_SECRET:         z.string().min(32),
+         GITHUB_CLIENT_ID:    z.string().min(1),
+         GITHUB_CLIENT_SECRET:z.string().min(1),
+         NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+       });
+
+       export const env = Schema.parse({
+         DATABASE_URL:        process.env.DATABASE_URL,
+         AUTH_SECRET:         process.env.AUTH_SECRET,
+         GITHUB_CLIENT_ID:    process.env.GITHUB_CLIENT_ID,
+         GITHUB_CLIENT_SECRET:process.env.GITHUB_CLIENT_SECRET,
+         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+       });
+
+  2. Replace every 'process.env.X' in your codebase with 'env.X'.
+     Use grep to find them all:
+
+       grep -r "process.env" --include="*.ts" --include="*.tsx" src/ app/
+
+  3. Try setting an obviously invalid value in .env.local
+     (DATABASE_URL=not-a-url) and run npm run dev. Zod throws a
+     readable error at boot pointing at the bad field. No more
+     mysterious 500s at request time.
+
+  4. Create .env.example with all the keys + placeholder values.
+     Commit it.
+
+  5. Bonus: add a 'pre-commit' check (script in package.json) that
+     greps the staging area for known secret patterns and refuses
+     to commit if it finds any. The 'git-secrets' or
+     'detect-secrets' tools do this professionally; a simple bash
+     version using 'grep -E "sk_(test|live)_[a-zA-Z0-9]{20,}"' is
+     a useful starter.
+
+The result: every env var is typed (env.DATABASE_URL has type string),
+every missing key fails at boot not at runtime, every committed config
+has a sanity check. Three problem categories closed in a 30-line
+file.`}
+/>

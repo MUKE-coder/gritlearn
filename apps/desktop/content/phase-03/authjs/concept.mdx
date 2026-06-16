@@ -1,0 +1,389 @@
+## Authentication with Auth.js / NextAuth
+
+Up until now, every route handler and server component has been wide open — anyone hitting `/api/notes` could read or write. For a real app you need to know **who is making the request** and **whether they're allowed**. Authentication is the answer to "who"; authorization (the next concept) is the answer to "are they allowed."
+
+This concept covers **Auth.js** — the library that gives Next.js apps a working auth system in an afternoon. (It used to be called NextAuth; the new package is just `next-auth` v5 / Auth.js, same project, new name.) Pluggable providers, session management, CSRF protection, secure cookies — all of it handled. You write the configuration; the library handles the rest.
+
+<Analogy>
+Auth.js is **the bouncer at the door of a nightclub.**
+
+The first time you arrive, the bouncer checks ID — that's the **provider** doing identity verification. There are different bouncers for different kinds of ID:
+
+- **Credentials provider** — checks an email + password you signed up with. Like a member-list bouncer.
+- **OAuth providers** (Google, GitHub, Discord, etc.) — bounces the question to a bigger venue. "Have you got a Google ID? Let me ask Google to vouch for you." Google asks you to log in over there, then hands back a stamped confirmation. Faster, more secure than rolling your own password storage.
+- **Email magic link** — the bouncer texts a one-time code to your phone (or emails you a link). You prove access to the phone/email; that's enough.
+
+Once you've passed the bouncer once, you don't have to ID every time you walk in or out of the bathroom. You get a **wristband** — the **session**. Every other part of the venue (the bar, the dance floor, the VIP room) checks the wristband, not your ID. Lose the wristband, you have to go back to the bouncer.
+
+In code:
+
+- The **provider config** says "I accept Google IDs, GitHub IDs, and an internal email-password member list."
+- The **session config** says "wristbands are valid for 30 days, stored as a signed cookie."
+- The **middleware** + **auth() helper** are the bar/dance-floor checks: "show me the wristband, OR turn this person away."
+
+Auth.js gives you all four sides:
+1. The bouncer (provider routes — `/api/auth/signin`, `/api/auth/callback/google`, etc.).
+2. The wristband (session cookie, signed + httpOnly).
+3. The bar's wristband-check API (the `auth()` helper, importable anywhere on the server).
+4. A `<SessionProvider>` for client components that need to know who's signed in (for rendering avatars, sign-out buttons, etc.).
+
+What you don't write: the cookie signing, the CSRF tokens, the OAuth state parameter, the password hashing, the cookie expiry logic. All of it is the library's job. You just plug in the providers + the database adapter and you've shipped real authentication.
+</Analogy>
+
+### What you'll install + configure
+
+```bash
+npm install next-auth@beta
+```
+
+The `@beta` tag is Auth.js v5, which is the App-Router-native release. (v4 is for the legacy Pages Router; we're on App Router, so v5.)
+
+You'll create one file:
+
+```
+auth.ts                           ← single source of truth
+app/api/auth/[...nextauth]/
+  └── route.ts                    ← the bouncer's endpoints
+middleware.ts                     ← optional: route-level gates
+.env.local                        ← AUTH_SECRET + OAuth keys
+```
+
+The `auth.ts` file at the repo root is the config. It exports four things you'll use throughout the app:
+
+```ts
+// auth.ts
+import NextAuth from "next-auth";
+import GitHub from "next-auth/providers/github";
+import Credentials from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { db } from "@/lib/db";
+
+export const {
+  handlers,        // → exposed as the API route
+  auth,            // → server-side helper: const session = await auth()
+  signIn,          // → trigger a sign-in flow programmatically
+  signOut,         // → trigger a sign-out flow
+} = NextAuth({
+  adapter: PrismaAdapter(db),
+  providers: [
+    GitHub({
+      clientId:     process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    }),
+    Credentials({
+      credentials: {
+        email:    { label: "Email",    type: "email"    },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (creds) => {
+        if (!creds?.email || !creds?.password) return null;
+        const user = await db.user.findUnique({
+          where: { email: creds.email as string },
+        });
+        if (!user) return null;
+        const ok = await verifyPassword(creds.password as string, user.passwordHash);
+        return ok ? { id: String(user.id), email: user.email, name: user.name } : null;
+      },
+    }),
+  ],
+  session: { strategy: "jwt" },     // see "JWT vs database sessions" below
+  pages: {
+    signIn: "/login",               // your own custom login page
+  },
+});
+```
+
+That single file is the entirety of your auth configuration. Five things to notice:
+
+1. **`adapter: PrismaAdapter(db)`** — Auth.js writes user records to your Postgres via Prisma. It expects four tables (User, Account, Session, VerificationToken) which the adapter docs include as a copy/paste-able Prisma schema. Add those models to your `schema.prisma`, run `prisma migrate dev`, and the adapter handles everything.
+
+2. **`providers: [...]`** — one entry per identity source. You can ship with just GitHub on day one, add Credentials later, swap in Google when you're ready. Mix and match.
+
+3. **`authorize`** is your code — the only place you implement real password checking. Returns the user object on success or `null` on failure. Compare against bcrypt-hashed passwords; never store plaintext.
+
+4. **`session: { strategy: "jwt" }`** — see the next section for the two options.
+
+5. **`pages: { signIn: "/login" }`** — by default Auth.js renders its own ugly default page. Pointing at `/login` tells it to send unauthenticated users to your custom one instead. Your login page renders a form that calls `signIn("credentials", { email, password })`.
+
+### The API route — three lines
+
+```ts
+// app/api/auth/[...nextauth]/route.ts
+import { handlers } from "@/auth";
+export const { GET, POST } = handlers;
+```
+
+Yes, really. Auth.js generates every endpoint it needs (`/api/auth/signin`, `/api/auth/callback/...`, `/api/auth/session`, `/api/auth/signout`, etc.) and you just re-export the GET + POST handlers. The catch-all `[...nextauth]` segment captures any sub-path.
+
+### Sign-in pages
+
+The shape Auth.js expects:
+
+```tsx
+// app/login/page.tsx
+"use client";
+
+import { signIn } from "next-auth/react";
+import { useState } from "react";
+
+export default function LoginPage() {
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [error,    setError]    = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await signIn("credentials", {
+      email, password,
+      redirect: false,           // we'll handle redirect ourselves
+    });
+    if (res?.error) {
+      setError("Invalid email or password");
+      return;
+    }
+    window.location.href = "/dashboard";
+  }
+
+  async function loginWithGitHub() {
+    await signIn("github", { callbackUrl: "/dashboard" });
+  }
+
+  return (
+    <form onSubmit={onSubmit}>
+      <input type="email"    value={email}    onChange={(e) => setEmail(e.target.value)}    placeholder="Email" />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+      {error && <p style={{ color: "tomato" }}>{error}</p>}
+      <button type="submit">Sign in with email</button>
+      <button type="button" onClick={loginWithGitHub}>Continue with GitHub</button>
+    </form>
+  );
+}
+```
+
+Two things:
+
+- `signIn("credentials", { ... })` triggers the `authorize` function in your `auth.ts`. On success, the response is `{ ok: true }` and the session cookie is set; on failure, `{ error: "..." }`.
+- `signIn("github", ...)` triggers the OAuth dance. The browser navigates to GitHub → user approves → GitHub redirects back to `/api/auth/callback/github` → Auth.js sets the session cookie → redirects to `callbackUrl`.
+
+### Reading the session — server vs client
+
+**Server (server components, route handlers, server actions):**
+
+```ts
+import { auth } from "@/auth";
+
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/login");
+  }
+  return <h1>Welcome, {session.user.name}</h1>;
+}
+```
+
+`auth()` is the canonical helper. Returns `Session | null`. No fetch, no hook — direct cookie read on the server.
+
+**Client (client components that need the user):**
+
+```tsx
+"use client";
+import { SessionProvider, useSession, signOut } from "next-auth/react";
+
+// Wrap once, near the top of your component tree (in a layout):
+<SessionProvider>{children}</SessionProvider>
+
+// Then anywhere:
+function Avatar() {
+  const { data: session, status } = useSession();
+  if (status === "loading") return <Skeleton />;
+  if (!session) return null;
+  return (
+    <div>
+      <img src={session.user?.image ?? ""} alt="" />
+      <button onClick={() => signOut()}>Sign out</button>
+    </div>
+  );
+}
+```
+
+`useSession()` calls `/api/auth/session` under the hood. It re-runs when tab focus changes (so a sign-in in another tab is picked up) and caches the result.
+
+### JWT vs database sessions — the two strategies
+
+When you log in, where does the "you are user 47" fact live?
+
+**`strategy: "jwt"` (default in v5)** — encoded into a signed cookie that the browser sends with every request. The server reads the cookie, verifies the signature, decodes the user ID. No database lookup per request.
+
+- ✅ Fast — no DB hit on auth check.
+- ✅ Scales horizontally — every server instance can verify the cookie.
+- ❌ Hard to invalidate — you can't "delete the session" without changing `AUTH_SECRET` for everyone. Sign-out works by clearing the cookie locally, but a stolen cookie remains valid until expiry.
+- ❌ Limited size (~4 KB cookie max — can't stuff a big user object in there).
+
+**`strategy: "database"`** — a row in your DB's `Session` table. The cookie holds just a session ID; the server looks up the row, gets the user, checks expiry.
+
+- ✅ You can revoke instantly — delete the row, user is logged out.
+- ✅ Track active sessions ("you're signed in on 3 devices").
+- ❌ A DB read on every auth check (cache to mitigate).
+
+For most apps: start with `"jwt"`. Switch to `"database"` when you need session revocation (banned users, "sign out everywhere" UX, security audit requirements).
+
+### `AUTH_SECRET` — the signing key
+
+```env
+AUTH_SECRET="some-long-random-string-min-32-chars"
+```
+
+The key Auth.js uses to sign session cookies and JWTs. Auth.js will refuse to start without it. Generate one:
+
+```bash
+npx auth secret           # writes to .env.local for you
+# or:
+openssl rand -base64 32
+```
+
+Rules:
+- **Never commit it.** It's in `.env.local`, which is gitignored.
+- **One per environment.** Dev, staging, prod — each has its own.
+- **Don't rotate without a plan.** Rotating invalidates every session — every user is signed out. Plan a maintenance window or build a rolling rotation.
+
+### Custom session callbacks — extend what's on the user
+
+By default, the session contains `{ user: { name, email, image } }` — what Auth.js stored. To put a custom field on the session (e.g., `role`, `userId`), use the `callbacks` config:
+
+```ts
+NextAuth({
+  // ... providers, adapter ...
+  callbacks: {
+    // For JWT strategy: token is stored in the JWT cookie.
+    async jwt({ token, user }) {
+      if (user) {
+        // Runs on sign-in only — copy a few fields into the JWT.
+        token.id   = user.id;
+        token.role = (user as any).role;
+      }
+      return token;
+    },
+    // Runs on every session read — shape what the client sees.
+    async session({ session, token }) {
+      if (token?.id)   (session.user as any).id   = token.id   as string;
+      if (token?.role) (session.user as any).role = token.role as string;
+      return session;
+    },
+  },
+});
+```
+
+After this, `session.user.role` is available in every server component. The `as any` casts are because the default Auth.js types are conservative — declare a `next-auth.d.ts` to type them properly (covered in protecting-routes).
+
+### Password hashing — don't store plaintext
+
+For the Credentials provider, you write user signup yourself (Auth.js doesn't presume to know how). Always hash with bcrypt or Argon2:
+
+```ts
+import bcrypt from "bcrypt";
+
+// On signup:
+const passwordHash = await bcrypt.hash(plainPassword, 12);
+await db.user.create({ data: { email, name, passwordHash } });
+
+// In authorize():
+const ok = await bcrypt.compare(plainPassword, user.passwordHash);
+```
+
+The cost factor (`12`) is how slow the hash is — slower is better (harder to brute force) up to the point where it impacts login speed. 12 is a good 2026 default.
+
+### OAuth — the GitHub example
+
+To wire GitHub login:
+
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**.
+2. Fill in:
+   - Application name: "JEditor (dev)" (use a separate app per environment).
+   - Homepage URL: `http://localhost:3000`
+   - Callback URL: `http://localhost:3000/api/auth/callback/github`
+3. GitHub gives you a Client ID + Client Secret.
+4. Paste into `.env.local`:
+
+```env
+GITHUB_CLIENT_ID=Ov23liXXXXXXXXX
+GITHUB_CLIENT_SECRET=XXXXXXXXXXXXXXXXXXXXXX
+```
+
+Restart `next dev`. The GitHub sign-in button now works end-to-end. The first time anyone signs in, Auth.js creates a row in `User` (via the Prisma adapter) and an `Account` row linking it to their GitHub identity. Future sign-ins find the existing rows.
+
+Production: create a separate OAuth App with the production callback URL (`https://jbeditor.com/api/auth/callback/github`), put those credentials in your Vercel env vars (covered in the env-secrets concept).
+
+### A complete minimal auth — checklist
+
+To ship working auth in a Next.js app:
+
+1. `npm i next-auth@beta @auth/prisma-adapter bcrypt`
+2. Add the Auth.js models (User, Account, Session, VerificationToken) to `schema.prisma`. Migrate.
+3. Create `auth.ts` with at least one provider + the adapter + `AUTH_SECRET`.
+4. Create `app/api/auth/[...nextauth]/route.ts` — three lines.
+5. Build `/login` (Credentials + at least one OAuth).
+6. Build `/signup` (insert a new `User` row with `passwordHash`).
+7. Add `<SessionProvider>` in your layout (only if you have client components that read the session).
+8. Protect your authenticated pages with `auth()` + `redirect("/login")`.
+
+That's the entire surface. The library is dense enough to do everything you need; you spend the time wiring providers and UI, not implementing crypto.
+
+<ExampleProject
+  src="credentials-flow"
+  title="A login flow, traced end to end"
+  description="The five files of a working Credentials sign-in: the form, the signIn call, the authorize check, the cookie set, the protected page that reads it. Each annotated with what runs where (client / server) and what the user sees."
+/>
+
+<Exercise
+  title="Wire GitHub OAuth into your Next.js project"
+  starter={`Using the Next.js + Prisma project from the previous concepts, add
+end-to-end GitHub sign-in.
+
+  1. Create a new GitHub OAuth App at:
+     https://github.com/settings/developers
+     - Name: "<your project> (dev)"
+     - Homepage URL: http://localhost:3000
+     - Callback URL: http://localhost:3000/api/auth/callback/github
+     Note the Client ID + Client Secret.
+
+  2. npm i next-auth@beta @auth/prisma-adapter
+
+  3. Add the Auth.js models to prisma/schema.prisma. Copy from
+     https://authjs.dev/getting-started/adapters/prisma#schema
+     Then: npx prisma migrate dev --name add_auth_models
+
+  4. Create auth.ts at the repo root with GitHub as the only provider,
+     PrismaAdapter as the adapter, strategy: "jwt", and read GITHUB_*
+     + AUTH_SECRET from process.env.
+
+  5. Create app/api/auth/[...nextauth]/route.ts with the three-line
+     export of GET + POST from handlers.
+
+  6. In .env.local, set:
+       AUTH_SECRET=<run: openssl rand -base64 32>
+       GITHUB_CLIENT_ID=<from step 1>
+       GITHUB_CLIENT_SECRET=<from step 1>
+
+  7. Build /login as a client component with one button:
+       <button onClick={() => signIn("github", { callbackUrl: "/dashboard" })}>
+         Continue with GitHub
+       </button>
+
+  8. Build /dashboard as a server component that:
+       - reads the session via const session = await auth()
+       - redirects to /login if no session
+       - shows the user's name and avatar
+
+  9. Test:
+       - Visit /dashboard while signed out → redirected to /login.
+       - Click Continue with GitHub → GitHub asks for permission →
+         redirects back → /dashboard renders with your name.
+       - Open Prisma Studio (npx prisma studio). You should see one
+         row each in User, Account, and Session.
+
+If something breaks: the most common bugs are (a) callback URL
+mismatch — must match GitHub's settings exactly, including http vs
+https, (b) AUTH_SECRET missing — Auth.js refuses to start, (c)
+schema models missing — the adapter throws on first sign-in. Each
+error message points exactly at the fix.`}
+/>

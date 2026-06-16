@@ -1,0 +1,275 @@
+<!--
+  End-to-end trace of a credentials sign-in. Five tabs, one per file
+  involved in the flow:
+    1. auth.ts                   — the Auth.js config
+    2. login/page.tsx            — the form + signIn() call
+    3. authorize()               — what runs on the server
+    4. session cookie set        — what the browser receives
+    5. dashboard/page.tsx        — protected route reading the session
+
+  Each tab also has a "what happens next" callout so the student can
+  follow the chain through both layers.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Credentials sign-in — five files, one flow</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 940px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+      .tabs { display: flex; gap: 0.4rem; margin: 1rem 0 0.7rem; flex-wrap: wrap; }
+      .tab {
+        padding: 0.45rem 0.85rem; border: 1px solid #d4d4d8; background: #fff;
+        cursor: pointer; font-size: 0.83rem; border-radius: 6px;
+      }
+      .tab.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .panel { border: 1px solid #e4e4e7; border-radius: 8px; padding: 1rem; background: #fafafa; min-height: 28rem; }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword  { color: #38bdf8; }
+      .string   { color: #7fff5b; }
+      .number   { color: #fbbf24; }
+      .type     { color: #c084fc; }
+      .comment  { color: #71717a; font-style: italic; }
+      .annot {
+        margin-top: 0.7rem; font-size: 0.84rem; padding: 0.65rem 0.85rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      .next {
+        margin-top: 0.5rem; font-size: 0.82rem; padding: 0.55rem 0.85rem;
+        background: #f4f4f5; color: #18181b; border-radius: 4px;
+        border-left: 3px solid #71717a;
+      }
+      .file-tag {
+        display: inline-block; font-family: ui-monospace, monospace; font-size: 0.72rem;
+        color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.4rem;
+      }
+      .runs {
+        display: inline-block; font-family: ui-monospace, monospace; font-size: 0.66rem;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        padding: 1px 7px; border-radius: 999px; margin-left: 0.4rem;
+      }
+      .runs.client { background: #fef3c7; color: #92400e; }
+      .runs.server { background: #dcfce7; color: #166534; }
+      .runs.browser { background: #dbeafe; color: #1e40af; }
+    </style>
+  </head>
+  <body>
+    <h1>Trace a credentials sign-in</h1>
+    <p>Five files, one click. Click each tab to follow the chain from button press to authenticated session.</p>
+
+    <div class="tabs" id="tabs">
+      <button data-id="config" class="tab active">1. auth.ts</button>
+      <button data-id="form"   class="tab">2. login/page.tsx</button>
+      <button data-id="auth"   class="tab">3. authorize()</button>
+      <button data-id="cookie" class="tab">4. session cookie</button>
+      <button data-id="page"   class="tab">5. dashboard/page.tsx</button>
+    </div>
+
+    <div class="panel" id="panel"></div>
+
+    <script>
+      const tabs = {
+        config: {
+          tag: "auth.ts  (repo root)",
+          runs: { kind: "server", label: "Module — initialised once per server process" },
+          code:
+`<span class="keyword">import</span> NextAuth <span class="keyword">from</span> <span class="string">"next-auth"</span>;
+<span class="keyword">import</span> Credentials <span class="keyword">from</span> <span class="string">"next-auth/providers/credentials"</span>;
+<span class="keyword">import</span> { PrismaAdapter } <span class="keyword">from</span> <span class="string">"@auth/prisma-adapter"</span>;
+<span class="keyword">import</span> bcrypt <span class="keyword">from</span> <span class="string">"bcrypt"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">export const</span> { handlers, auth, signIn, signOut } = <span class="keyword">NextAuth</span>({
+  adapter:  PrismaAdapter(db),
+  session:  { strategy: <span class="string">"jwt"</span> },
+  pages:    { signIn: <span class="string">"/login"</span> },
+  providers: [
+    Credentials({
+      credentials: {
+        email:    { label: <span class="string">"Email"</span>,    type: <span class="string">"email"</span>    },
+        password: { label: <span class="string">"Password"</span>, type: <span class="string">"password"</span> },
+      },
+      authorize: <span class="keyword">async</span> (creds) =&gt; {
+        <span class="keyword">if</span> (!creds?.email || !creds?.password) <span class="keyword">return null</span>;
+        <span class="keyword">const</span> user = <span class="keyword">await</span> db.user.findUnique({
+          where: { email: creds.email <span class="keyword">as</span> <span class="type">string</span> },
+        });
+        <span class="keyword">if</span> (!user) <span class="keyword">return null</span>;
+        <span class="keyword">const</span> ok = <span class="keyword">await</span> bcrypt.compare(creds.password <span class="keyword">as</span> <span class="type">string</span>, user.passwordHash);
+        <span class="keyword">return</span> ok ? { id: <span class="type">String</span>(user.id), email: user.email, name: user.name } : <span class="keyword">null</span>;
+      },
+    }),
+  ],
+});`,
+          annot: "Exports four things the rest of the app imports: handlers (the API endpoints), auth (server-side helper), signIn / signOut (programmatic triggers).",
+          next: "When the user clicks 'Sign in', signIn() calls the API endpoint exposed via handlers, which routes to authorize() in the Credentials provider.",
+        },
+        form: {
+          tag: "app/login/page.tsx  ('use client')",
+          runs: { kind: "client", label: "Client component — renders in the browser" },
+          code:
+`<span class="string">"use client"</span>;
+
+<span class="keyword">import</span> { signIn } <span class="keyword">from</span> <span class="string">"next-auth/react"</span>;
+<span class="keyword">import</span> { useState } <span class="keyword">from</span> <span class="string">"react"</span>;
+
+<span class="keyword">export default function</span> LoginPage() {
+  <span class="keyword">const</span> [email,    setEmail]    = useState(<span class="string">""</span>);
+  <span class="keyword">const</span> [password, setPassword] = useState(<span class="string">""</span>);
+  <span class="keyword">const</span> [error,    setError]    = useState&lt;<span class="type">string</span> | <span class="keyword">null</span>&gt;(<span class="keyword">null</span>);
+
+  <span class="keyword">async function</span> onSubmit(e: <span class="type">React.FormEvent</span>) {
+    e.preventDefault();
+    <span class="keyword">const</span> res = <span class="keyword">await</span> signIn(<span class="string">"credentials"</span>, {
+      email, password,
+      redirect: <span class="keyword">false</span>,
+    });
+    <span class="keyword">if</span> (res?.error) {
+      setError(<span class="string">"Invalid email or password"</span>);
+      <span class="keyword">return</span>;
+    }
+    <span class="comment">// Success — cookie is set; navigate.</span>
+    window.location.href = <span class="string">"/dashboard"</span>;
+  }
+
+  <span class="keyword">return</span> (
+    &lt;<span class="type">form</span> onSubmit={onSubmit}&gt;
+      &lt;<span class="type">input</span> type=<span class="string">"email"</span> value={email} onChange={(e) =&gt; setEmail(e.target.value)} /&gt;
+      &lt;<span class="type">input</span> type=<span class="string">"password"</span> value={password} onChange={(e) =&gt; setPassword(e.target.value)} /&gt;
+      {error &amp;&amp; &lt;<span class="type">p</span>&gt;{error}&lt;/<span class="type">p</span>&gt;}
+      &lt;<span class="type">button</span> type=<span class="string">"submit"</span>&gt;Sign in&lt;/<span class="type">button</span>&gt;
+    &lt;/<span class="type">form</span>&gt;
+  );
+}`,
+          annot: "signIn('credentials', {...}) is the client-side trigger. It POSTs to /api/auth/callback/credentials. The redirect: false flag lets us handle the navigate ourselves so we can show inline errors.",
+          next: "The signIn call hits /api/auth/callback/credentials → that route is one of the handlers in step 1 → which runs authorize() in step 3.",
+        },
+        auth: {
+          tag: "authorize() — inside auth.ts",
+          runs: { kind: "server", label: "Server function — runs inside the API route handler" },
+          code:
+`authorize: <span class="keyword">async</span> (creds) =&gt; {
+  <span class="comment">// 1. Reject obviously empty input.</span>
+  <span class="keyword">if</span> (!creds?.email || !creds?.password) <span class="keyword">return null</span>;
+
+  <span class="comment">// 2. Look up the user by email (database, NOT memory).</span>
+  <span class="keyword">const</span> user = <span class="keyword">await</span> db.user.findUnique({
+    where: { email: creds.email <span class="keyword">as</span> <span class="type">string</span> },
+  });
+  <span class="keyword">if</span> (!user) <span class="keyword">return null</span>;
+  <span class="comment">//                                  ↑</span>
+  <span class="comment">// Returning null at any point = sign-in fails. Auth.js sends</span>
+  <span class="comment">// { error: "CredentialsSignin" } back to the client. NEVER throw</span>
+  <span class="comment">// here with the message "user not found" — that leaks which</span>
+  <span class="comment">// emails are registered. Generic null is the secure choice.</span>
+
+  <span class="comment">// 3. Verify the password with bcrypt (constant-time compare).</span>
+  <span class="keyword">const</span> ok = <span class="keyword">await</span> bcrypt.compare(
+    creds.password <span class="keyword">as</span> <span class="type">string</span>,
+    user.passwordHash,
+  );
+  <span class="keyword">if</span> (!ok) <span class="keyword">return null</span>;
+
+  <span class="comment">// 4. Success. Return the user object Auth.js puts on the session.</span>
+  <span class="keyword">return</span> {
+    id:    <span class="type">String</span>(user.id),
+    email: user.email,
+    name:  user.name,
+  };
+}`,
+          annot: "Three checks in order: input shape → user exists → password matches. Each failure returns null with no detail. The success path returns a small user object that becomes the session.user payload.",
+          next: "When authorize() returns a user, Auth.js encodes the user into a JWT, signs it with AUTH_SECRET, and sets it as an httpOnly cookie on the response.",
+        },
+        cookie: {
+          tag: "HTTP response — what the browser receives",
+          runs: { kind: "browser", label: "Set-Cookie header on the response" },
+          code:
+`<span class="comment">// Response headers from /api/auth/callback/credentials:</span>
+
+HTTP/1.1 <span class="number">200</span> OK
+Content-Type: application/json
+<span class="keyword">Set-Cookie</span>: authjs.session-token=eyJhbGciOiJkaXIiLCJlbmM...; \\
+  Path=<span class="string">"/"</span>; \\
+  Expires=Wed, 16 Jul 2026 03:09:42 GMT; \\
+  HttpOnly; \\
+  SameSite=Lax; \\
+  Secure
+
+{<span class="string">"ok"</span>: <span class="keyword">true</span>}
+
+<span class="comment">// Decoded JWT payload (what's inside the cookie):</span>
+{
+  <span class="string">"id"</span>:    <span class="string">"4"</span>,
+  <span class="string">"email"</span>: <span class="string">"ava@studio.io"</span>,
+  <span class="string">"name"</span>:  <span class="string">"Ava Cole"</span>,
+  <span class="string">"iat"</span>:   <span class="number">1750043382</span>,    <span class="comment">// issued at</span>
+  <span class="string">"exp"</span>:   <span class="number">1752635382</span>     <span class="comment">// 30-day expiry</span>
+}`,
+          annot: "Three security flags on the cookie: HttpOnly (JavaScript can't read it — XSS-proof), SameSite=Lax (not sent on cross-site requests — CSRF-proof), Secure (HTTPS only — wire-sniffing-proof). The JWT is signed; tampering invalidates the signature.",
+          next: "The browser stores the cookie. Every subsequent request to your domain includes it automatically. Server code reads it via auth() to know who the user is.",
+        },
+        page: {
+          tag: "app/dashboard/page.tsx  (server component)",
+          runs: { kind: "server", label: "Server component — runs on the server per request" },
+          code:
+`<span class="keyword">import</span> { auth } <span class="keyword">from</span> <span class="string">"@/auth"</span>;
+<span class="keyword">import</span> { redirect } <span class="keyword">from</span> <span class="string">"next/navigation"</span>;
+<span class="keyword">import</span> { db } <span class="keyword">from</span> <span class="string">"@/lib/db"</span>;
+
+<span class="keyword">export default async function</span> DashboardPage() {
+  <span class="comment">// 1. Read the session cookie. auth() decodes + verifies the JWT.</span>
+  <span class="keyword">const</span> session = <span class="keyword">await</span> auth();
+  <span class="keyword">if</span> (!session?.user) {
+    <span class="keyword">redirect</span>(<span class="string">"/login"</span>);
+  }
+
+  <span class="comment">// 2. We have a user. Fetch their notes (or whatever).</span>
+  <span class="keyword">const</span> notes = <span class="keyword">await</span> db.note.findMany({
+    where:   { authorId: <span class="type">Number</span>(session.user.id) },
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+  });
+
+  <span class="keyword">return</span> (
+    &lt;<span class="type">main</span>&gt;
+      &lt;<span class="type">h1</span>&gt;Welcome, {session.user.name}&lt;/<span class="type">h1</span>&gt;
+      &lt;<span class="type">ul</span>&gt;
+        {notes.map((n) =&gt; (
+          &lt;<span class="type">li</span> key={n.id}&gt;{n.title}&lt;/<span class="type">li</span>&gt;
+        ))}
+      &lt;/<span class="type">ul</span>&gt;
+    &lt;/<span class="type">main</span>&gt;
+  );
+}`,
+          annot: "Three lines is the entire auth check: await auth(), if (no session) redirect. Every protected page in your app uses this same pattern — the auth() helper is the bar's wristband-check.",
+          next: "If the user signs out (signOut() from the client), Auth.js clears the cookie. The next request to /dashboard finds no session → redirect(/login). The cycle is complete.",
+        },
+      };
+
+      function show(id) {
+        const t = tabs[id];
+        document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+        document.getElementById("panel").innerHTML = `
+          <div class="file-tag">${t.tag} <span class="runs ${t.runs.kind}">${t.runs.label}</span></div>
+          <pre>${t.code}</pre>
+          <div class="annot">${t.annot}</div>
+          <div class="next"><strong>→ Next:</strong> ${t.next}</div>
+        `;
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button.tab");
+        if (!b) return;
+        show(b.dataset.id);
+      });
+
+      show("config");
+    </script>
+  </body>
+</html>
