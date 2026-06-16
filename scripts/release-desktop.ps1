@@ -119,7 +119,14 @@ if (-not $DryRun) {
 if ($Version -ne $current) {
   Write-Host "==> Bumping wails.json: $current → $Version" -ForegroundColor Cyan
   $json.info.productVersion = $Version
-  $json | ConvertTo-Json -Depth 10 | Set-Content $wailsJson -Encoding utf8
+  # Write UTF-8 WITHOUT BOM. PowerShell 5.1's Set-Content -Encoding utf8
+  # writes a BOM, which Wails' JSON parser rejects ("invalid character
+  # 'ï' looking for beginning of value" — that's the EF BB BF BOM
+  # decoded by the error reporter). WriteAllText + UTF8Encoding($false)
+  # gives clean UTF-8 with no BOM.
+  $bomless = New-Object System.Text.UTF8Encoding $false
+  $jsonText = $json | ConvertTo-Json -Depth 10
+  [System.IO.File]::WriteAllText((Resolve-Path $wailsJson).Path, $jsonText, $bomless)
 }
 
 # ─── regenerate installer BMPs ───────────────────────────────────────
