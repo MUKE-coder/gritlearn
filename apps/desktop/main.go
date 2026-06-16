@@ -52,7 +52,15 @@ func main() {
 			WindowIsTranslucent:               false,
 			DisableWindowIcon:                 false,
 			DisableFramelessWindowDecorations: false,
-			BackdropType:                      windows.Mica,
+			// BackdropType: explicitly opaque (None). Mica/Acrylic only
+			// render if the webview is transparent AND the window is
+			// translucent; with our setup (opaque webview, opaque
+			// background) Mica does nothing useful on Win11 and
+			// occasionally renders the whole window black on machines
+			// without the Mica DWM extension (older Win10, server SKUs).
+			// Going opaque guarantees the user sees our painted
+			// background colour the moment the window appears.
+			BackdropType: windows.None,
 		},
 		Mac: &mac.Options{
 			TitleBar: &mac.TitleBar{

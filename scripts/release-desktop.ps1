@@ -147,6 +147,10 @@ if (-not (Test-Path $headerBmp) -or -not (Test-Path $welcomeBmp)) {
   $iconLg = (New-Object System.Drawing.Icon($iconPath, 64, 64)).ToBitmap()
   $iconSm = (New-Object System.Drawing.Icon($iconPath, 32, 32)).ToBitmap()
 
+  # Build as 32-bit, then flatten to 24-bit before save. NSIS MUI
+  # classic expects 24-bit BMPs — 32-bit ARGB renders corrupt or
+  # makes the wizard silently skip the page on some Windows builds
+  # (the v0.3.0 / v0.3.1 "no wizard appeared" bug).
   $header = New-Object System.Drawing.Bitmap(150, 57)
   $gh = [System.Drawing.Graphics]::FromImage($header)
   $gh.SmoothingMode    = 'AntiAlias'
@@ -157,7 +161,9 @@ if (-not (Test-Path $headerBmp) -or -not (Test-Path $welcomeBmp)) {
   $gh.DrawString('JEditor',           (New-Object System.Drawing.Font('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)), $creamBrush, 50, 13)
   $gh.DrawString('analogy-first IDE', (New-Object System.Drawing.Font('Segoe UI', 7.5)),                                  $mutedBrush, 50, 32)
   $gh.Dispose()
-  $header.Save($headerBmp, [System.Drawing.Imaging.ImageFormat]::Bmp)
+  $h24 = $header.Clone((New-Object System.Drawing.Rectangle(0, 0, 150, 57)), [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+  $h24.Save($headerBmp, [System.Drawing.Imaging.ImageFormat]::Bmp)
+  $header.Dispose(); $h24.Dispose()
 
   $welcome = New-Object System.Drawing.Bitmap(164, 314)
   $gw = [System.Drawing.Graphics]::FromImage($welcome)
@@ -172,7 +178,9 @@ if (-not (Test-Path $headerBmp) -or -not (Test-Path $welcomeBmp)) {
   $gw.DrawString('analogy-first IDE', (New-Object System.Drawing.Font('Segoe UI', 8.5)),                                  $mutedBrush, (New-Object System.Drawing.RectangleF(0, 196, 164, 20)), $sf)
   $gw.DrawString('Setup Wizard',      (New-Object System.Drawing.Font('Segoe UI', 7)),                                    $mutedBrush, (New-Object System.Drawing.RectangleF(0, 290, 164, 16)), $sf)
   $gw.Dispose()
-  $welcome.Save($welcomeBmp, [System.Drawing.Imaging.ImageFormat]::Bmp)
+  $w24 = $welcome.Clone((New-Object System.Drawing.Rectangle(0, 0, 164, 314)), [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+  $w24.Save($welcomeBmp, [System.Drawing.Imaging.ImageFormat]::Bmp)
+  $welcome.Dispose(); $w24.Dispose()
 }
 
 # ─── stage WebView2 offline runtime (for the FULL installer flavour) ─

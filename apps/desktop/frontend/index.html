@@ -3,13 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>gritlearn</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>JEditor</title>
+    <!--
+      No external font CDN. The bundled app must render the moment
+      WebView2 paints — pulling fonts from Google blocks the HTML
+      parser, and on a fresh install / captive-portal network the
+      request hangs for 30+ seconds, leaving the user staring at a
+      black window (the v0.3.0 / v0.3.1 install bug). System fonts
+      (Segoe UI / SF / Roboto via the system-ui keyword) look clean
+      and are guaranteed available offline. We can revisit bundling
+      Onest + JetBrains Mono via @fontsource later if we want the
+      exact brand typography in-app.
+    -->
+    <style>
+      html, body, #app {
+        background-color: #0a0a0d;
+        color: #ededee;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        height: 100%;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!--
+        Initial paint shows a centred mint {J} so the user sees life
+        on screen the instant WebView2 hands over rendering, even if
+        React hasn't mounted yet (or the JS bundle is still parsing).
+        React replaces this whole tree on hydration.
+      -->
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;">
+        <div style="width:48px;height:48px;border-radius:12px;background:#5FE3B0;
+                    display:flex;align-items:center;justify-content:center;
+                    font-family:ui-monospace,monospace;font-weight:700;color:#0a0a0d;
+                    font-size:22px;letter-spacing:-1px;">{J}</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
