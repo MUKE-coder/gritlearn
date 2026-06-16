@@ -1,0 +1,411 @@
+## Authentication with JWT and sessions
+
+A REST API that anyone can hit isn't useful for long. The moment users have accounts, data, things only *they* should see — the API needs to know *who is making the request*. Authentication is the answer to "who."
+
+In Phase 3 you used Auth.js inside Next.js, which handled the session shape for you. In a standalone Express backend, you write the auth yourself. The good news: the patterns are direct and well-trodden. Most production APIs use one of two shapes — **JWT (JSON Web Tokens)** or **server-side sessions**. This concept covers both, plus when to use which.
+
+<Analogy>
+Authentication is **the wristband you get at a concert.**
+
+You arrive at the venue. At the door, security checks your ticket (your password) — that's the slow check. Once you're verified, they put a **wristband** on you and you're inside. For the rest of the night, no one asks for your ticket again — they just glance at the wristband. Bar, bathroom, dance floor, VIP rope: wristband shown, access granted.
+
+The wristband replaces the slow check (looking up your ticket in a database) with a fast check (looking at your wrist). It's the same role tokens play in API auth: prove identity once, get a wristband, present the wristband on every subsequent request.
+
+Two different wristband designs in widespread use:
+
+- **Self-describing wristbands** — the wristband itself has your name + access level written on it in tamper-proof ink (a cryptographic signature). Security looks at the wristband, verifies the ink hasn't been forged, reads the name. **No database lookup needed.** This is **JWT** — self-contained, stateless.
+
+- **Numbered wristbands** — the wristband has a unique number. Security looks at the number, walks to the front desk, looks up "who has wristband #847?" in the guest book, finds your record. **One database lookup per request.** This is **server-side sessions** — stateful.
+
+Three trade-offs the wristband choice forces:
+
+1. **Revocation.** Tear off a numbered wristband at the front desk and the guest book entry is gone — that wristband is now invalid the moment security checks. Tearing off a self-describing wristband doesn't help: someone could have copied the ink onto a new band. To revoke JWTs you need a blocklist (which is itself a database). For instant revocation, numbered wristbands win.
+
+2. **Speed at scale.** Numbered wristbands need the front desk to handle every check. 10,000 attendees → 10,000 wristband checks per minute → front desk is the bottleneck. Self-describing wristbands distribute the check — every door can verify on its own. JWTs scale horizontally without coordination.
+
+3. **Storage on the wristband.** The numbered version can store arbitrary data in the guest book — your photo, your dietary restrictions, your VIP-room access. The self-describing version is limited to what fits in tamper-proof ink (~4KB cookie limit). For large or sensitive user data, numbered is better.
+
+Most production APIs lean toward **JWT** because the horizontal scaling story is simpler, and revocation rarely needs to be instant (logout, password change, account ban can all afford a small delay). Server-side sessions remain the right choice when revocation must be instant (banking, payment, healthcare) or when you need to track active devices precisely.
+
+This concept walks the JWT path end to end. We'll touch on session-based auth at the end so you know when to switch.
+</Analogy>
+
+### The JWT structure — three parts joined by dots
+
+A JWT is just a string: `header.payload.signature`. Base64-encoded, separated by dots.
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NyIsIm5hbWUiOiJBdmEiLCJpYXQiOjE3MTU5NjQwMDB9.tH4r8sxBmKb_gZ3WqM2lfqJ3FwxYZkP9pVQ4...
+```
+
+Decoded, each section is JSON:
+
+```json
+// header
+{ "alg": "HS256", "typ": "JWT" }
+
+// payload (the claims)
+{
+  "sub":  "47",
+  "name": "Ava",
+  "role": "user",
+  "iat":  1715964000,
+  "exp":  1715967600
+}
+
+// signature
+HMAC-SHA256(base64url(header) + "." + base64url(payload), JWT_SECRET)
+```
+
+Three things to internalize:
+
+- **The payload is base64, not encrypted.** Anyone can decode it. Don't put secrets in the payload. Put the *user ID* and the *role* — enough for the server to look up the rest if needed.
+- **The signature is what makes it trustable.** It's computed from `header.payload + JWT_SECRET`. A client tampering with the payload changes the signature; the server recomputes and notices.
+- **The secret is server-side only.** Anyone with the secret can forge JWTs. Treat it like a password.
+
+### Issuing a JWT — what the login endpoint does
+
+```js
+// src/routes/auth.js
+import { Router } from "express";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import { z } from "zod";
+import { db } from "../lib/db.js";
+import { env } from "../lib/env.js";
+
+export const authRouter = Router();
+
+const LoginSchema = z.object({
+  email:    z.string().email(),
+  password: z.string().min(8),
+});
+
+authRouter.post("/login", async (req, res) => {
+  const parsed = LoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: "VALIDATION_ERROR", details: parsed.error.format() } });
+  }
+
+  const user = await db.user.findUnique({ where: { email: parsed.data.email } });
+  if (!user) {
+    return res.status(401).json({ error: { code: "INVALID_CREDENTIALS", message: "Email or password incorrect" } });
+  }
+
+  const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
+  if (!ok) {
+    return res.status(401).json({ error: { code: "INVALID_CREDENTIALS", message: "Email or password incorrect" } });
+  }
+
+  const token = jwt.sign(
+    { sub: String(user.id), role: user.role },
+    env.JWT_SECRET,
+    { expiresIn: "15m" },
+  );
+
+  const refreshToken = jwt.sign(
+    { sub: String(user.id), type: "refresh" },
+    env.JWT_SECRET,
+    { expiresIn: "7d" },
+  );
+
+  res.json({ data: { user: { id: user.id, email: user.email, name: user.name }, token, refreshToken } });
+});
+```
+
+Three claims to put in the payload by default:
+
+- **`sub`** (subject) — the user ID. Standardized JWT claim.
+- **`role`** — what the user is allowed to do. Used by `requireRole` middleware.
+- **`exp`** (expiration) — added by `jsonwebtoken` via `expiresIn`. A short-lived access token (5-15 minutes) limits the damage of a leaked token.
+
+The login endpoint returns both an **access token** (short-lived, used on every request) and a **refresh token** (longer-lived, used to mint new access tokens when the old one expires). This is the standard pattern.
+
+### Verifying the JWT — middleware
+
+```js
+// src/middleware/auth.js
+import jwt from "jsonwebtoken";
+import { env } from "../lib/env.js";
+
+export function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: { code: "NO_TOKEN", message: "Authorization required" } });
+  }
+  const token = header.slice("Bearer ".length);
+
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET);
+    req.user = { id: payload.sub, role: payload.role };
+    next();
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: { code: "TOKEN_EXPIRED", message: "Token expired" } });
+    }
+    return res.status(401).json({ error: { code: "INVALID_TOKEN", message: "Token invalid" } });
+  }
+}
+```
+
+Use it on any protected route:
+
+```js
+import { requireAuth } from "../middleware/auth.js";
+
+postsRouter.post("/", requireAuth, createPost);
+postsRouter.delete("/:id", requireAuth, deletePost);
+
+// Or apply to the whole router:
+const adminRouter = Router();
+adminRouter.use(requireAuth);
+```
+
+The handler downstream sees `req.user` populated with `{ id, role }`. From there, you scope queries by user, check roles, do permission checks (next concept).
+
+### Refresh flow — extending the session without re-login
+
+When the access token expires (15 min later), the client doesn't have to make the user log in again. It uses the refresh token to mint a new access token:
+
+```js
+authRouter.post("/refresh", async (req, res) => {
+  const refreshToken = req.body.refreshToken;
+  if (!refreshToken) {
+    return res.status(400).json({ error: { code: "NO_REFRESH_TOKEN", message: "refreshToken required" } });
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, env.JWT_SECRET);
+    if (payload.type !== "refresh") {
+      return res.status(401).json({ error: { code: "INVALID_TOKEN", message: "Not a refresh token" } });
+    }
+
+    // Optional but recommended: check that the user still exists and is active.
+    const user = await db.user.findUnique({ where: { id: Number(payload.sub) } });
+    if (!user || !user.active) {
+      return res.status(401).json({ error: { code: "ACCOUNT_INACTIVE" } });
+    }
+
+    const newAccessToken = jwt.sign(
+      { sub: payload.sub, role: user.role },
+      env.JWT_SECRET,
+      { expiresIn: "15m" },
+    );
+
+    res.json({ data: { token: newAccessToken } });
+  } catch {
+    return res.status(401).json({ error: { code: "INVALID_TOKEN" } });
+  }
+});
+```
+
+The client's flow then becomes:
+
+```js
+// Frontend
+async function apiCall(method, url, body) {
+  let res = await fetch(url, { method, headers: { Authorization: `Bearer ${accessToken}` }, body });
+  if (res.status === 401) {
+    accessToken = await refreshAccessToken(refreshToken);
+    res = await fetch(url, { method, headers: { Authorization: `Bearer ${accessToken}` }, body });
+  }
+  return res.json();
+}
+```
+
+The 401 retry pattern works invisibly. The user types one password and stays logged in for the refresh token's lifetime (a week is common).
+
+### Where to store tokens on the client — the big choice
+
+The decision is **localStorage vs httpOnly cookie**, and it's about XSS:
+
+- **localStorage**: JavaScript reads/writes it directly. If a malicious script gets injected into your page (XSS), it can steal the token. The script runs in your origin so it can do anything the token can do.
+- **httpOnly cookie**: the browser stores it; JavaScript *cannot* read it. The browser automatically attaches it to requests to your domain. XSS-resistant. But you have to handle CSRF separately (a separate concept).
+
+Modern best practice for SPAs:
+
+- **Access token in memory** (a JS variable, lost on tab close). Short-lived.
+- **Refresh token in httpOnly cookie**. Long-lived. The `/refresh` endpoint reads the cookie, validates, returns a new access token.
+
+For mobile or desktop apps (like JEditor), tokens go in the **OS keychain** — Keychain on macOS, DPAPI on Windows, libsecret on Linux. Way better than either browser option since the keychain has its own access controls.
+
+### Password hashing — bcrypt + a real cost
+
+Never store passwords directly. Hash them with **bcrypt** (slow on purpose):
+
+```js
+import bcrypt from "bcrypt";
+
+// On signup:
+const hash = await bcrypt.hash(plainPassword, 12);
+await db.user.create({ data: { email, passwordHash: hash, ... } });
+
+// On login:
+const ok = await bcrypt.compare(plainPassword, user.passwordHash);
+```
+
+The `12` is the **cost factor** — the higher, the slower the hash. `12` takes about 250ms per call on modern hardware. That's a deliberate tax on attackers; legitimate logins barely notice. Don't go below `10`; above `14` starts impacting UX.
+
+**Why bcrypt and not SHA-256:** SHA-256 is too fast. An attacker with a leaked password table can try billions of passwords per second. bcrypt's cost factor makes that impractical.
+
+Modern alternatives: **argon2** (newer, more memory-hard) and **scrypt**. bcrypt is the most widely supported and well-understood; pick it unless you have a specific reason.
+
+### Server-side sessions — when JWT isn't the right call
+
+For instant revocation, large user objects, or maximum security audits, do this instead:
+
+```js
+// On login — store a session row:
+const sessionId = crypto.randomUUID();
+await db.session.create({
+  data: {
+    id:        sessionId,
+    userId:    user.id,
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    userAgent: req.headers["user-agent"],
+    ip:        req.ip,
+  },
+});
+res.cookie("session", sessionId, {
+  httpOnly: true,
+  secure:   true,
+  sameSite: "lax",
+  maxAge:   7 * 24 * 3600 * 1000,
+});
+```
+
+Middleware:
+
+```js
+async function requireSession(req, res, next) {
+  const sessionId = req.cookies.session;
+  if (!sessionId) return res.status(401).json({ error: "Not authenticated" });
+
+  const session = await db.session.findUnique({
+    where:   { id: sessionId },
+    include: { user: true },
+  });
+  if (!session || session.expiresAt < new Date()) {
+    return res.status(401).json({ error: "Session expired" });
+  }
+  req.user = session.user;
+  next();
+}
+```
+
+To revoke: `await db.session.delete({ where: { id } })`. Instant. No need to wait for the JWT expiry to roll over.
+
+Trade-off: one DB call per request. Mitigated by caching the session in Redis with a short TTL.
+
+### Quick comparison
+
+| | JWT | Session |
+|---|---|---|
+| Storage | Stateless (token holds it all) | DB row + cookie pointer |
+| Revocation | Hard (need blocklist) | Instant (delete the row) |
+| Scaling | Horizontal-friendly | Needs shared session store |
+| Per-request cost | Verify signature (~µs) | DB lookup (~ms) |
+| User-data size limit | ~4 KB | Unlimited |
+| Mobile / cross-domain | Trivial | Cookies don't cross domains |
+
+Default to JWT for new APIs. Switch to sessions when revocation matters more than scaling.
+
+<ExampleProject
+  src="jwt-anatomy"
+  title="Decode a JWT and watch it get verified"
+  description="Live inspector — paste any JWT (or use the demo one) and see the three parts decoded. Edit the payload and watch the signature go red because it no longer matches. Visual proof that JWTs are tamper-evident, not encrypted."
+/>
+
+<Exercise
+  title="Wire JWT auth onto the Express API"
+  starter={`Continue from the Express + Prisma API you built in Batch 3.
+
+  1. Add a User model to prisma/schema.prisma:
+       model User {
+         id           Int      @id @default(autoincrement())
+         email        String   @unique
+         passwordHash String
+         name         String
+         role         String   @default("user")
+         active       Boolean  @default(true)
+         createdAt    DateTime @default(now())
+         posts        Post[]
+       }
+     Update Post to have an authorId + author relation.
+     npx prisma migrate dev --name add_users
+
+  2. npm install bcrypt jsonwebtoken zod
+     npm install -D @types/bcrypt @types/jsonwebtoken (TS only)
+
+  3. Add to your env.js Zod schema:
+       JWT_SECRET: z.string().min(32),
+       JWT_EXPIRES_IN: z.string().default("15m"),
+     Generate a secret: openssl rand -base64 32, put it in .env.
+
+  4. Create src/routes/auth.js with two endpoints:
+       POST /api/auth/register
+         body: { email, password, name }
+         → hash password with bcrypt(12)
+         → create user
+         → return 201 with { user, token }
+       POST /api/auth/login
+         body: { email, password }
+         → look up user by email
+         → bcrypt.compare
+         → return 200 with { user, token } or 401
+
+     Use the Zod validation factory from the middleware concept for
+     input validation.
+
+  5. Create src/middleware/auth.js with requireAuth.
+     Read Bearer header, jwt.verify, set req.user = { id, role }.
+
+  6. Apply requireAuth to the write paths of your posts router:
+       postsRouter.post("/",       requireAuth, createPost);
+       postsRouter.patch("/:id",   requireAuth, updatePost);
+       postsRouter.delete("/:id",  requireAuth, deletePost);
+     Update createPost to scope by req.user.id:
+       const post = await db.post.create({
+         data: { ...parsed.data, authorId: req.user.id }
+       });
+
+  7. Update updatePost + deletePost to verify ownership BEFORE acting:
+       const post = await db.post.findUnique({ where: { id: ... } });
+       if (!post) return res.status(404).json({ error: "Not found" });
+       if (post.authorId !== req.user.id) {
+         return res.status(404).json({ error: "Not found" });
+         // 404 not 403 — don't leak that the post exists
+       }
+
+  8. Test the full flow with curl:
+       # Register
+       curl -X POST localhost:3000/api/auth/register \\
+            -H "Content-Type: application/json" \\
+            -d '{"email":"a@x.com","password":"hunter22","name":"Ava"}'
+       # → Save the returned token
+
+       # Try to create a post WITHOUT token
+       curl -X POST localhost:3000/api/posts \\
+            -H "Content-Type: application/json" \\
+            -d '{"title":"x"}'
+       # → 401
+
+       # Create a post WITH token
+       curl -X POST localhost:3000/api/posts \\
+            -H "Content-Type: application/json" \\
+            -H "Authorization: Bearer <token>" \\
+            -d '{"title":"My post"}'
+       # → 201
+
+       # Try to delete someone else's post (register a second user,
+       # have them try to delete the first user's post)
+       # → 404
+
+You now have authentication, scoped queries, and ownership checks
+working — the three pillars of a production REST API.
+
+Bonus: add the refresh-token endpoint from the concept. Add a
+'TokenExpiredError → refresh → retry' wrapper on the client side.
+You now have indefinite sessions without re-login until either the
+refresh token expires or the user logs out.`}
+/>

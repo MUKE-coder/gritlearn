@@ -1,0 +1,254 @@
+<!--
+  JWT anatomy + tamper-evident demo. Three sections shown side by side:
+  the encoded JWT string, the decoded header + payload, and the
+  signature check status. User can edit the payload — the signature
+  goes red, proving the JWT can't be tampered with without the secret.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JWT anatomy — tamper-evident proof</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .jwt-line {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.6; word-break: break-all; user-select: all;
+      }
+      .jwt-line .part-header    { color: #f87171; }
+      .jwt-line .part-payload   { color: #c084fc; }
+      .jwt-line .part-signature { color: #5FE3B0; }
+      .jwt-line .dot { color: #71717a; }
+
+      .pretty {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8rem;
+        line-height: 1.5; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .pretty.editable {
+        background: #fff; color: #18181b; border: 1px solid #d4d4d8;
+      }
+      textarea.payload {
+        width: 100%; box-sizing: border-box; min-height: 9rem;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.85rem;
+        padding: 0.7rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        line-height: 1.5; resize: vertical;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+
+      .row { display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0; font-size: 0.85rem; }
+      .row label { color: #71717a; min-width: 5.5rem; font-family: ui-monospace, monospace; font-size: 0.78rem; }
+      .row input {
+        flex: 1; font-family: ui-monospace, monospace; font-size: 0.82rem;
+        padding: 0.32rem 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;
+      }
+
+      .status {
+        margin-top: 0.7rem; padding: 0.85rem 1rem; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600;
+        display: flex; align-items: center; gap: 0.6rem;
+      }
+      .status.ok   { background: #dcfce7; color: #166534; }
+      .status.fail { background: #fee2e2; color: #7f1d1d; }
+
+      .annot {
+        margin-top: 0.6rem; font-size: 0.82rem; padding: 0.6rem 0.8rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+
+      button {
+        padding: 0.45rem 0.9rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem;
+      }
+      button.secondary { background: #fff; }
+      button.primary { background: #15803d; color: #fff; border-color: #15803d; }
+    </style>
+  </head>
+  <body>
+    <h1>JWT anatomy — three parts, one tamper-evident string</h1>
+    <p>A JWT is just <code><span style="color:#f87171">header</span>.<span style="color:#c084fc">payload</span>.<span style="color:#5FE3B0">signature</span></code>. Edit the payload below and watch the signature go red because it no longer matches.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>1 — The encoded JWT (what travels on the wire)</h2>
+        <div class="jwt-line" id="jwt-line"></div>
+
+        <h2 style="margin-top: 0.9rem;">2 — Decoded header</h2>
+        <pre class="pretty" id="header-pretty"></pre>
+
+        <h2>3 — Signing secret (server-side only)</h2>
+        <div class="row">
+          <label>secret:</label>
+          <input type="text" id="secret" value="super-secret-min-32-chars-aaaa" />
+        </div>
+        <p style="font-size: 0.78rem; color: #71717a;">
+          In production this is in <code>process.env.JWT_SECRET</code>. Never expose to the client.
+        </p>
+      </div>
+
+      <div class="col">
+        <h2>4 — Decoded payload (the claims) — try editing</h2>
+        <textarea class="payload" id="payload-edit"></textarea>
+
+        <h2 style="margin-top: 0.9rem;">5 — Signature verification</h2>
+        <div class="status" id="status"></div>
+        <div class="annot" id="annot"></div>
+
+        <div style="display: flex; gap: 0.4rem; margin-top: 0.7rem;">
+          <button class="primary" id="reset">Reset to demo</button>
+          <button class="secondary" id="tamper-role">Tamper: set role=admin</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Demo payload — what a typical login endpoint puts in the token.
+      const demoPayload = {
+        sub:  "47",
+        name: "Ava",
+        role: "user",
+        iat:  1715964000,
+        exp:  1715967600,
+      };
+      const demoHeader = { alg: "HS256", typ: "JWT" };
+
+      function b64urlEncode(obj) {
+        // Stable JSON stringify with no whitespace for the wire form.
+        const json = JSON.stringify(obj);
+        const utf8 = new TextEncoder().encode(json);
+        let bin = "";
+        utf8.forEach((b) => (bin += String.fromCharCode(b)));
+        return btoa(bin).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+      }
+
+      async function hmacSha256(key, msg) {
+        const k = new TextEncoder().encode(key);
+        const m = new TextEncoder().encode(msg);
+        const cryptoKey = await crypto.subtle.importKey("raw", k, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const sig = await crypto.subtle.sign("HMAC", cryptoKey, m);
+        const bytes = new Uint8Array(sig);
+        let bin = "";
+        bytes.forEach((b) => (bin += String.fromCharCode(b)));
+        return btoa(bin).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+      }
+
+      function decodeBase64Url(s) {
+        const padded = s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4);
+        const bin = atob(padded);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+      }
+
+      let originalJwt;          // computed once from demoPayload + secret
+      let currentPayload = { ...demoPayload };
+      let currentSecret  = "super-secret-min-32-chars-aaaa";
+
+      async function buildJwt(payload, secret) {
+        const h = b64urlEncode(demoHeader);
+        const p = b64urlEncode(payload);
+        const sig = await hmacSha256(secret, h + "." + p);
+        return `${h}.${p}.${sig}`;
+      }
+
+      async function render() {
+        // Compute what the JWT WOULD be if signed with current payload + secret.
+        const expectedJwt = await buildJwt(currentPayload, currentSecret);
+
+        // For display, split the original (untampered) JWT into 3 parts.
+        // If the user edited the payload but kept the original signature,
+        // the displayed string uses the original signature — showing the
+        // mismatch is the whole point.
+        const [origH, origP, origS] = originalJwt.split(".");
+        const newP = b64urlEncode(currentPayload);
+        const displayJwt = `${origH}.${newP}.${origS}`;
+
+        // Coloured display
+        document.getElementById("jwt-line").innerHTML =
+          `<span class="part-header">${origH}</span>` +
+          `<span class="dot">.</span>` +
+          `<span class="part-payload">${newP}</span>` +
+          `<span class="dot">.</span>` +
+          `<span class="part-signature">${origS}</span>`;
+
+        // Pretty header
+        document.getElementById("header-pretty").innerHTML =
+          syntaxJson(JSON.stringify(demoHeader, null, 2));
+
+        // Verification: recompute the signature for the displayed payload.
+        // If it equals the original signature, valid. Otherwise tampered.
+        const expectedSig = expectedJwt.split(".")[2];
+        const valid = expectedSig === origS;
+
+        document.getElementById("status").innerHTML = valid
+          ? `<span style="font-size:1.3rem;">✓</span> <span>Signature VALID — payload matches the secret-signed token.</span>`
+          : `<span style="font-size:1.3rem;">✗</span> <span>Signature MISMATCH — payload was tampered with, the server WOULD REJECT this token.</span>`;
+        document.getElementById("status").className = valid ? "status ok" : "status fail";
+
+        document.getElementById("annot").textContent = valid
+          ? "When the server receives this token it recomputes the signature using its JWT_SECRET. The recomputed signature matches the one in the token, so the server trusts the payload."
+          : "The displayed signature was computed for the ORIGINAL payload. The payload has changed (you edited it), so when the server recomputes the signature using the current payload bytes + JWT_SECRET, it gets a different value. The server rejects the token. This is why JWTs are tamper-evident: you can't change the claims without the secret.";
+      }
+
+      function syntaxJson(s) {
+        return s.replace(/("([^"\\]|\\.)*"\s*:)/g, '<span class="string">$1</span>')
+                .replace(/(:\s*)("([^"\\]|\\.)*")/g, '$1<span class="string">$2</span>')
+                .replace(/(:\s*)(\d+)/g, '$1<span class="number">$2</span>')
+                .replace(/(true|false|null)/g, '<span class="keyword">$1</span>');
+      }
+
+      function setPayloadFromTextarea() {
+        const raw = document.getElementById("payload-edit").value;
+        try {
+          currentPayload = JSON.parse(raw);
+          render();
+        } catch {
+          // Invalid JSON — leave currentPayload as-is, show status "invalid".
+          document.getElementById("status").innerHTML = `<span>...</span> <span>Payload isn't valid JSON yet. Keep editing.</span>`;
+          document.getElementById("status").className = "status fail";
+        }
+      }
+
+      async function reset() {
+        currentPayload = { ...demoPayload };
+        currentSecret = "super-secret-min-32-chars-aaaa";
+        document.getElementById("secret").value = currentSecret;
+        document.getElementById("payload-edit").value = JSON.stringify(currentPayload, null, 2);
+        originalJwt = await buildJwt(demoPayload, currentSecret);
+        render();
+      }
+
+      async function tamperRole() {
+        currentPayload = { ...currentPayload, role: "admin" };
+        document.getElementById("payload-edit").value = JSON.stringify(currentPayload, null, 2);
+        render();
+      }
+
+      document.getElementById("payload-edit").addEventListener("input", setPayloadFromTextarea);
+      document.getElementById("secret").addEventListener("input", async (e) => {
+        currentSecret = e.target.value;
+        // Note: changing the secret means originalJwt is no longer valid
+        // unless we rebuild — which we don't, because the point is to
+        // simulate the SERVER's secret. The displayed sig stays original.
+        render();
+      });
+      document.getElementById("reset").addEventListener("click", reset);
+      document.getElementById("tamper-role").addEventListener("click", tamperRole);
+
+      reset();
+    </script>
+  </body>
+</html>

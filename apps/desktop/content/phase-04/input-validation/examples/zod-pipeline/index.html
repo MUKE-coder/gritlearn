@@ -1,0 +1,255 @@
+<!--
+  Interactive Zod sandbox. Pick a schema preset (Post / User / Pagination)
+  or write a payload in the left box. The right side shows whether it
+  passes validation + the per-field issues. Live updates as you type.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Zod validation sandbox</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .controls { display: flex; gap: 0.4rem; margin: 1rem 0; flex-wrap: wrap; }
+      .controls button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem; font-family: ui-monospace, monospace;
+      }
+      .controls button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      textarea {
+        width: 100%; box-sizing: border-box; min-height: 12rem;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.84rem;
+        line-height: 1.5; padding: 0.7rem 0.9rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        resize: vertical;
+      }
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+
+      .verdict {
+        margin-top: 0.7rem; padding: 0.85rem 1rem; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600;
+        display: flex; align-items: center; gap: 0.6rem;
+      }
+      .verdict.ok   { background: #dcfce7; color: #166534; }
+      .verdict.fail { background: #fee2e2; color: #7f1d1d; }
+
+      .issue {
+        background: #fee2e2; color: #7f1d1d; border-left: 3px solid #dc2626;
+        border-radius: 4px; padding: 0.5rem 0.75rem; margin: 0.3rem 0;
+        font-family: ui-monospace, monospace; font-size: 0.79rem;
+      }
+      .issue .path { font-weight: 700; }
+
+      .parsed {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        margin-top: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Watch Zod parse a request</h1>
+    <p>Pick a schema preset, edit the payload, and see validation in real time. The right column shows whether it passes + which fields failed.</p>
+
+    <div class="controls" id="preset-bar">
+      <button data-preset="create-post"  class="active">CreatePost schema</button>
+      <button data-preset="register">Register schema</button>
+      <button data-preset="pagination">Pagination (query)</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Schema (read-only here)</h2>
+        <pre id="schema"></pre>
+
+        <h2 style="margin-top: 0.8rem;">Payload (edit me)</h2>
+        <textarea id="payload" spellcheck="false"></textarea>
+      </div>
+
+      <div class="col">
+        <h2>Verdict</h2>
+        <div id="verdict"></div>
+
+        <h2 style="margin-top: 0.8rem;">Parsed data (what the handler sees)</h2>
+        <pre class="parsed" id="parsed">—</pre>
+
+        <h2 style="margin-top: 0.8rem;">Issues</h2>
+        <div id="issues"></div>
+      </div>
+    </div>
+
+    <script>
+      // A tiny Zod-like validator built inline so the lesson HTML stays
+      // dependency-free. Mirrors Zod's safeParse shape for the purposes
+      // of this demo. Not a full Zod implementation.
+
+      const validators = {
+        string: ({ min, max, pattern } = {}) => (v) => {
+          if (typeof v !== "string") return { ok: false, msg: `expected string, got ${typeof v}` };
+          if (min !== undefined && v.length < min) return { ok: false, msg: `string must be at least ${min} chars` };
+          if (max !== undefined && v.length > max) return { ok: false, msg: `string must be at most ${max} chars` };
+          if (pattern && !pattern.test(v))         return { ok: false, msg: `string does not match pattern` };
+          return { ok: true, value: v };
+        },
+        email: () => (v) => {
+          if (typeof v !== "string")   return { ok: false, msg: `expected string, got ${typeof v}` };
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return { ok: false, msg: `invalid email` };
+          return { ok: true, value: v.toLowerCase() };
+        },
+        number: ({ min, max, integer } = {}) => (v) => {
+          const n = typeof v === "string" ? Number(v) : v;
+          if (typeof n !== "number" || !Number.isFinite(n)) return { ok: false, msg: `expected number, got ${typeof v}` };
+          if (integer && !Number.isInteger(n)) return { ok: false, msg: `expected integer, got ${n}` };
+          if (min !== undefined && n < min) return { ok: false, msg: `must be >= ${min}` };
+          if (max !== undefined && n > max) return { ok: false, msg: `must be <= ${max}` };
+          return { ok: true, value: n };
+        },
+        boolean: () => (v) => {
+          if (typeof v === "boolean") return { ok: true, value: v };
+          return { ok: false, msg: `expected boolean, got ${typeof v}` };
+        },
+        enum: (values) => (v) => {
+          if (!values.includes(v)) return { ok: false, msg: `must be one of ${values.join(", ")}` };
+          return { ok: true, value: v };
+        },
+        array: (item) => (v) => {
+          if (!Array.isArray(v)) return { ok: false, msg: `expected array` };
+          const out = [];
+          for (let i = 0; i < v.length; i++) {
+            const r = item(v[i]);
+            if (!r.ok) return { ok: false, msg: `[${i}]: ${r.msg}` };
+            out.push(r.value);
+          }
+          return { ok: true, value: out };
+        },
+      };
+
+      function validateObject(obj, schema) {
+        const result = {};
+        const issues = [];
+        for (const [key, def] of Object.entries(schema)) {
+          const raw = obj?.[key];
+          if (raw === undefined) {
+            if (def.required && def.default === undefined) {
+              issues.push({ path: key, message: `Required` });
+              continue;
+            }
+            if (def.default !== undefined) {
+              result[key] = def.default;
+            }
+            continue;
+          }
+          const r = def.validate(raw);
+          if (!r.ok) issues.push({ path: key, message: r.msg });
+          else result[key] = r.value;
+        }
+        return { ok: issues.length === 0, result, issues };
+      }
+
+      const presets = {
+        "create-post": {
+          schemaSource: `<span class="keyword">const</span> CreatePostSchema = z.object({
+  title:     z.string().min(<span class="number">1</span>).max(<span class="number">200</span>),
+  body:      z.string().optional().default(<span class="string">""</span>),
+  published: z.boolean().optional().default(<span class="keyword">false</span>),
+  tags:      z.array(z.string().min(<span class="number">1</span>).max(<span class="number">40</span>)).max(<span class="number">10</span>).optional(),
+});`,
+          payload: '{\n  "title": "My first post",\n  "body":  "Hello world",\n  "published": false,\n  "tags": ["express", "prisma"]\n}',
+          schema: {
+            title:     { required: true,  validate: validators.string({ min: 1, max: 200 }) },
+            body:      { required: false, default: "", validate: validators.string({}) },
+            published: { required: false, default: false, validate: validators.boolean() },
+            tags:      { required: false, validate: validators.array(validators.string({ min: 1, max: 40 })) },
+          },
+        },
+        register: {
+          schemaSource: `<span class="keyword">const</span> RegisterSchema = z.object({
+  email:    z.string().email().toLowerCase(),
+  password: z.string().min(<span class="number">8</span>).max(<span class="number">128</span>),
+  name:     z.string().min(<span class="number">1</span>).max(<span class="number">100</span>),
+});`,
+          payload: '{\n  "email":    "Ava@studio.IO",\n  "password": "hunter22",\n  "name":     "Ava Cole"\n}',
+          schema: {
+            email:    { required: true, validate: validators.email() },
+            password: { required: true, validate: validators.string({ min: 8, max: 128 }) },
+            name:     { required: true, validate: validators.string({ min: 1, max: 100 }) },
+          },
+        },
+        pagination: {
+          schemaSource: `<span class="keyword">const</span> PaginationSchema = z.object({
+  page:   z.coerce.number().int().min(<span class="number">1</span>).default(<span class="number">1</span>),
+  limit:  z.coerce.number().int().min(<span class="number">1</span>).max(<span class="number">100</span>).default(<span class="number">20</span>),
+  status: z.enum([<span class="string">"open"</span>, <span class="string">"closed"</span>, <span class="string">"all"</span>]).default(<span class="string">"all"</span>),
+});`,
+          payload: '{\n  "page":   "2",\n  "limit":  "50",\n  "status": "open"\n}',
+          schema: {
+            page:   { required: false, default: 1,  validate: validators.number({ integer: true, min: 1 }) },
+            limit:  { required: false, default: 20, validate: validators.number({ integer: true, min: 1, max: 100 }) },
+            status: { required: false, default: "all", validate: validators.enum(["open", "closed", "all"]) },
+          },
+        },
+      };
+
+      let active = "create-post";
+
+      function render() {
+        const preset = presets[active];
+        document.getElementById("schema").innerHTML = preset.schemaSource;
+
+        let parsedJson;
+        try {
+          parsedJson = JSON.parse(document.getElementById("payload").value);
+        } catch (e) {
+          document.getElementById("verdict").innerHTML = `<div class="verdict fail">✗ Payload is not valid JSON: ${e.message}</div>`;
+          document.getElementById("parsed").textContent = "—";
+          document.getElementById("issues").innerHTML = "";
+          return;
+        }
+
+        const { ok, result, issues } = validateObject(parsedJson, preset.schema);
+
+        if (ok) {
+          document.getElementById("verdict").innerHTML = `<div class="verdict ok"><span style="font-size:1.2rem">✓</span> <span>Validation passed. <code>schema.safeParse(req.body).success === true</code></span></div>`;
+        } else {
+          document.getElementById("verdict").innerHTML = `<div class="verdict fail"><span style="font-size:1.2rem">✗</span> <span>${issues.length} validation issue${issues.length === 1 ? "" : "s"}. The middleware would respond <code>400</code> with these details.</span></div>`;
+        }
+
+        document.getElementById("parsed").textContent = JSON.stringify(result, null, 2);
+        document.getElementById("issues").innerHTML = issues.length === 0
+          ? `<p style="font-size:0.82rem;color:#71717a;">No issues.</p>`
+          : issues.map(i => `<div class="issue"><span class="path">${i.path}</span> — ${i.message}</div>`).join("");
+      }
+
+      document.getElementById("preset-bar").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        active = b.dataset.preset;
+        document.querySelectorAll(".controls button").forEach(x => x.classList.toggle("active", x.dataset.preset === active));
+        document.getElementById("payload").value = presets[active].payload;
+        render();
+      });
+      document.getElementById("payload").addEventListener("input", render);
+
+      // Initialise.
+      document.getElementById("payload").value = presets[active].payload;
+      render();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,283 @@
+<!--
+  Interactive permission matrix. Pick (user role, action, resource owner)
+  and see the can() function trace step-by-step to a yes or no verdict.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Authorization matrix — who can do what</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1020px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+      .group {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px; padding: 0.5rem 0.7rem;
+        font-size: 0.85rem;
+      }
+      .group label {
+        display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin-bottom: 0.2rem;
+      }
+      .group select {
+        font-size: 0.85rem; padding: 0.25rem 0.4rem; border: 1px solid #d4d4d8; border-radius: 4px; background: #fff;
+        font-family: ui-monospace, monospace;
+      }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; align-items: start; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .hl-true  { background: #14532d; color: #4ade80; padding: 0 4px; border-radius: 2px; }
+      .hl-false { background: #7f1d1d; color: #fca5a5; padding: 0 4px; border-radius: 2px; }
+
+      .step {
+        margin: 0.45rem 0; padding: 0.55rem 0.85rem; background: #fff;
+        border-radius: 4px; border: 1px solid #e4e4e7; font-size: 0.85rem;
+      }
+      .step.true  { border-left: 3px solid #16a34a; background: #ecfdf5; color: #166534; }
+      .step.false { border-left: 3px solid #dc2626; background: #fee2e2; color: #7f1d1d; }
+      .step .num {
+        display: inline-block; background: #f4f4f5; color: #71717a; padding: 1px 6px;
+        border-radius: 3px; font-family: ui-monospace, monospace; font-size: 0.7rem;
+        margin-right: 0.5rem;
+      }
+
+      .verdict {
+        margin-top: 0.7rem; padding: 0.9rem 1rem; border-radius: 8px;
+        font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem;
+      }
+      .verdict.allow { background: #dcfce7; color: #166534; }
+      .verdict.deny  { background: #fee2e2; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>Who can do what — interactive policy</h1>
+    <p>Pick a user role, an action, and whether they own the resource. Watch <code>can()</code> trace through the policy step by step.</p>
+
+    <div class="controls">
+      <div class="group">
+        <label>User role</label>
+        <select id="role">
+          <option value="anonymous">anonymous (not signed in)</option>
+          <option value="user" selected>user</option>
+          <option value="moderator">moderator</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <label>Action</label>
+        <select id="action">
+          <option value="view">view post</option>
+          <option value="edit" selected>edit post</option>
+          <option value="delete">delete post</option>
+          <option value="publish">publish post</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <label>Resource owner</label>
+        <select id="owner">
+          <option value="me" selected>me (the signed-in user)</option>
+          <option value="someone-else">someone else</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <label>Post is published</label>
+        <select id="published">
+          <option value="true" selected>yes</option>
+          <option value="false">no (draft)</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <label>Email verified</label>
+        <select id="verified">
+          <option value="true" selected>yes</option>
+          <option value="false">no</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>The permission function</h2>
+        <pre id="code"></pre>
+      </div>
+      <div class="col">
+        <h2>Trace</h2>
+        <div id="steps"></div>
+        <div id="verdict"></div>
+      </div>
+    </div>
+
+    <script>
+      const policies = {
+        view: {
+          fnName: "canViewPost",
+          body: (user, post) => {
+            const steps = [];
+            if (post.published === true) {
+              steps.push({ kind: "true", num: "1", text: "post.published === true → public read, allow." });
+              return { ok: true, steps };
+            }
+            steps.push({ kind: "false", num: "1", text: "post.published === false (draft) — only author or admin can view." });
+            if (!user) {
+              steps.push({ kind: "false", num: "2", text: "no user (anonymous) — deny." });
+              return { ok: false, steps };
+            }
+            if (user.role === "admin") {
+              steps.push({ kind: "true", num: "2", text: "user.role === 'admin' — bypass." });
+              return { ok: true, steps };
+            }
+            if (post.authorId === user.id) {
+              steps.push({ kind: "true", num: "2", text: "post.authorId === user.id — the author can see their own draft." });
+              return { ok: true, steps };
+            }
+            steps.push({ kind: "false", num: "2", text: "not admin, not author — deny." });
+            return { ok: false, steps };
+          },
+          code: `<span class="keyword">export function</span> canViewPost(user, post) {
+  <span class="keyword">if</span> (post.published === <span class="keyword">true</span>) <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">if</span> (!user) <span class="keyword">return</span> <span class="keyword">false</span>;
+  <span class="keyword">if</span> (user.role === <span class="string">"admin"</span>) <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">if</span> (post.authorId === user.id) <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">return</span> <span class="keyword">false</span>;
+}`,
+        },
+
+        edit: {
+          fnName: "canEditPost",
+          body: (user, post) => {
+            const steps = [];
+            if (!user) {
+              steps.push({ kind: "false", num: "1", text: "no user (anonymous) — deny." });
+              return { ok: false, steps };
+            }
+            if (user.role === "admin") {
+              steps.push({ kind: "true", num: "1", text: "user.role === 'admin' — bypass." });
+              return { ok: true, steps };
+            }
+            if (user.role === "moderator") {
+              steps.push({ kind: "true", num: "1", text: "user.role === 'moderator' — moderators can edit any post." });
+              return { ok: true, steps };
+            }
+            if (post.authorId === user.id) {
+              steps.push({ kind: "true", num: "1", text: "post.authorId === user.id — the author can edit their own post." });
+              return { ok: true, steps };
+            }
+            steps.push({ kind: "false", num: "1", text: "not admin, not moderator, not the author — deny." });
+            return { ok: false, steps };
+          },
+          code: `<span class="keyword">export function</span> canEditPost(user, post) {
+  <span class="keyword">if</span> (!user) <span class="keyword">return</span> <span class="keyword">false</span>;
+  <span class="keyword">if</span> (user.role === <span class="string">"admin"</span>)      <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">if</span> (user.role === <span class="string">"moderator"</span>)  <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">if</span> (post.authorId === user.id) <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">return</span> <span class="keyword">false</span>;
+}`,
+        },
+
+        delete: {
+          fnName: "canDeletePost",
+          body: (user, post) => {
+            const steps = [];
+            if (!user) {
+              steps.push({ kind: "false", num: "1", text: "no user — deny." });
+              return { ok: false, steps };
+            }
+            if (user.role === "admin") {
+              steps.push({ kind: "true", num: "1", text: "user.role === 'admin' — bypass. Moderators do NOT get delete." });
+              return { ok: true, steps };
+            }
+            steps.push({ kind: "false", num: "1", text: "moderators CANNOT delete (intentional policy choice)." });
+            if (post.authorId === user.id) {
+              steps.push({ kind: "true", num: "2", text: "post.authorId === user.id — the author can delete their own post." });
+              return { ok: true, steps };
+            }
+            steps.push({ kind: "false", num: "2", text: "not admin, not the author — deny." });
+            return { ok: false, steps };
+          },
+          code: `<span class="keyword">export function</span> canDeletePost(user, post) {
+  <span class="comment">// Note: moderators can EDIT but not DELETE.</span>
+  <span class="keyword">if</span> (!user) <span class="keyword">return</span> <span class="keyword">false</span>;
+  <span class="keyword">if</span> (user.role === <span class="string">"admin"</span>)  <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">if</span> (post.authorId === user.id) <span class="keyword">return</span> <span class="keyword">true</span>;
+  <span class="keyword">return</span> <span class="keyword">false</span>;
+}`,
+        },
+
+        publish: {
+          fnName: "canPublishPost",
+          body: (user, post) => {
+            const steps = [];
+            const editPolicy = policies.edit.body(user, post);
+            if (!editPolicy.ok) {
+              const lastStep = editPolicy.steps[editPolicy.steps.length - 1];
+              steps.push({ kind: "false", num: "1", text: `canEditPost(...) === false (${lastStep.text}) → publish denied.` });
+              return { ok: false, steps };
+            }
+            steps.push({ kind: "true", num: "1", text: "canEditPost(...) === true — passes edit check." });
+            if (!user.emailVerifiedAt) {
+              steps.push({ kind: "false", num: "2", text: "user.emailVerifiedAt is null — publish requires email verification." });
+              return { ok: false, steps };
+            }
+            steps.push({ kind: "true", num: "2", text: "user.emailVerifiedAt is set — fully allowed." });
+            return { ok: true, steps };
+          },
+          code: `<span class="keyword">export function</span> canPublishPost(user, post) {
+  <span class="comment">// Publish stacks on edit + an extra requirement.</span>
+  <span class="keyword">return</span> canEditPost(user, post)
+      &amp;&amp; !!user?.emailVerifiedAt;
+}`,
+        },
+      };
+
+      function compute() {
+        const role = document.getElementById("role").value;
+        const action = document.getElementById("action").value;
+        const owner = document.getElementById("owner").value;
+        const published = document.getElementById("published").value === "true";
+        const verified = document.getElementById("verified").value === "true";
+
+        const user = role === "anonymous" ? null : {
+          id: 1,
+          role,
+          emailVerifiedAt: verified ? new Date() : null,
+        };
+        const post = {
+          id: 99,
+          authorId: owner === "me" ? 1 : 2,
+          published,
+        };
+
+        const policy = policies[action];
+        const result = policy.body(user, post);
+
+        document.getElementById("code").innerHTML = policy.code;
+        document.getElementById("steps").innerHTML = result.steps.map(s => `
+          <div class="step ${s.kind}"><span class="num">${s.num}</span>${s.text}</div>
+        `).join("");
+        document.getElementById("verdict").innerHTML = result.ok
+          ? `<div class="verdict allow"><span style="font-size:1.3rem;">✓</span><span><code>${policy.fnName}(...)</code> → <span class="hl-true">true</span> — handler proceeds.</span></div>`
+          : `<div class="verdict deny"><span style="font-size:1.3rem;">✗</span><span><code>${policy.fnName}(...)</code> → <span class="hl-false">false</span> — handler returns <code>404 Not Found</code> (don't leak existence).</span></div>`;
+      }
+
+      document.querySelectorAll(".group select").forEach(s => s.addEventListener("change", compute));
+      compute();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,298 @@
+## CORS explained
+
+A React app at `https://app.jbeditor.com` tries to fetch from `https://api.jbeditor.com`. The browser blocks the request. The DevTools console shows:
+
+```
+Access to fetch at 'https://api.jbeditor.com/users' from origin
+'https://app.jbeditor.com' has been blocked by CORS policy.
+```
+
+You will see this error. Everyone has. It's the single most common deploy-day surprise when a frontend and backend split across domains for the first time.
+
+**CORS** (Cross-Origin Resource Sharing) is the browser's way of asking the server "are you OK with this cross-origin request?" Express handles it via the `cors` package; the trick is understanding what the browser is checking for and configuring Express to satisfy it.
+
+This concept is the model of CORS — not the cheat sheet of `cors()` options. Once you know what the browser is doing and why, the package config writes itself.
+
+<Analogy>
+CORS is **the door policy at an embassy.**
+
+An embassy is a piece of foreign territory inside a host country. People walk up to the embassy door from outside. The embassy's job is to decide *who from outside this door we'll do business with* — applying their own rules, independent of the host country's laws.
+
+A visitor from country A walks up to country B's embassy. They want to file a document. The guard checks:
+
+1. **Is country A on the embassy's allowlist?** Each embassy publishes a list of countries it serves. If country A isn't on the list, the guard turns the visitor away at the door. The visitor was free to walk up — the guard just won't let them in.
+
+2. **Does the request type need special clearance?** A casual visit (asking the time, "GET") gets waved through without preamble. A signed document submission ("POST with JSON") triggers a preliminary check: the guard asks "what are you about to file?" and consults a higher authority. THAT preliminary check is the **CORS preflight** — an OPTIONS request the browser sends before the actual one.
+
+3. **Did the visitor bring sensitive papers (credentials)?** The guard's check is stricter when cookies / auth tokens are involved. Cross-border passport stuff requires explicit pre-approval ("Access-Control-Allow-Credentials").
+
+Three things make this analogy useful:
+
+1. **The browser is the guard, not the server.** The check happens at the browser level, *before* the request reaches your server (for preflight) or *after* the response comes back (for verifying headers). Curl and Postman don't enforce CORS — only browsers do. That's why your backend can pass curl tests and still break a deployed frontend.
+
+2. **The check is the server SAYING what's allowed.** CORS isn't security in the sense of preventing access — anyone can hit your API with curl. CORS is the server *telling browsers* "here's who I trust." Browsers respect that hint. Without proper headers, a *browser*-based attacker site can't make authenticated requests to your API on the user's behalf.
+
+3. **The check happens automatically when the request is "non-simple".** Send a GET with no custom headers — no preflight. Send a POST with `Content-Type: application/json` — preflight. Send a request with `Authorization` or `Idempotency-Key` headers — preflight. We hit this exact thing in our own desktop signup bug.
+</Analogy>
+
+### What "origin" means precisely
+
+An **origin** is the triple `(scheme, host, port)`. These are all different origins:
+
+```
+https://app.jbeditor.com           # one origin
+http://app.jbeditor.com            # different (different scheme)
+https://api.jbeditor.com           # different (different host)
+https://app.jbeditor.com:8080      # different (different port)
+https://www.app.jbeditor.com       # different (different subdomain)
+```
+
+Two pages are "same-origin" only when all three match exactly. The browser tags requests with the originating page's origin via the `Origin` header. Your server inspects it and decides.
+
+### Simple vs preflighted requests
+
+Some cross-origin requests are "simple" — the browser sends them directly without asking permission first. Others are "preflighted" — the browser sends an `OPTIONS` request first to verify the server's policy.
+
+A request is **simple** when ALL of:
+
+- Method is `GET`, `HEAD`, or `POST`.
+- Only "safelist" headers are sent. Safelist includes `Accept`, `Accept-Language`, `Content-Language`, plus a constrained `Content-Type`.
+- `Content-Type` (if present) is one of: `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`. **`application/json` is NOT safelist.**
+
+So `GET /users` with no custom headers — simple. `GET /users` with `Content-Type: application/json` — preflighted. `POST /users` with JSON body — preflighted. `DELETE /users/47` with any header — preflighted.
+
+Practically, **almost every JSON API request is preflighted.** The browser does an `OPTIONS` first, then the real method.
+
+### The OPTIONS preflight — what's in it
+
+```http
+OPTIONS /api/posts HTTP/1.1
+Host: api.jbeditor.com
+Origin: https://app.jbeditor.com
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: content-type, authorization, idempotency-key
+```
+
+The browser asks: "I'm at `https://app.jbeditor.com`, and I'm about to send a `POST` with the headers `Content-Type, Authorization, Idempotency-Key`. Are you OK with that?"
+
+The server responds:
+
+```http
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://app.jbeditor.com
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization, Idempotency-Key
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 86400
+Vary: Origin
+```
+
+The browser reads each header:
+
+- **`Access-Control-Allow-Origin: https://app.jbeditor.com`** — the calling origin is allowed (must match exactly OR be `*`).
+- **`Access-Control-Allow-Methods: ..., POST, ...`** — the method the browser is about to use is in the list.
+- **`Access-Control-Allow-Headers: ..., Authorization, Idempotency-Key, ...`** — every custom header the browser was going to send is allowed.
+- **`Access-Control-Allow-Credentials: true`** — cookies / auth tokens may be sent (and Origin must NOT be `*` if this is true).
+- **`Access-Control-Max-Age: 86400`** — cache this preflight result for 24 hours; don't re-ask for the same origin / method / headers combo.
+
+If ANY of those checks fail (origin not on list, header not allowed, etc.), the browser doesn't send the actual POST. **The actual POST is silently aborted**. Your server never sees it. Your client sees a network error. That's the failure mode we kept hitting.
+
+If they all pass, the browser proceeds to send the actual `POST` (with the same `Origin` header). The server's response must ALSO include `Access-Control-Allow-Origin` (it's checked both on preflight and on the actual response).
+
+### Configuring CORS in Express
+
+You CAN write the middleware by hand (and we did in the `middleware` concept). For most apps, the `cors` package does the right thing:
+
+```bash
+npm install cors
+```
+
+```js
+// src/server.js
+import express from "express";
+import cors from "cors";
+import { env } from "./lib/env.js";
+
+const app = express();
+
+app.use(cors({
+  // Allowed origins. Either a literal string, an array, or a function.
+  origin: env.CORS_ORIGINS,  // e.g. ["https://app.jbeditor.com", "http://localhost:5173"]
+
+  // Allow credentials (cookies, Authorization header) — REQUIRED if your
+  // frontend uses cookies or Bearer tokens.
+  credentials: true,
+
+  // Headers your endpoints expect to receive on requests.
+  allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+
+  // Headers you want the browser JS to be able to READ off your responses.
+  // (Some are exposed by default; custom ones need to be listed.)
+  exposedHeaders: ["X-Total-Count"],
+
+  // Cache the preflight result for 24 hours.
+  maxAge: 86400,
+}));
+
+app.use(express.json());
+app.use("/api/posts", postsRouter);
+// ...
+```
+
+`cors()` registers as global middleware. It handles the OPTIONS preflight automatically (with `204` + the right headers) AND adds `Access-Control-Allow-Origin` to every subsequent response.
+
+The `origin` field is the trickiest. Three forms:
+
+- **A string**: `origin: "https://app.jbeditor.com"` — only this exact origin. Most restrictive, safest.
+- **An array**: `origin: ["https://app.jbeditor.com", "http://localhost:5173"]` — multiple specific origins. Common in dev (localhost + prod URL allowed).
+- **A function**: `origin: (origin, cb) => { ... }` — fully dynamic. Use when origins are stored in the DB or you want pattern matching.
+
+**Never use `origin: "*"` with `credentials: true`.** The browser refuses to attach cookies / auth tokens to a `*` response. You'd have CORS that ALMOST works but auth never makes it through. Always echo the specific origin back.
+
+### Common CORS errors and what they mean
+
+The exact wording in DevTools varies by browser, but the categories are stable:
+
+| Symptom (browser console) | Cause | Fix |
+|---|---|---|
+| `No 'Access-Control-Allow-Origin' header is present` | Origin not in your allowlist | Add the origin to `cors({ origin: [...] })` |
+| `The 'Access-Control-Allow-Origin' header has a value '*' which must not be the wildcard '*' when the request's credentials mode is 'include'` | `credentials: true` + `origin: "*"` | Change `origin` to the specific URL |
+| `Method PATCH is not allowed by Access-Control-Allow-Methods` | Your CORS middleware doesn't list PATCH | Don't override `methods`; the `cors` default includes all common verbs |
+| `Request header field idempotency-key is not allowed by Access-Control-Allow-Headers` | The header your client sends isn't in the server's `allowedHeaders` | Add `Idempotency-Key` (or your custom header) to `allowedHeaders` |
+| `Preflight response is not successful. Status code: 401` | Authentication middleware ran BEFORE CORS middleware | Put `app.use(cors(...))` ABOVE auth middleware |
+| `Network error / Failed to fetch` with no other detail | Preflight rejected (any of the above), browser killed the actual request | Open the Network tab; the OPTIONS will be visible there with whatever's missing |
+
+### The most common production CORS bug
+
+In our own deploy of JEditor we hit this exact thing: the server's `Access-Control-Allow-Headers` listed `Origin, Content-Type, Accept, Authorization` but the client (axios on the desktop) added `Idempotency-Key` to every POST. Preflight returned 204 successfully (the browser only checks SOME of the response on its way back), but the browser then refused to send the actual POST because `Idempotency-Key` wasn't in the allowed list.
+
+The symptom: 24µs OPTIONS in the server logs followed by silence. No POST. The client sees "network error." Took several rounds of debugging to spot.
+
+The lesson: **`Access-Control-Allow-Headers` must include every custom header your client sends.** If you add a new header to the client, add it to the server's allowlist too.
+
+### CORS and credentials — the cookie story
+
+When your frontend wants the browser to send cookies / auth tokens cross-origin:
+
+```js
+// Client (browser):
+fetch("https://api.jbeditor.com/users", {
+  credentials: "include",         // ← cookies are sent
+});
+```
+
+The server side requires THREE pieces:
+
+```js
+app.use(cors({
+  origin: ["https://app.jbeditor.com"],   // explicit origin, NOT "*"
+  credentials: true,                       // ← announce credentials allowed
+}));
+```
+
+And in the response from your auth endpoints, set cookies with attributes that let them cross domains:
+
+```js
+res.cookie("session", sessionId, {
+  httpOnly: true,
+  secure:   true,
+  sameSite: "none",     // ← required for cross-origin cookies
+  domain:   ".jbeditor.com",  // ← cookie usable across *.jbeditor.com
+});
+```
+
+`sameSite: "none"` is the cross-origin one. `lax` (the default) blocks the cookie from being sent on cross-origin POSTs. `strict` blocks cross-origin entirely.
+
+### When you don't need CORS at all
+
+Two cases that bypass CORS:
+
+- **Same-origin requests.** If your frontend is served from `/app` on the same domain as your API at `/api`, no CORS. Your fetch URL is `/api/users` (relative), the browser doesn't tag it as cross-origin.
+
+- **Server-to-server.** Anything not going through a browser (Node.js fetches, your API calling another API, curl, mobile apps) isn't subject to CORS. They go straight through.
+
+If your architecture lets you put the frontend and API behind the same domain (often via a reverse proxy), you can sidestep CORS entirely. Many production setups do this for the main app and use CORS only for public APIs.
+
+### CORS for desktop / mobile / native apps
+
+Native apps don't have a "page origin" the same way browsers do. WebView2 (what Wails uses) sends an Origin header — but the value is implementation-specific. We saw this in JEditor: WebView2 might send `https://wails.localhost` or `null` depending on the version and config.
+
+Approaches:
+
+1. **Allowlist the specific WebView origin** in your `cors()` config (we have `https://wails.localhost` and a few variants for JEditor).
+2. **Make selected endpoints (like `/api/health`) CORS-public** with `Access-Control-Allow-Origin: *`.
+3. **Native apps bypass CORS entirely** when not using a webview — a raw Swift or Kotlin HTTP client doesn't care about CORS. Only browser-based clients do.
+
+For desktop apps using a webview: lean on (1) and (2). For pure native: don't worry about CORS — it's not in play.
+
+### The reality check
+
+CORS is famously misunderstood. Two clarifications that save hours:
+
+- **CORS is not security against malicious requests.** It's a browser-side check. Any attacker can curl your API; CORS doesn't stop them. CORS stops a *different* attack: a malicious site (say `evil.com`) trying to make a *user's browser* make authenticated requests to your API on the user's behalf (so cookies / tokens get sent). That's CSRF + cross-origin abuse, and CORS is one layer of defense against it. The actual auth happens in your `requireAuth` middleware.
+
+- **CORS errors are server configuration errors, not security improvements.** A "CORS error" in DevTools doesn't mean a bad guy was blocked — it means a legitimate request was blocked because the server's policy didn't include the calling origin. Fix the server config to match the calling origin (after confirming the call is legitimate).
+
+<ExampleProject
+  src="preflight-trace"
+  title="Watch a CORS preflight succeed (and fail)"
+  description="Toggle scenarios — same-origin, allowed cross-origin, disallowed origin, missing header, credentials with wildcard. Each shows the OPTIONS request the browser sends, the server response, and whether the browser allows the actual request through. Pin this open the first time CORS bites you."
+/>
+
+<Exercise
+  title="Wire CORS for a frontend + backend split"
+  starter={`Continue from the Express + Prisma + JWT API. Get it speaking with
+a real React frontend across origins.
+
+  1. Install cors:
+       npm install cors
+
+  2. In src/server.js, register CORS BEFORE all other middleware that
+     might reject the preflight:
+       app.use(cors({
+         origin: ["http://localhost:5173", "https://app.jbeditor.com"],
+         credentials: true,
+         allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+         maxAge: 86400,
+       }));
+
+  3. Spin up a quick React frontend (or use any existing one) on
+     localhost:5173. Have it fetch your API:
+       const res = await fetch("http://localhost:3000/api/posts", {
+         headers: { "Authorization": \`Bearer \${token}\` },
+       });
+       const data = await res.json();
+
+  4. Open the React app + DevTools Network tab. You should see TWO
+     requests per API call:
+       OPTIONS http://localhost:3000/api/posts → 204
+       GET     http://localhost:3000/api/posts → 200
+
+     If you see only the OPTIONS (and a CORS error in the console),
+     check which response header is missing. The error message tells
+     you.
+
+  5. Try removing your frontend's origin from the allowlist. Reload.
+     The browser blocks. Add it back. Refresh. Works.
+
+  6. Temporary stunt — change credentials to false and try to send
+     a cookie. The browser strips it. Switch back to true and
+     ensure cookies arrive on the server (req.cookies).
+
+  7. Set up the production env vars:
+       CORS_ORIGINS=https://app.jbeditor.com,https://www.jbeditor.com
+     Parse in env.js (z.string().transform(s => s.split(','))).
+     Now production locks down to your real domain; dev allows
+     localhost via the dev env file.
+
+  8. Bonus — open DevTools, hit the network tab, change the request
+     headers manually to remove the Authorization header. The CORS
+     preflight should adjust automatically (browser computes the
+     Access-Control-Request-Headers list from the actual request
+     headers).
+
+You now know the full CORS dance: same-origin (no CORS), cross-origin
+simple (no preflight), cross-origin preflighted (OPTIONS first), and
+the credentials variant. Most CORS bugs become 30-second fixes once
+you can read the OPTIONS response in the Network tab.`}
+/>

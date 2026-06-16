@@ -1,5 +1,5 @@
 {
-  "version": 19,
+  "version": 20,
   "phases": [
     {
       "id": "phase-01",
@@ -124,10 +124,10 @@
         { "slug": "phase-04/rest-endpoints", "title": "Building REST endpoints", "available": true },
         { "slug": "phase-04/express-postgres", "title": "Postgres + Prisma in an Express API", "available": true },
         { "slug": "phase-04/env-config", "title": "Environment config and dotenv", "available": true },
-        { "slug": "phase-04/jwt-sessions", "title": "Authentication with JWT and sessions", "available": false },
-        { "slug": "phase-04/authorization", "title": "Authorization and protected routes", "available": false },
-        { "slug": "phase-04/input-validation", "title": "Input validation and error handling", "available": false },
-        { "slug": "phase-04/cors", "title": "CORS explained", "available": false },
+        { "slug": "phase-04/jwt-sessions", "title": "Authentication with JWT and sessions", "available": true },
+        { "slug": "phase-04/authorization", "title": "Authorization and protected routes", "available": true },
+        { "slug": "phase-04/input-validation", "title": "Input validation and error handling", "available": true },
+        { "slug": "phase-04/cors", "title": "CORS explained", "available": true },
         { "slug": "phase-04/separate-frontend-backend", "title": "Connecting a separate frontend to Express", "available": false },
         { "slug": "phase-04/milestone-standalone-api", "title": "Milestone: Standalone Express API", "available": false }
       ]

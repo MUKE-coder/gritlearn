@@ -1,0 +1,210 @@
+<!--
+  CORS preflight scenarios. Pick a scenario — same-origin, allowed
+  cross-origin, disallowed origin, missing header, credentials-with-
+  wildcard — and see the OPTIONS preflight request + server response
+  step by step, then whether the browser allows the actual request.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CORS preflight — when it works, when it doesn't</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .scenarios { display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 1rem 0; }
+      .scenarios button {
+        padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.8rem; text-align: left;
+      }
+      .scenarios button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.76rem;
+        line-height: 1.55; margin: 0 0 0.6rem; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .header  { color: #c084fc; }
+      .ok      { color: #4ade80; }
+      .fail    { color: #f87171; }
+
+      .step {
+        margin: 0.4rem 0; padding: 0.55rem 0.85rem; background: #fff;
+        border-radius: 4px; border: 1px solid #e4e4e7; font-size: 0.85rem;
+      }
+      .step.ok   { border-left: 3px solid #16a34a; background: #ecfdf5; color: #166534; }
+      .step.fail { border-left: 3px solid #dc2626; background: #fee2e2; color: #7f1d1d; }
+      .step.skip { border-left: 3px solid #71717a; background: #f4f4f5; color: #52525b; }
+
+      .verdict {
+        margin-top: 0.7rem; padding: 0.85rem 1rem; border-radius: 8px;
+        font-size: 0.92rem; font-weight: 600;
+      }
+      .verdict.allow { background: #dcfce7; color: #166534; }
+      .verdict.deny  { background: #fee2e2; color: #7f1d1d; }
+      .verdict.skip  { background: #fef3c7; color: #92400e; }
+    </style>
+  </head>
+  <body>
+    <h1>CORS preflight — when it works, when it doesn't</h1>
+    <p>Pick a scenario to see what the browser sends, what the server returns, and whether the actual request gets through.</p>
+
+    <div class="scenarios" id="scenarios">
+      <button data-id="same-origin"        class="active">Same-origin GET (no CORS at all)</button>
+      <button data-id="cross-origin-ok">Cross-origin, allowlist match</button>
+      <button data-id="origin-not-allowed">Origin not on allowlist</button>
+      <button data-id="header-missing">Custom header not in Allow-Headers</button>
+      <button data-id="creds-with-wildcard">credentials: true + Allow-Origin: *</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>1 — Browser sends preflight (if needed)</h2>
+        <pre id="preflight-req"></pre>
+
+        <h2>2 — Server responds</h2>
+        <pre id="preflight-res"></pre>
+      </div>
+      <div class="col">
+        <h2>3 — Browser checks the response</h2>
+        <div id="checks"></div>
+
+        <h2 style="margin-top: 0.6rem;">4 — Actual request</h2>
+        <div id="actual"></div>
+      </div>
+    </div>
+
+    <script>
+      const scenarios = {
+        "same-origin": {
+          preflight: null,                 // no preflight at all
+          preflightRes: null,
+          checks: [
+            { kind: "skip", text: "No CORS check — same origin. Browser doesn't send a preflight; the request goes directly." },
+          ],
+          actual: { kind: "skip", text: "GET fires immediately. No 'Origin' header. Server responds 200. End." },
+        },
+
+        "cross-origin-ok": {
+          preflight:
+`<span class="comment">// From https://app.jbeditor.com to https://api.jbeditor.com</span>
+<span class="keyword">OPTIONS</span> /api/posts <span class="comment">HTTP/1.1</span>
+<span class="header">Origin:</span> https://app.jbeditor.com
+<span class="header">Access-Control-Request-Method:</span> POST
+<span class="header">Access-Control-Request-Headers:</span> content-type, authorization`,
+          preflightRes:
+`<span class="comment">HTTP/1.1 204 No Content</span>
+<span class="header">Access-Control-Allow-Origin:</span> <span class="ok">https://app.jbeditor.com</span>
+<span class="header">Access-Control-Allow-Methods:</span> <span class="ok">GET, POST, PATCH, DELETE, OPTIONS</span>
+<span class="header">Access-Control-Allow-Headers:</span> <span class="ok">Content-Type, Authorization</span>
+<span class="header">Access-Control-Allow-Credentials:</span> true
+<span class="header">Vary:</span> Origin`,
+          checks: [
+            { kind: "ok", text: "Origin matches ACAO header → ✓" },
+            { kind: "ok", text: "POST is in Allow-Methods → ✓" },
+            { kind: "ok", text: "All requested headers are in Allow-Headers → ✓" },
+          ],
+          actual: { kind: "allow", text: "Browser sends the actual POST. Server responds 201. Frontend gets the data." },
+        },
+
+        "origin-not-allowed": {
+          preflight:
+`<span class="comment">// From https://evil.com (not on the allowlist)</span>
+<span class="keyword">OPTIONS</span> /api/posts <span class="comment">HTTP/1.1</span>
+<span class="header">Origin:</span> https://evil.com
+<span class="header">Access-Control-Request-Method:</span> POST
+<span class="header">Access-Control-Request-Headers:</span> content-type, authorization`,
+          preflightRes:
+`<span class="comment">HTTP/1.1 204 No Content</span>
+<span class="comment">// Server's CORS middleware checks allowlist: 'https://evil.com' not in it.</span>
+<span class="comment">// Access-Control-Allow-Origin header is OMITTED entirely.</span>
+<span class="header">Access-Control-Allow-Methods:</span> GET, POST, PATCH, DELETE, OPTIONS
+<span class="header">Access-Control-Allow-Headers:</span> Content-Type, Authorization`,
+          checks: [
+            { kind: "fail", text: "Browser looks for Access-Control-Allow-Origin in the response → NOT PRESENT. CORS check fails." },
+          ],
+          actual: { kind: "deny", text: "Browser REFUSES to send the actual POST. JS sees a network error in the catch. DevTools console: 'No Access-Control-Allow-Origin header'." },
+        },
+
+        "header-missing": {
+          preflight:
+`<span class="comment">// From https://app.jbeditor.com, sending Idempotency-Key</span>
+<span class="keyword">OPTIONS</span> /api/posts <span class="comment">HTTP/1.1</span>
+<span class="header">Origin:</span> https://app.jbeditor.com
+<span class="header">Access-Control-Request-Method:</span> POST
+<span class="header">Access-Control-Request-Headers:</span> content-type, authorization, <span class="fail">idempotency-key</span>`,
+          preflightRes:
+`<span class="comment">HTTP/1.1 204 No Content</span>
+<span class="header">Access-Control-Allow-Origin:</span> https://app.jbeditor.com
+<span class="header">Access-Control-Allow-Methods:</span> GET, POST, PATCH, DELETE, OPTIONS
+<span class="header">Access-Control-Allow-Headers:</span> <span class="fail">Content-Type, Authorization</span>
+<span class="comment">// NOTE: Idempotency-Key is NOT in the list.</span>`,
+          checks: [
+            { kind: "ok", text: "Origin matches → ✓" },
+            { kind: "ok", text: "POST is in Allow-Methods → ✓" },
+            { kind: "fail", text: "Browser scans Access-Control-Request-Headers for each requested header. 'idempotency-key' is NOT in Allow-Headers → ✗" },
+          ],
+          actual: { kind: "deny", text: "Browser REFUSES to send the actual POST. This is the JEditor v0.4.0 bug exactly — the desktop's axios added Idempotency-Key, the server's CORS middleware didn't list it, browser killed the POST silently. Symptom: OPTIONS in the API logs, then nothing." },
+        },
+
+        "creds-with-wildcard": {
+          preflight:
+`<span class="comment">// From https://app.jbeditor.com, fetch({ credentials: 'include' })</span>
+<span class="keyword">OPTIONS</span> /api/posts <span class="comment">HTTP/1.1</span>
+<span class="header">Origin:</span> https://app.jbeditor.com
+<span class="header">Access-Control-Request-Method:</span> POST`,
+          preflightRes:
+`<span class="comment">HTTP/1.1 204 No Content</span>
+<span class="header">Access-Control-Allow-Origin:</span> <span class="fail">*</span>
+<span class="header">Access-Control-Allow-Credentials:</span> <span class="fail">true</span>
+<span class="header">Access-Control-Allow-Methods:</span> GET, POST, PATCH, DELETE, OPTIONS
+<span class="header">Access-Control-Allow-Headers:</span> Content-Type, Authorization
+<span class="comment">// NOTE: cannot combine '*' with credentials: true.</span>`,
+          checks: [
+            { kind: "fail", text: "credentials mode is 'include' AND Access-Control-Allow-Origin === '*'. Browser refuses — '*' is not allowed when credentials are sent." },
+          ],
+          actual: { kind: "deny", text: "Browser blocks. Fix: echo the specific origin back, not '*'. Example: app.use(cors({ origin: 'https://app.jbeditor.com', credentials: true }))." },
+        },
+      };
+
+      function show(id) {
+        const s = scenarios[id];
+        document.querySelectorAll(".scenarios button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+
+        if (s.preflight === null) {
+          document.getElementById("preflight-req").innerHTML = `<span class="comment">// No preflight — same origin or simple request.</span>`;
+          document.getElementById("preflight-res").innerHTML = `<span class="comment">// (nothing to send)</span>`;
+        } else {
+          document.getElementById("preflight-req").innerHTML = s.preflight;
+          document.getElementById("preflight-res").innerHTML = s.preflightRes;
+        }
+
+        document.getElementById("checks").innerHTML = s.checks.map(c => `
+          <div class="step ${c.kind}">${c.text}</div>
+        `).join("");
+
+        document.getElementById("actual").innerHTML =
+          `<div class="verdict ${s.actual.kind}">${s.actual.text}</div>`;
+      }
+
+      document.getElementById("scenarios").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        show(b.dataset.id);
+      });
+
+      show("same-origin");
+    </script>
+  </body>
+</html>

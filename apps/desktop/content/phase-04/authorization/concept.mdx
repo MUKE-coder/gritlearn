@@ -1,0 +1,333 @@
+## Authorization and protected routes
+
+Authentication answered "who are you?" Authorization answers "**are you allowed to do this?**" The two questions are different and they live in different parts of your code. Mixing them up — letting any authenticated user delete any other user's posts, for example — is one of the most common production security bugs.
+
+This concept covers the patterns: gating routes by role, checking ownership, building a permissions module that the whole app can call.
+
+<Analogy>
+Authorization is **the layered access in a hotel.**
+
+You check in at the front desk. They verify your ID, hand you a keycard — that's authentication. Done.
+
+Now you walk through the hotel. The keycard does different things at different doors:
+
+- **The front lobby** — wide open. Anyone can walk in.
+- **Your room** — your keycard works. Other guests' cards don't.
+- **The gym** — your keycard works (you're a paying guest).
+- **The conference room** — only works if you're attending the event.
+- **The penthouse floor** — only works if you booked the penthouse.
+- **The staff-only laundry room** — never works for guests.
+
+The same keycard, at different doors, gets different verdicts. The verdict depends on **who you are** (the keycard identity) and **what you're trying to do** (which door). The hotel runs a permission check at every door, not just at the front desk.
+
+In code, this becomes a small set of patterns:
+
+- **Role gates**: `requireRole("admin")` for entire URL trees. Front desk hands out three keycard colors (guest, staff, manager); the door checks the color.
+- **Ownership checks**: "the post you're trying to delete must be a post YOU wrote." The room key only opens *your* room, not the one next door.
+- **Permission functions**: `can(user, "edit", post)` — a single function the rest of the codebase calls when in doubt. Centralises the policy.
+
+Three rules:
+
+1. **Auth checks always run on the server.** A "delete" button hidden in the UI is not security — it's just UX. The check that prevents the actual delete runs in the server handler, every time, no exceptions.
+
+2. **Default to deny.** When you write a new endpoint, assume nobody can hit it. Then add explicit allows. The opposite ("public until I add a gate") leaves you vulnerable while you're still iterating.
+
+3. **Return 404, not 403, when you don't want to reveal that a resource exists.** If a non-admin tries to view an admin-only resource, returning 403 confirms the URL exists. Returning 404 hides the existence — they can't tell the difference between "doesn't exist" and "you can't see it." Important for ops/admin URLs.
+</Analogy>
+
+### Role-based gates — `requireRole`
+
+Most authorization starts here. Roles are coarse but fast:
+
+```js
+// src/middleware/auth.js
+export function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: { code: "NO_AUTH", message: "Not authenticated" } });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not allowed" } });
+    }
+    next();
+  };
+}
+```
+
+Use it after `requireAuth` (which sets `req.user`):
+
+```js
+import { requireAuth, requireRole } from "../middleware/auth.js";
+
+// Whole admin router:
+const adminRouter = Router();
+adminRouter.use(requireAuth, requireRole("admin"));
+adminRouter.get("/users",        listAllUsers);
+adminRouter.patch("/users/:id",  forceUpdateUser);
+
+// Single route:
+postsRouter.delete("/:id/force",
+  requireAuth,
+  requireRole("admin", "moderator"),
+  forceDeletePost,
+);
+```
+
+The factory pattern `requireRole(...allowed)` returns the actual middleware. Lets you parameterize without writing one middleware per role combo.
+
+Common role hierarchies:
+
+- **`user`, `admin`** — minimal.
+- **`viewer`, `editor`, `admin`** — read-only / can-modify / can-modify-anything.
+- **`student`, `instructor`, `tenant_admin`, `system_admin`** — multi-tenant SaaS.
+
+The role lives on the user record (`User.role` column). It rides along in the JWT payload so middleware can check it without a DB call.
+
+### Ownership checks — the most common kind
+
+Role gates don't cover "users can edit *their own* posts." That's an **ownership check** — the user has permission *because they own the resource*. Always inside the handler, after loading the resource:
+
+```js
+postsRouter.patch("/:id", requireAuth, async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: Number(req.params.id) } });
+  if (!post) return res.status(404).json({ error: { code: "NOT_FOUND" } });
+
+  if (post.authorId !== Number(req.user.id)) {
+    // Important: 404 not 403. Don't reveal that the post exists.
+    return res.status(404).json({ error: { code: "NOT_FOUND" } });
+  }
+
+  const updated = await db.post.update({ where: { id: post.id }, data: req.body });
+  res.json({ data: updated });
+});
+```
+
+Three patterns to internalize:
+
+1. **Load → check → mutate.** Never trust client-supplied IDs without verifying ownership against the loaded record.
+
+2. **The 404-not-403 trick.** Returning 403 leaks the existence of the row. Use 404 unless the consumer specifically needs to know "this exists but you can't have it."
+
+3. **Scope at the query, when you can.** Sometimes you can roll the ownership check into the query itself:
+
+   ```js
+   const post = await db.post.findFirst({
+     where: { id: Number(req.params.id), authorId: req.user.id },
+   });
+   if (!post) return res.status(404).json({ error: "Not found" });
+   ```
+
+   One DB call instead of two. The query returns `null` if either the post doesn't exist *or* the user isn't the owner — both map to 404. Clean.
+
+### Permission modules — `can(user, action, resource)`
+
+Beyond a handful of role + ownership checks, the policy logic gets tangled. The cleanest pattern is a **dedicated permissions module**:
+
+```js
+// src/lib/permissions.js
+
+// Pure functions. No DB calls — all the data they need
+// comes in as arguments. Easy to test in isolation.
+export function canEditPost(user, post) {
+  if (!user) return false;
+  if (user.role === "admin")        return true;
+  if (user.role === "moderator")    return true;
+  if (post.authorId === user.id)    return true;
+  return false;
+}
+
+export function canDeletePost(user, post) {
+  // Only admins + post authors. NOT moderators.
+  if (!user) return false;
+  if (user.role === "admin")        return true;
+  if (post.authorId === user.id)    return true;
+  return false;
+}
+
+export function canPublishPost(user, post) {
+  return canEditPost(user, post) && !!user.emailVerifiedAt;
+}
+```
+
+In handlers:
+
+```js
+import { canEditPost, canDeletePost } from "../lib/permissions.js";
+
+postsRouter.patch("/:id", requireAuth, async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: Number(req.params.id) } });
+  if (!post) return res.status(404).json({ error: "Not found" });
+
+  if (!canEditPost(req.user, post)) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const updated = await db.post.update({ where: { id: post.id }, data: req.body });
+  res.json({ data: updated });
+});
+```
+
+Now the policy ("moderators can edit any post but only admins + authors can delete") lives in ONE FILE. When marketing asks "can we add a 'pro user' role that can edit but not delete?" you change three functions, run the tests, ship. Without a permissions module, you'd be grepping the codebase for every `if (user.role === ...)` check.
+
+### When the permission depends on the database
+
+Some checks can't be pure. "Can this user comment on this post?" might depend on whether the post's author has blocked them. That's a DB lookup.
+
+Two ways to handle this:
+
+```js
+// Approach A: separate function for the async check.
+export async function canCommentOnPost(user, post) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+
+  const blocked = await db.block.findFirst({
+    where: { blockerId: post.authorId, blockedId: user.id },
+  });
+  return !blocked;
+}
+
+// In the handler:
+if (!(await canCommentOnPost(req.user, post))) {
+  return res.status(404).json({ error: "Not found" });
+}
+```
+
+```js
+// Approach B: pull the data in the handler, pass to a pure function.
+const blocked = await db.block.findFirst({
+  where: { blockerId: post.authorId, blockedId: req.user.id },
+});
+if (!canCommentOnPost(req.user, post, { blocked })) {
+  return res.status(404).json({ error: "Not found" });
+}
+```
+
+Approach B is cleaner for testing because `canCommentOnPost` stays pure. Approach A is easier to write. Pick one and be consistent.
+
+### Multi-tenant gates — every resource belongs to a tenant
+
+If your API serves multiple organisations, every resource has a `tenantId` and every query has to be scoped:
+
+```js
+postsRouter.get("/", requireAuth, async (req, res) => {
+  const posts = await db.post.findMany({
+    where: { tenantId: req.user.tenantId },   // ← MUST be on every query
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ data: posts });
+});
+```
+
+Forgetting this on one endpoint = a critical security bug (one tenant sees another's data). To make it harder to forget:
+
+- **Wrap your Prisma client** with a tenant-scoped version that auto-injects `tenantId`.
+- **Use Prisma's row-level security** (Postgres RLS, supported via Prisma's `$extends`).
+- **Code review checklist**: every query must have an obvious tenant scope.
+
+Multi-tenancy is a deep topic. The takeaway: it's authorization-shaped, not authentication-shaped, and you handle it at the query layer.
+
+### Common authorization bugs in production
+
+The ones that show up in security audits:
+
+1. **IDOR (Insecure Direct Object Reference)** — `/api/orders/47` returns user 12's order to user 99 because the handler doesn't check ownership. The fix is the load → check → mutate pattern.
+
+2. **Missing role check on write endpoints** — `POST /api/admin/users` happens to work for anyone because the handler forgot to register `requireRole("admin")`. The fix: default-deny + always test the negative case.
+
+3. **Privilege escalation via field manipulation** — `PATCH /api/users/me` lets the user update their own profile, but the handler does `db.user.update({ data: req.body })` and the user sends `{ role: "admin" }` in the body. The fix: validate the allowed fields explicitly with a Zod schema.
+
+4. **Trusting client-side hiding** — the React app doesn't show the delete button to non-owners, but the server endpoint doesn't check ownership. Fix: server-side check, always.
+
+5. **Refresh-token replay** — a logout endpoint clears the access token but doesn't invalidate the refresh token. An attacker who stole the refresh token can mint new access tokens forever. Fix: store the refresh token (or its hash) in the DB; delete on logout.
+
+Most of these are caught by writing the negative test: "an unauthenticated request should fail," "a non-owner request should fail," "a non-admin request should fail." Three test cases per protected endpoint — boring but unmissable.
+
+### Auditing — log who did what
+
+For sensitive operations (deletes, role changes, payment changes), log to a separate audit table:
+
+```js
+async function deletePost(req, res) {
+  const post = await db.post.findUnique({ where: { id: Number(req.params.id) } });
+  if (!canDeletePost(req.user, post)) return res.status(404).json({ error: "Not found" });
+
+  await db.$transaction([
+    db.post.delete({ where: { id: post.id } }),
+    db.auditLog.create({
+      data: {
+        actorId:  Number(req.user.id),
+        action:   "post.delete",
+        resource: `post:${post.id}`,
+        metadata: { title: post.title },
+      },
+    }),
+  ]);
+
+  res.status(204).end();
+}
+```
+
+When something goes wrong later — accidental deletion, suspicious admin activity — the audit log is the ground truth. Wrap the action + the audit insert in a Prisma `$transaction` so either both happen or neither does.
+
+<ExampleProject
+  src="permission-matrix"
+  title="Who can do what — interactive policy"
+  description="Click a (user role, action, resource owner) combination and see the can() function trace through to a yes/no. Visualises the layered checks (role → ownership → email verification → tenant) that real authorization policies stack."
+/>
+
+<Exercise
+  title="Build the permission layer for your posts API"
+  starter={`Continue from the JWT-auth API you built in the previous concept.
+
+  1. Add a 'role' column to User (default 'user'). Update your
+     Zod schema for User registration to NOT allow role — it
+     defaults to 'user' and only admins can promote.
+
+  2. Create src/lib/permissions.js with three pure functions:
+       canViewPost(user, post)
+         - Public if post.published === true
+         - Otherwise only the author or admin
+       canEditPost(user, post)
+         - Author or admin
+       canDeletePost(user, post)
+         - Author or admin (no moderators in this brief)
+
+  3. Apply each:
+       GET    /api/posts/:id    → load post, if !canViewPost, 404.
+       PATCH  /api/posts/:id    → load, if !canEditPost, 404.
+       DELETE /api/posts/:id    → load, if !canDeletePost, 404.
+
+  4. Add an admin-only endpoint:
+       PATCH /api/admin/users/:id/role
+         body: { role: "user" | "admin" }
+       gated by requireRole("admin"). Returns 403 to non-admins
+       (here 403 is fine — the route's existence isn't sensitive).
+
+  5. Manually set your own user's role to 'admin' via Prisma Studio
+     (npx prisma studio → User → role → admin → save). Sign in
+     again and try:
+       - PATCH /api/admin/users/2/role { role: "admin" } → should
+         work for you, return 403 for non-admins.
+       - PATCH another user's post → should 404 (not your post,
+         not admin... wait, you ARE admin now, so it works). Try
+         with a non-admin token → 404.
+
+  6. Add an audit log:
+       Add model AuditLog { id, actorId, action, resource, metadata, createdAt }
+       Wrap delete + role change in a $transaction with the audit
+       insert. Verify rows appear in the audit table on every
+       sensitive action.
+
+  7. Write the negative tests:
+     - Unauthenticated requests to write endpoints → 401
+     - Authenticated non-owner non-admin requests to PATCH → 404
+     - Non-admin to admin endpoint → 403
+     Three Vitest tests minimum. They'll catch every future
+     authorization regression.
+
+By the end you have role-based access, ownership checks, a centralized
+permissions module, and audit logging. That's the auth layer of a
+real production REST API. Next concept covers input validation +
+error handling, which closes the loop on the input boundary.`}
+/>

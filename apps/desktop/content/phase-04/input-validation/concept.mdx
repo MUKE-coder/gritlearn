@@ -1,0 +1,472 @@
+## Input validation and error handling
+
+Every byte of data that arrives at your API is *untrusted* until proven otherwise. A request body, a URL parameter, a query string, a header — all of it came from someone you can't vouch for. The handler that takes those bytes and reaches into the database doesn't get to assume the shape is right, the types are right, or the values are sane.
+
+Phase 3 introduced Zod for this. Phase 4 is where it becomes a *system*: a single validation pattern applied to every untrusted input, paired with a single error-handling shape so the client always knows what to do.
+
+<Analogy>
+Input validation is **the customs desk at every border crossing into your country.**
+
+A traveler walks up with a backpack. The customs officer doesn't say "you say you don't have anything illegal, fine, go through." They open the bag. They check the documents. They verify the dates. They sometimes confiscate something the traveler didn't realise was banned. The traveler may have entered hundreds of countries without issue — every country still checks, every time. The check is the whole point.
+
+If customs trusted the labels on the bag — "this bag declared as 'clothes only'" — the whole system would collapse. Trust is given AFTER verification, not before.
+
+Your Express handler is the country's interior. The customs desk is your validation layer:
+
+- **Every entry point checks.** Every route handler that touches `req.body`, `req.query`, `req.params`, or `req.headers` validates first, no exceptions.
+- **The check is declarative.** You write the rule once (a Zod schema) and the framework either passes or rejects.
+- **Rejections give a precise reason.** "Your passport expires in 2 days; valid passports must have 6 months remaining" — not "invalid passport." A useful error tells the client exactly what to fix.
+- **The validated input is the only thing the handler sees.** After customs, the traveler's bag is the bag they declared. After validation, `req.body` is the *parsed* (and possibly defaulted, transformed) data, not the raw client payload.
+
+Errors are the customs officer's job too. When a request is bad, you don't crash the whole airport. You hand the traveler a stamped denial slip — a structured error response with a code, a message, and (optionally) the specific field that's wrong. The client uses that to display a useful error to the user.
+
+Two halves to the system:
+
+1. **Validation** at the request boundary. Zod schemas + a `zodValidate(schema)` middleware factory.
+2. **Error handling** at the response boundary. One error-shaped middleware that catches every throw and emits a consistent `{ error: { code, message, details } }`.
+
+You'll write each piece once and reuse them everywhere.
+</Analogy>
+
+### The Zod validation factory — one middleware for every endpoint
+
+You met this pattern in the `middleware` concept; now make it the universal shape:
+
+```js
+// src/middleware/validate.js
+import { ZodError } from "zod";
+
+/**
+ * Validate one part of the request (body/query/params/headers) against
+ * a Zod schema. On success, REPLACES req[target] with the parsed data
+ * (so defaults are applied, coercions happen, and downstream handlers
+ * see the exact shape the schema declares — not the raw client input).
+ * On failure, responds 400 with the formatted Zod errors.
+ */
+export function zodValidate(schema, target = "body") {
+  return (req, res, next) => {
+    const result = schema.safeParse(req[target]);
+    if (!result.success) {
+      return res.status(400).json({
+        error: {
+          code:    "VALIDATION_ERROR",
+          message: "Request did not match the expected shape",
+          target,
+          details: formatZodIssues(result.error),
+        },
+      });
+    }
+    req[target] = result.data;
+    next();
+  };
+}
+
+// formatZodIssues turns Zod's nested error tree into a flat array of
+// { path, message } objects that's easy for clients to display.
+function formatZodIssues(err) {
+  if (!(err instanceof ZodError)) return [{ message: String(err) }];
+  return err.issues.map((iss) => ({
+    path:    iss.path.join("."),
+    code:    iss.code,
+    message: iss.message,
+  }));
+}
+```
+
+In a route:
+
+```js
+import { z } from "zod";
+import { zodValidate } from "../middleware/validate.js";
+
+const CreatePostSchema = z.object({
+  title:     z.string().min(1).max(200),
+  body:      z.string().optional().default(""),
+  published: z.boolean().optional().default(false),
+  tags:      z.array(z.string().min(1).max(40)).max(10).optional(),
+});
+
+postsRouter.post("/",
+  requireAuth,
+  zodValidate(CreatePostSchema),
+  async (req, res) => {
+    // req.body is now { title, body, published, tags } — typed,
+    // validated, defaults applied. No need to defensive-check.
+    const post = await db.post.create({
+      data: { ...req.body, authorId: req.user.id },
+    });
+    res.status(201).json({ data: post });
+  },
+);
+```
+
+Three things this gives you:
+
+1. **One line of validation per route.** No defensive `if (!req.body.title)` checks polluting the handler.
+2. **Consistent error shape.** Every failed validation looks the same to the client.
+3. **The handler is pure.** Given valid input, it does its job. Given invalid input, the middleware short-circuits before the handler runs.
+
+### Validating each part of the request
+
+The same factory works for any source — `body`, `query`, `params`, `headers`:
+
+```js
+const ListSchema = z.object({
+  page:  z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  q:     z.string().optional(),
+  status: z.enum(["open", "closed", "all"]).default("all"),
+});
+
+postsRouter.get("/",
+  zodValidate(ListSchema, "query"),
+  async (req, res) => {
+    // req.query.page is now a NUMBER (coerced from string), defaulted.
+    // req.query.limit is clamped to <= 100.
+    // req.query.status is one of the three enum values, defaulted.
+    const where = {};
+    if (req.query.status !== "all") where.status = req.query.status;
+    if (req.query.q) where.title = { contains: req.query.q, mode: "insensitive" };
+
+    const [data, total] = await Promise.all([
+      db.post.findMany({ where, take: req.query.limit, skip: (req.query.page - 1) * req.query.limit }),
+      db.post.count({ where }),
+    ]);
+    res.json({ data, meta: { page: req.query.page, limit: req.query.limit, total } });
+  },
+);
+```
+
+Query strings arrive as *strings* — `z.coerce.number()` parses them into numbers. `z.enum()` rejects anything not in the list. `default()` fills missing values.
+
+Same for URL params:
+
+```js
+const IdParam = z.object({ id: z.coerce.number().int().positive() });
+
+postsRouter.get("/:id",
+  zodValidate(IdParam, "params"),
+  async (req, res) => {
+    // req.params.id is now a positive integer.
+    const post = await db.post.findUnique({ where: { id: req.params.id } });
+    // ...
+  },
+);
+```
+
+The same pattern, three contexts.
+
+### Common Zod schemas you'll reuse
+
+A starter set worth pulling into `src/lib/schemas.js`:
+
+```js
+import { z } from "zod";
+
+export const Pagination = z.object({
+  page:  z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const IdParam = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+export const Email = z.string().email().toLowerCase().max(254);
+
+export const Password = z.string().min(8, "At least 8 characters").max(128);
+
+export const Slug = z.string()
+  .regex(/^[a-z0-9-]+$/, "lowercase letters, numbers, hyphens only")
+  .min(1).max(80);
+
+export const Timestamp = z.string().datetime();
+```
+
+Now route schemas compose:
+
+```js
+const CreateUserSchema = z.object({
+  email:    Email,
+  password: Password,
+  name:     z.string().min(1).max(100),
+});
+```
+
+Reusing primitives means email-format rules live in one place. Update them once; every endpoint gets the new rule.
+
+### Errors at the response boundary — one middleware to rule them all
+
+A handler that throws should produce the same response shape as a handler that returns an error directly. Centralise via an error middleware:
+
+```js
+// src/middleware/error.js
+import { ZodError } from "zod";
+import { Prisma } from "@prisma/client";
+
+export class HttpError extends Error {
+  constructor(status, code, message, details) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function errorHandler(err, req, res, next) {
+  // 1. Our own HttpError class — direct map.
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({
+      error: { code: err.code, message: err.message, details: err.details },
+    });
+  }
+
+  // 2. Zod error that escaped the validate middleware (e.g. thrown
+  //    inside the handler from a manual schema.parse).
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid input",
+        details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      },
+    });
+  }
+
+  // 3. Prisma errors with stable codes.
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: { code: "DUPLICATE", message: "Already exists" } });
+    }
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } });
+    }
+    if (err.code === "P2003") {
+      return res.status(400).json({ error: { code: "FK_VIOLATION", message: "Referenced record does not exist" } });
+    }
+  }
+
+  // 4. Anything else — log and emit a generic 500.
+  console.error("[unhandled]", err);
+  res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+}
+```
+
+In your server bootstrap, register error middleware **last**:
+
+```js
+app.use(postsRouter);
+app.use(authRouter);
+
+// 404 for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
+});
+
+app.use(errorHandler);
+```
+
+Now any handler can do:
+
+```js
+import { HttpError } from "../middleware/error.js";
+
+app.get("/api/posts/:id", async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: Number(req.params.id) } });
+  if (!post) {
+    throw new HttpError(404, "NOT_FOUND", "Post not found");
+  }
+  if (!canView(req.user, post)) {
+    throw new HttpError(404, "NOT_FOUND", "Post not found");  // intentionally same shape
+  }
+  res.json({ data: post });
+});
+```
+
+The middleware turns the `throw` into a JSON 404. No per-handler try/catch noise. The handler reads like business logic.
+
+### Async errors — Express 5 catches them automatically
+
+In Express 4, throws inside `async` handlers escape past the middleware. You had to wrap with `express-async-errors` or use try/catch.
+
+In Express 5 (the default in 2026), thrown errors in async handlers are automatically routed to the error middleware. Use Express 5.
+
+### The standard response shape
+
+Sticking to one shape pays off forever. The convention this curriculum uses:
+
+```json
+// Success
+{ "data": { ... } }
+{ "data": [ ... ], "meta": { "page": 1, "limit": 20, "total": 47 } }
+
+// Error
+{
+  "error": {
+    "code":    "VALIDATION_ERROR",
+    "message": "Request did not match the expected shape",
+    "target":  "body",
+    "details": [
+      { "path": "title", "code": "too_small", "message": "String must contain at least 1 character(s)" }
+    ]
+  }
+}
+```
+
+Three rules:
+
+- **Success → `{ data }`**. Empty body for 204 No Content.
+- **Error → `{ error: { code, message, details? } }`**. `code` is a stable string (machine-readable). `message` is human-readable. `details` is optional structured data the client can format.
+- **HTTP status code matches the error category.** 4xx for client errors, 5xx for server errors. Don't return `200 OK` with `{ error }` — use status codes.
+
+### Common validation patterns
+
+A handful of Zod idioms you'll reach for repeatedly:
+
+```js
+// Optional field with default
+z.string().optional().default("")
+
+// Coerce string → number (for query strings)
+z.coerce.number().int().min(0)
+
+// Enum from an array
+z.enum(["open", "closed", "pending"])
+
+// Custom refinement (e.g. password matches confirmation)
+z.object({
+  password: Password,
+  confirm:  Password,
+}).refine((data) => data.password === data.confirm, {
+  path: ["confirm"],
+  message: "Passwords don't match",
+})
+
+// Transform after validation
+z.string().email().toLowerCase().transform((s) => s.trim())
+
+// One of multiple shapes
+z.union([
+  z.object({ type: z.literal("email"),    email: z.string().email() }),
+  z.object({ type: z.literal("phone"),    phone: z.string().min(10) }),
+])
+
+// Discriminated union (better error messages than plain union)
+z.discriminatedUnion("type", [
+  z.object({ type: z.literal("email"), email: z.string().email() }),
+  z.object({ type: z.literal("phone"), phone: z.string().min(10) }),
+])
+
+// Partial update — all fields optional, at least one required
+const UpdatePostSchema = z.object({
+  title:     z.string().min(1).max(200).optional(),
+  body:      z.string().optional(),
+  published: z.boolean().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided",
+})
+```
+
+You'll write each of these patterns at most a few times before they're muscle memory.
+
+### Where validation MUST NOT trust the client
+
+The cases new developers miss:
+
+- **Don't trust IDs in the body.** `POST /api/posts { authorId: 1, title: "..." }` — the client sets `authorId` to whoever they like. Always overwrite from `req.user.id`:
+  ```js
+  const post = await db.post.create({
+    data: { ...req.body, authorId: req.user.id },   // NOT req.body.authorId
+  });
+  ```
+
+- **Don't allow status / role / admin fields in user-facing update endpoints.** `PATCH /api/users/me { role: "admin" }` would let a user escalate themselves. Strip those fields with a schema that explicitly lists what's allowed.
+
+- **Don't echo back user-provided HTML.** A `body` field that arrives as `<script>alert(1)</script>` and renders unsanitized on the client is XSS. Strip / sanitize before storing (or sanitize on render).
+
+- **Don't trust file uploads' filenames.** Filenames can contain path traversal (`../../etc/passwd`). Generate a fresh name server-side, don't reuse the client's.
+
+The validation schema is the seam. Anything missing from the schema is either intentionally allowed (with a comment) or a bug.
+
+<ExampleProject
+  src="zod-pipeline"
+  title="Watch Zod parse a request"
+  description="Live JSON editor on the left, Zod schema on the right. Type a payload and watch each field validate or fail in real time. Edit the schema to add fields, change validators, see how errors update. Use as a sandbox to prototype schemas before adding them to a route."
+/>
+
+<Exercise
+  title="Add the validation layer to your /api/posts router"
+  starter={`Continue from the authorization-protected posts API. Add the full
+validation + error-handling layer.
+
+  1. Create src/middleware/validate.js with the zodValidate factory
+     from the concept. Same shape for body / query / params.
+
+  2. Create src/middleware/error.js with:
+     - HttpError class (status, code, message, details)
+     - errorHandler middleware that maps:
+       - HttpError → its status + payload
+       - ZodError → 400 + formatted issues
+       - Prisma errors (P2002, P2025, P2003) → mapped status codes
+       - Anything else → 500 + log
+
+  3. Register errorHandler as the LAST middleware in server.js.
+
+  4. Define schemas for posts in src/routes/posts.js:
+       const ListSchema   = z.object({ page, limit, q, status });
+       const IdParam      = z.object({ id: z.coerce.number().int().positive() });
+       const CreateSchema = z.object({ title, body, published, tags });
+       const UpdateSchema = z.object({ ...all optional }).refine(at-least-one-field);
+
+  5. Apply each to its route:
+       postsRouter.get("/",     zodValidate(ListSchema, "query"), list);
+       postsRouter.get("/:id",  zodValidate(IdParam, "params"), get);
+       postsRouter.post("/",    requireAuth, zodValidate(CreateSchema), create);
+       postsRouter.patch("/:id",
+         zodValidate(IdParam, "params"),
+         requireAuth,
+         zodValidate(UpdateSchema),
+         update,
+       );
+       postsRouter.delete("/:id",
+         zodValidate(IdParam, "params"),
+         requireAuth,
+         remove,
+       );
+
+  6. Strip CLIENT-supplied authorId in create. Always overwrite
+     from req.user.id (NOT req.body.authorId).
+
+  7. Throw HttpError in handlers instead of duplicating the
+     response shape:
+       const post = await db.post.findUnique({ where: { id: req.params.id } });
+       if (!post) throw new HttpError(404, "NOT_FOUND", "Post not found");
+
+  8. Test the validation:
+       # Missing title → 400 with details
+       curl -X POST localhost:3000/api/posts \\
+            -H "Content-Type: application/json" \\
+            -H "Authorization: Bearer <token>" \\
+            -d '{}'
+
+       # Invalid status enum → 400
+       curl 'localhost:3000/api/posts?status=invalid'
+
+       # Title too long → 400 with which-field detail
+       curl -X POST localhost:3000/api/posts \\
+            -H "Content-Type: application/json" \\
+            -H "Authorization: Bearer <token>" \\
+            -d '{"title":"'"$(python -c 'print("x"*300)')"'"}'
+
+       # Trying to set authorId in the body
+       curl -X POST localhost:3000/api/posts \\
+            -H "Content-Type: application/json" \\
+            -H "Authorization: Bearer <token>" \\
+            -d '{"title":"x","authorId":99}'
+         → Server should IGNORE authorId, use the JWT's user id.
+
+By the end every handler is short, every error is consistent, every
+field is validated. The boundary between 'untrusted input' and 'safe
+to use' is one Zod call wide. This is the production validation
+layer.`}
+/>
