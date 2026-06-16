@@ -1,0 +1,376 @@
+## Request and response objects
+
+Every Express handler has two characters: **`req`** (the request) and **`res`** (the response). They're the only two arguments you'll touch in 99% of routes. Master what's on each and you can answer every "how do I read the X / send the Y" question without googling.
+
+This concept is a focused tour. Not exhaustive — just what you'll actually use.
+
+<Analogy>
+A request and response are **two envelopes that pass through your office.**
+
+A customer mails a letter to your office. The letter arrives as an envelope (`req`) with:
+
+- A **destination** written on the front (the URL).
+- A **return address** (the client's IP, the user-agent header).
+- A bunch of **labels and stickers** stuck to the envelope (headers: content type, auth token, cookies).
+- The **actual letter** inside (the body — JSON, form data, file upload).
+
+Your office reads the labels, opens the envelope, reads the letter, and decides what to do.
+
+You write your **reply** on a new envelope (`res`) and send it back:
+
+- A **return slip** indicating "delivered successfully" or "address not found" (the status code).
+- **Labels** for the response (Content-Type, Set-Cookie, Cache-Control).
+- The **actual reply letter** inside (your JSON, your HTML, your file download).
+
+The customer's machine reads your reply envelope the same way you read theirs.
+
+Express's job is to give you both envelopes in a convenient shape. You don't open the letter chunk by chunk; Express opens it for you and puts the contents on `req.body`. You don't manually write status codes onto the response envelope; `res.status(201)` does it. The req/res pair is the *whole interface* between Express and your code.
+
+Three habits that pay off:
+
+1. **Validate everything you read off `req` before using it.** Anything from the client is hostile. The shape might be wrong, the values might be malicious, the user might be lying about their identity. Validation libraries (Zod, especially) let you declare the expected shape once and reject anything that doesn't match.
+
+2. **Always send exactly one response.** Calling `res.json(...)` and then `res.send(...)` would error: "headers already sent." Inside one handler, return after you respond — or structure with early returns + a single final response.
+
+3. **Don't forget to respond at all.** A handler that does work but forgets `res.json()` leaves the request hanging until it times out. The client sees a hang, not an error. Read your handlers and trace every path to make sure each one ends with a `res.*` call (or calls `next()`).
+</Analogy>
+
+### The `req` object — what's on it
+
+```js
+app.post("/api/posts/:id", (req, res) => {
+  req.method;              // "POST"
+  req.url;                 // "/api/posts/47?draft=true"
+  req.baseUrl;             // "/api" (if mounted via app.use("/api", ...))
+  req.path;                // "/posts/47"
+
+  req.params.id;           // "47" (from /:id pattern)
+  req.query.draft;         // "true" (from ?draft=true) — string, not boolean
+
+  req.body;                // { title: "..." } (with express.json() mounted)
+
+  req.headers.authorization; // "Bearer eyJ..." (lowercased)
+  req.headers["content-type"]; // "application/json"
+  req.get("Authorization"); // "Bearer eyJ..." (case-insensitive helper)
+
+  req.cookies;             // { session: "abc..." } (with cookie-parser mounted)
+  req.ip;                  // "10.0.1.1" (or req.ips for an array if behind a proxy)
+  req.protocol;            // "https"
+  req.hostname;            // "api.jbeditor.com"
+
+  req.user;                // your auth middleware sets this — { id, email, role }
+});
+```
+
+The bold ones — `req.params`, `req.query`, `req.body`, `req.user` — are what 80% of handlers actually use.
+
+### URL params vs query strings — when to use which
+
+Both let the client send data in the URL. The convention:
+
+- **URL params** identify a resource: `/posts/:id`, `/users/:userId/orders/:orderId`. Required for the route to make sense.
+- **Query strings** filter, paginate, or modify the response: `?status=open&page=2&sort=desc`. Optional, can be combined freely.
+
+In code:
+
+```js
+app.get("/api/posts/:id", (req, res) => {
+  const id = req.params.id;           // required — without it the route wouldn't match
+});
+
+app.get("/api/posts", (req, res) => {
+  const page  = Number(req.query.page  ?? 1);
+  const limit = Number(req.query.limit ?? 20);
+  const status = req.query.status;     // undefined if missing
+});
+```
+
+Query strings are always strings on the way in. `?page=2` arrives as `"2"`, not `2`. Convert with `Number()`, `parseInt()`, or validate with Zod.
+
+### `req.body` — and the JSON parsing middleware
+
+Without middleware, `req.body` is `undefined`. Express doesn't auto-parse bodies in v5 — you opt in with `express.json()`:
+
+```js
+const app = express();
+app.use(express.json());                 // parses application/json
+app.use(express.urlencoded({ extended: true })); // parses form-encoded POSTs
+```
+
+After mounting, any handler downstream can use `req.body`:
+
+```js
+app.post("/api/posts", (req, res) => {
+  const { title, body } = req.body;
+  // ...
+});
+```
+
+For file uploads, JSON parsing isn't enough — you need `multer` or `busboy` (separate package). Covered in a later concept.
+
+### Validating with Zod — the modern pattern
+
+Don't trust `req.body`. Even if your TypeScript types say it's `{ title: string }`, a malicious client can send anything. **Validate at the boundary**:
+
+```js
+import { z } from "zod";
+
+const CreatePostSchema = z.object({
+  title: z.string().min(1).max(200),
+  body:  z.string().optional(),
+  tags:  z.array(z.string()).optional(),
+});
+
+app.post("/api/posts", async (req, res) => {
+  const parsed = CreatePostSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.format() });
+  }
+  // parsed.data is now typed AND validated
+  const post = await db.post.create({ data: parsed.data });
+  res.status(201).json(post);
+});
+```
+
+A reusable middleware factory wraps this so every route doesn't repeat the boilerplate:
+
+```js
+// middleware/validate.js
+export function zodValidate(schema, target = "body") {
+  return (req, res, next) => {
+    const result = schema.safeParse(req[target]);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.format() });
+    }
+    req[target] = result.data;     // overwrite with parsed (defaults applied)
+    next();
+  };
+}
+
+// in your route:
+app.post("/api/posts",
+  zodValidate(CreatePostSchema),
+  async (req, res) => {
+    const post = await db.post.create({ data: req.body });
+    res.status(201).json(post);
+  }
+);
+```
+
+Now every POST/PATCH route gets validation in one line. The next concept (`middleware`) goes deeper on this pattern.
+
+### The `res` object — what you can send
+
+```js
+app.get("/api/posts/:id", async (req, res) => {
+  res.status(200);                    // set status code (chainable)
+  res.json({ id: 1, title: "..." });  // send JSON, sets Content-Type automatically
+  res.send("plain text");             // send any body
+  res.sendFile("/path/to/file.pdf");  // stream a file from disk
+  res.redirect(301, "/api/posts");    // redirect with status
+  res.cookie("session", "abc", { httpOnly: true, secure: true, sameSite: "lax" });
+  res.clearCookie("session");
+  res.set("Cache-Control", "no-store"); // set response header
+  res.set({ "X-Custom": "v", "X-Other": "w" }); // multiple at once
+  res.end();                          // no body, just close the response
+});
+```
+
+Chainable, so you can build up:
+
+```js
+res.status(404).set("Cache-Control", "no-store").json({ error: "Not found" });
+```
+
+Three patterns to internalize:
+
+- **`res.status(n).json(obj)`** is the everyday response.
+- **`res.status(204).end()`** is the "delete succeeded, no body" response.
+- **`res.redirect(url)`** writes a 302 by default. Pass `res.redirect(301, url)` for permanent.
+
+### Standardizing the response shape
+
+Pick a shape for your API responses and stick to it. Common convention:
+
+```js
+// Success
+{
+  "data": { ... }     // or  "data": [...]
+}
+
+// Error
+{
+  "error": {
+    "code":    "VALIDATION_ERROR",
+    "message": "Title is required.",
+    "details": [ ... ]   // optional
+  }
+}
+```
+
+Then a helper:
+
+```js
+// lib/respond.js
+export const ok    = (res, data)         => res.json({ data });
+export const created = (res, data)       => res.status(201).json({ data });
+export const notFound = (res, msg = "Not found") =>
+  res.status(404).json({ error: { code: "NOT_FOUND", message: msg } });
+export const badInput = (res, details) =>
+  res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Invalid input", details } });
+```
+
+In handlers:
+
+```js
+import { ok, created, notFound } from "../lib/respond.js";
+
+app.get("/api/posts/:id", async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: req.params.id } });
+  if (!post) return notFound(res, "Post not found");
+  ok(res, post);
+});
+```
+
+Every endpoint becomes consistent. Every client knows what to parse. Worth setting up on day one.
+
+### Headers you'll set often
+
+- **`Content-Type`** — set automatically by `res.json()`, `res.send()` for the right type. You rarely set it explicitly.
+- **`Cache-Control`** — `no-store` for personalised endpoints, `public, max-age=3600` for shareable data.
+- **`Access-Control-Allow-Origin`** — CORS (covered in `middleware`). Use the `cors` package; don't hand-roll.
+- **`Authorization`** — read on the request, never set on the response.
+- **`Set-Cookie`** — via `res.cookie(...)`; don't write the header string by hand.
+- **`Location`** — for `201 Created`, points at the new resource: `res.set("Location", `/api/posts/${post.id}`)`.
+
+### Streaming responses — when you don't want to buffer
+
+`res.json(obj)` builds the response in memory then sends it. For large responses (downloading a huge CSV, exporting a DB table) you stream instead:
+
+```js
+app.get("/api/exports/posts.csv", async (req, res) => {
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="posts.csv"');
+
+  res.write("id,title,createdAt\n");
+  for await (const post of db.post.findManyStream()) {
+    res.write(`${post.id},"${post.title}",${post.createdAt}\n`);
+  }
+  res.end();
+});
+```
+
+You'll use this for: large exports, file downloads, server-sent events. Most endpoints don't need it.
+
+### Async error handling
+
+Inside an async handler, throw an error and Express 5 routes it to the error middleware:
+
+```js
+app.get("/api/posts/:id", async (req, res, next) => {
+  const post = await db.post.findUnique({ where: { id: req.params.id } });
+  if (!post) {
+    throw new HttpError(404, "Post not found");
+  }
+  res.json(post);
+});
+```
+
+In Express 4 you'd need `try { ... } catch (e) { next(e) }` around the body, or the `express-async-errors` package. In 5 it just works.
+
+The error middleware that catches the throw (one per app, registered last) typically looks like:
+
+```js
+app.use((err, req, res, next) => {
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({ error: { message: err.message } });
+  }
+  console.error(err);
+  res.status(500).json({ error: { message: "Internal server error" } });
+});
+```
+
+Covered fully in the `middleware` concept.
+
+### When you've responded twice
+
+The classic Express bug: two `res.*` calls in one handler.
+
+```js
+app.get("/api/posts/:id", async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: req.params.id } });
+  if (!post) {
+    res.status(404).json({ error: "Not found" });
+  }
+  res.json(post);   // ← runs ALWAYS, even after the 404 path
+});
+```
+
+The fix is `return`:
+
+```js
+if (!post) {
+  return res.status(404).json({ error: "Not found" });
+}
+res.json(post);
+```
+
+Express errors with `Error: Cannot set headers after they are sent` and the request handles incorrectly. Every handler with branching needs the `return`.
+
+<ExampleProject
+  src="request-anatomy"
+  title="Pick apart a real HTTP request"
+  description="A live request inspector — click any part of an example POST /api/posts request to see how it lands on the req object in Express. Maps wire format to req.method / req.url / req.params / req.query / req.body / req.headers / req.cookies."
+/>
+
+<Exercise
+  title="Build a robust /api/search endpoint"
+  starter={`Build an Express endpoint that takes input from URL params + query
++ headers + body and responds with proper status codes.
+
+  GET /api/search?q=express&page=2&limit=10
+    Headers:
+      Authorization: Bearer demo123
+      X-Locale: en-GB
+
+  Requirements:
+    1. Read the search term from req.query.q. If missing, respond
+       with 400 + { error: { code: "MISSING_QUERY", message: "?q= is
+       required" } }.
+    2. Read page + limit from req.query, with defaults page=1 limit=20.
+       Coerce to numbers. Clamp limit to a max of 100.
+    3. Read Authorization from req.headers. If absent, respond 401.
+       (Don't bother verifying the token — that's the middleware
+       concept later.)
+    4. Read X-Locale header (optional). If absent, default to "en".
+    5. Generate a fake results array (e.g. 100 strings like
+       "Result 1 for express", "Result 2 for express"...) and
+       slice based on page + limit.
+    6. Respond 200 with:
+         {
+           "data": {
+             "query":   "express",
+             "page":    2,
+             "limit":   10,
+             "locale":  "en-GB",
+             "results": ["Result 11...", "Result 12...", ...]
+           }
+         }
+
+  Then make a POST /api/search/log endpoint:
+    1. Expect a body like { query: string, resultsClicked: number[] }.
+    2. Mount express.json() middleware so req.body parses.
+    3. Validate the body with Zod — title is required, resultsClicked
+       must be array of numbers. Use a zodValidate middleware factory
+       (the one in the concept).
+    4. Respond 201 with { data: { logged: true } }.
+
+  Bonus: write a small lib/respond.js with ok / created / badInput /
+  unauthorized helpers and use them in both endpoints. Notice how
+  consistent the response shape becomes — every error has a code,
+  every success wraps in 'data', every endpoint looks the same.
+
+When done, hit your endpoints with curl. Make sure both the success
+and the error paths return the shape you specified. This is the
+shape every endpoint in Phase 4 will follow.`}
+/>

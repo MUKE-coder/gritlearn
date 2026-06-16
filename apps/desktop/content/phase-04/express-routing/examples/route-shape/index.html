@@ -1,0 +1,252 @@
+<!--
+  Anatomy of an Express route. Hover the parts of an example route
+  signature to highlight + describe what each does. Visual breakdown
+  of: method · URL pattern · middleware list · async handler · req
+  shape · res shape.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Anatomy of an Express route</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.55; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .signature {
+        background: #0a0a0d; color: #ededee; padding: 1.5rem 1.25rem; border-radius: 8px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.05rem;
+        line-height: 1.55; margin: 1rem 0; white-space: pre; overflow-x: auto;
+      }
+      .signature .seg {
+        padding: 1px 4px; border-radius: 3px; cursor: pointer;
+        transition: background-color 0.15s, color 0.15s;
+      }
+      .signature .seg:hover  { background: #fbbf24; color: #0a0a0d; }
+      .signature .seg.active { background: #5FE3B0; color: #0a0a0d; }
+
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .type    { color: #c084fc; }
+      .comment { color: #71717a; font-style: italic; }
+
+      .grid {
+        display: grid; grid-template-columns: 1fr 1.4fr; gap: 1rem; margin-top: 0.5rem;
+      }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 { margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; }
+
+      .key-list { list-style: none; padding: 0; margin: 0; }
+      .key-list li {
+        font-family: ui-monospace, monospace; font-size: 0.82rem; padding: 0.32rem 0;
+        cursor: pointer; border-bottom: 1px dashed #e4e4e7;
+      }
+      .key-list li:last-child { border-bottom: none; }
+      .key-list li:hover { background: #f4f4f5; }
+      .key-list li.active { color: #15803d; font-weight: 700; }
+      .key-list .desc { font-family: ui-sans-serif; color: #71717a; font-size: 0.74rem; font-weight: 400; }
+
+      .detail h3 { margin: 0; font-size: 1rem; }
+      .detail .tag {
+        display: inline-block; font-size: 0.66rem; padding: 1px 7px; border-radius: 999px;
+        background: #ecfdf5; color: #166534; font-family: ui-monospace, monospace;
+        text-transform: uppercase; letter-spacing: 0.08em; margin-left: 0.4rem;
+      }
+      .detail .why {
+        margin-top: 0.5rem; font-size: 0.86rem; padding: 0.55rem 0.8rem;
+        background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534;
+        border-radius: 4px;
+      }
+      pre.sub {
+        background: #0a0a0d; color: #ededee; padding: 0.7rem 0.9rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; margin-top: 0.5rem; overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Anatomy of an Express route</h1>
+    <p>Hover any highlighted piece of the route signature to see what it does. Click to lock it.</p>
+
+    <div class="signature" id="sig"><!-- segments injected by JS --></div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>What each part does</h2>
+        <ul class="key-list" id="key-list"></ul>
+      </div>
+      <div class="col detail" id="detail">
+        <h3>Tap a part to see what it does</h3>
+        <p>Click any highlighted segment in the signature above (or any row on the left) to see its purpose.</p>
+      </div>
+    </div>
+
+    <script>
+      // Segments of the example route:
+      //   app.post("/api/tasks/:id", requireAuth, async (req, res) => { ... })
+      const segments = [
+        { id: "app",        text: "app", indent: "" },
+        { id: "method",     text: ".post",  indent: "" },
+        { id: "open",       text: "(", indent: "", noHl: true },
+        { id: "pattern",    text: `"/api/tasks/:id"`, indent: "", className: "string" },
+        { id: "comma1",     text: ",", indent: "", noHl: true },
+        { id: "middleware", text: " requireAuth", indent: "" },
+        { id: "comma2",     text: ",", indent: "", noHl: true },
+        { id: "async",      text: " async ", indent: "", className: "keyword" },
+        { id: "handler",    text: "(req, res)", indent: "" },
+        { id: "arrow",      text: " => {",  indent: "", noHl: true },
+        { id: "newline1",   text: "\n  ",     indent: "", noHl: true },
+        { id: "req",        text: "const id = req.params.id;", indent: "" },
+        { id: "newline2",   text: "\n  ",     indent: "", noHl: true },
+        { id: "body",       text: "const task = await db.task.findUnique({ where: { id } });", indent: "", className: "" },
+        { id: "newline3",   text: "\n  ",     indent: "", noHl: true },
+        { id: "res",        text: "res.json(task);",  indent: "" },
+        { id: "newline4",   text: "\n",      indent: "", noHl: true },
+        { id: "close",      text: "});", indent: "", noHl: true },
+      ];
+
+      const detail = {
+        app: {
+          title: "app",
+          tag: "object",
+          summary: "The Express app instance. Created with const app = express(). Holds the routing table, the mounted middleware, and the listen() entrypoint.",
+          example: `<span class="keyword">const</span> app = express();`,
+          why: "Every route registers itself onto this object.",
+        },
+        method: {
+          title: ".post",
+          tag: "method",
+          summary: "Routing method for POST. Express has one per HTTP verb: .get, .post, .patch, .put, .delete, .options. There's also .all to match any method.",
+          example: `app.get(<span class="string">"/tasks"</span>,   listTasks);
+app.post(<span class="string">"/tasks"</span>,  createTask);
+app.delete(<span class="string">"/tasks/:id"</span>, deleteTask);`,
+          why: "Method + pattern together is what Express matches against.",
+        },
+        pattern: {
+          title: "URL pattern",
+          tag: "string",
+          summary: ":id is a parameter. Matches /api/tasks/47, /api/tasks/abc, etc. The value lands on req.params.id. You can have multiple params (/orgs/:org/repos/:repo) and a catch-all (*).",
+          example: `<span class="comment">// matches /api/tasks/47 → req.params.id = "47"</span>
+<span class="string">"/api/tasks/:id"</span>`,
+          why: "Express's value vs writing your own URL matcher — no regex in your code.",
+        },
+        middleware: {
+          title: "Middleware",
+          tag: "function",
+          summary: "Functions Express runs BEFORE the main handler. Each can read/modify req, set headers, or short-circuit by sending a response. Pass any number — Express runs them in order.",
+          example: `app.post(<span class="string">"/api/tasks/:id"</span>,
+  requireAuth,
+  validateBody(TaskSchema),
+  async (req, res) =&gt; { ... });`,
+          why: "Separates cross-cutting concerns (auth, validation, logging) from the route's main job.",
+        },
+        async: {
+          title: "async",
+          tag: "keyword",
+          summary: "Marks the handler as async so you can use await inside. Express 5 automatically catches thrown errors from async handlers and forwards them to the error middleware.",
+          example: `app.get(<span class="string">"/tasks"</span>, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> tasks = <span class="keyword">await</span> db.task.findMany();
+  res.json(tasks);
+});`,
+          why: "Every real handler does I/O. Async/await keeps it readable.",
+        },
+        handler: {
+          title: "(req, res)",
+          tag: "callback",
+          summary: "The handler function. Always (req, res, next?). req is the incoming request; res is what you send back; next is optional, calls the next middleware. Most route handlers don't need next.",
+          example: `<span class="keyword">async</span> (req, res, next) =&gt; {
+  <span class="comment">// 'next' is optional. Used inside middleware,</span>
+  <span class="comment">// rarely in handlers (only for error forwarding).</span>
+}`,
+          why: "Three arguments cover every middleware AND every route handler. One shape to learn.",
+        },
+        req: {
+          title: "req",
+          tag: "object",
+          summary: "The incoming request. Express adds helpful fields: req.params (URL params), req.query (?key=value), req.body (parsed JSON if express.json() is mounted), req.headers, req.method, req.url, req.user (your auth middleware sets this).",
+          example: `req.params.id      <span class="comment">// "47" (from URL pattern :id)</span>
+req.query.sort     <span class="comment">// "desc" (from ?sort=desc)</span>
+req.body           <span class="comment">// { title: "..." } (with express.json())</span>
+req.headers.auth   <span class="comment">// "Bearer eyJ..." (lowercased)</span>`,
+          why: "All inputs to your handler arrive on req. Pluck what you need.",
+        },
+        body: {
+          title: "Your work",
+          tag: "logic",
+          summary: "The route's actual job. Talk to the database, validate, transform, anything. Use await for any I/O. Don't forget to send a response — Express won't auto-finish for you.",
+          example: `<span class="keyword">const</span> task = <span class="keyword">await</span> db.task.findUnique({
+  where: { id: req.params.id },
+});
+<span class="keyword">if</span> (!task) <span class="keyword">return</span> res.status(<span class="keyword">404</span>).json({ error: <span class="string">"Not found"</span> });`,
+          why: "Where the business logic lives. Keep handlers thin; push complex logic to services/.",
+        },
+        res: {
+          title: "res",
+          tag: "object",
+          summary: "The response builder. Chainable. Common methods: res.json(body), res.status(404), res.send(string), res.redirect(url), res.cookie(name, value), res.set(header, value), res.end() for no body.",
+          example: `res.status(<span class="keyword">201</span>).json(task);        <span class="comment">// 201 created</span>
+res.status(<span class="keyword">204</span>).end();              <span class="comment">// no body</span>
+res.cookie(<span class="string">"sess"</span>, token, { httpOnly: <span class="keyword">true</span> });
+res.redirect(<span class="string">"/login"</span>);`,
+          why: "All outputs flow through res. One object, many helpers.",
+        },
+      };
+
+      let active = "app";
+
+      function renderSignature() {
+        const out = segments.map((s) => {
+          if (s.noHl) {
+            const cls = s.className ? ` class="${s.className}"` : "";
+            return `<span${cls}>${s.text}</span>`;
+          }
+          const cls = `seg ${s.className || ""} ${active === s.id ? "active" : ""}`;
+          return `<span class="${cls}" data-id="${s.id}">${s.text}</span>`;
+        });
+        document.getElementById("sig").innerHTML = out.join("");
+      }
+
+      function renderKeyList() {
+        const keys = Object.keys(detail);
+        document.getElementById("key-list").innerHTML = keys.map((k) => `
+          <li data-id="${k}" class="${active === k ? "active" : ""}">
+            ${detail[k].title}
+            <div class="desc">${detail[k].tag}</div>
+          </li>
+        `).join("");
+      }
+
+      function renderDetail() {
+        const d = detail[active];
+        if (!d) return;
+        document.getElementById("detail").innerHTML = `
+          <h3>${d.title} <span class="tag">${d.tag}</span></h3>
+          <p>${d.summary}</p>
+          <pre class="sub">${d.example}</pre>
+          <div class="why"><strong>Why it matters:</strong> ${d.why}</div>
+        `;
+      }
+
+      function select(id) {
+        if (!detail[id]) return;
+        active = id;
+        renderSignature();
+        renderKeyList();
+        renderDetail();
+      }
+
+      document.getElementById("sig").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-id]");
+        if (t) select(t.dataset.id);
+      });
+      document.getElementById("key-list").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-id]");
+        if (t) select(t.dataset.id);
+      });
+
+      renderSignature();
+      renderKeyList();
+      renderDetail();
+    </script>
+  </body>
+</html>

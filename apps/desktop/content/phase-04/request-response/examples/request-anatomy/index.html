@@ -1,0 +1,188 @@
+<!--
+  HTTP request inspector. Shows a real HTTP wire-format request on the
+  left and the corresponding Express req object on the right. Click
+  any line in either view to highlight the matching field in the other.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>HTTP request → Express req — mapping</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .toggle { display: flex; gap: 0.4rem; margin: 1rem 0; }
+      .toggle button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+      }
+      .toggle button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+      .col { border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa; }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .wire {
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.84rem;
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        line-height: 1.6;
+      }
+      .wire .ln {
+        display: block; padding: 1px 4px; border-radius: 3px;
+        cursor: pointer; transition: background-color 0.2s;
+      }
+      .wire .ln:hover { background: #292930; }
+      .wire .ln.active { background: #5FE3B0; color: #0a0a0d; }
+      .wire .key { color: #38bdf8; }
+      .wire .val { color: #ededee; }
+      .wire .pun { color: #71717a; }
+
+      .req-list {
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.82rem;
+        line-height: 1.5;
+      }
+      .req-row {
+        padding: 0.45rem 0.6rem; border-bottom: 1px dashed #e4e4e7;
+        cursor: pointer; transition: background-color 0.2s;
+      }
+      .req-row:last-child { border-bottom: none; }
+      .req-row:hover { background: #f4f4f5; }
+      .req-row.active { background: #ecfdf5; border-left: 3px solid #16a34a; }
+      .req-row .path { color: #166534; font-weight: 600; }
+      .req-row .val  { color: #18181b; margin-left: 0.4rem; }
+      .req-row .desc { font-family: ui-sans-serif; color: #71717a; font-size: 0.74rem; margin-top: 0.18rem; }
+    </style>
+  </head>
+  <body>
+    <h1>HTTP request → Express <code>req</code> — mapping</h1>
+    <p>Left: the raw HTTP request the way it travels on the wire. Right: the same data as Express puts it on the <code>req</code> object. Click any line to highlight the match.</p>
+
+    <div class="toggle" id="toggle">
+      <button data-id="get" class="active">GET /api/posts?status=open&amp;limit=2</button>
+      <button data-id="post">POST /api/posts/47/comments</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>HTTP request (on the wire)</h2>
+        <div class="wire" id="wire"></div>
+      </div>
+      <div class="col">
+        <h2>Express <code>req</code> (what your handler sees)</h2>
+        <div class="req-list" id="req-list"></div>
+      </div>
+    </div>
+
+    <script>
+      // Each example has wire lines and req rows. Lines with a "linkId"
+      // become clickable + highlight the matching req row.
+      const scenarios = {
+        get: {
+          wire: [
+            { id: "method", txt: `<span class="key">GET</span> <span class="val">/api/posts?status=open&amp;limit=2</span> <span class="pun">HTTP/1.1</span>` },
+            { id: "host",   txt: `<span class="key">Host:</span> <span class="val">api.jbeditor.com</span>` },
+            { id: "auth",   txt: `<span class="key">Authorization:</span> <span class="val">Bearer eyJhbGc...</span>` },
+            { id: "accept", txt: `<span class="key">Accept:</span> <span class="val">application/json</span>` },
+            { id: "ua",     txt: `<span class="key">User-Agent:</span> <span class="val">Mozilla/5.0 (Windows NT 11.0)</span>` },
+            { id: "cookie", txt: `<span class="key">Cookie:</span> <span class="val">session=abc123; theme=dark</span>` },
+            { id: "blank",  txt: ``, nolink: true },
+            { id: "body",   txt: `<span class="pun">(no body — GET requests don't have one)</span>`, nolink: true },
+          ],
+          req: [
+            { id: "method", path: "req.method",            val: '"GET"',                         desc: "HTTP verb of the request." },
+            { id: "method", path: "req.url",               val: '"/api/posts?status=open&limit=2"', desc: "Full URL after the host." },
+            { id: "method", path: "req.path",              val: '"/api/posts"',                   desc: "URL without the query string." },
+            { id: "method", path: "req.query.status",      val: '"open"',                         desc: "Express parses ?status=open into req.query." },
+            { id: "method", path: "req.query.limit",       val: '"2"  // string, not number!',   desc: "All query values are strings until you Number() them." },
+            { id: "host",   path: "req.hostname",          val: '"api.jbeditor.com"',             desc: "From the Host header." },
+            { id: "host",   path: "req.protocol",          val: '"https"',                        desc: "Inferred from the connection / X-Forwarded-Proto." },
+            { id: "auth",   path: "req.headers.authorization", val: '"Bearer eyJhbGc..."',        desc: "All headers are lowercased on req.headers." },
+            { id: "auth",   path: "req.get(\"Authorization\")", val: '"Bearer eyJhbGc..."',        desc: "Case-insensitive shortcut." },
+            { id: "accept", path: "req.headers.accept",    val: '"application/json"',             desc: "What content types the client accepts." },
+            { id: "ua",     path: "req.headers[\"user-agent\"]", val: '"Mozilla/5.0..."',          desc: "Bracket access for keys with hyphens." },
+            { id: "cookie", path: "req.cookies.session",   val: '"abc123"',                       desc: "Requires cookie-parser middleware. Without it, req.cookies is undefined." },
+            { id: "cookie", path: "req.cookies.theme",     val: '"dark"',                         desc: "Multiple cookies → multiple keys on req.cookies." },
+          ],
+        },
+        post: {
+          wire: [
+            { id: "method", txt: `<span class="key">POST</span> <span class="val">/api/posts/47/comments</span> <span class="pun">HTTP/1.1</span>` },
+            { id: "host",   txt: `<span class="key">Host:</span> <span class="val">api.jbeditor.com</span>` },
+            { id: "ct",     txt: `<span class="key">Content-Type:</span> <span class="val">application/json</span>` },
+            { id: "cl",     txt: `<span class="key">Content-Length:</span> <span class="val">68</span>` },
+            { id: "auth",   txt: `<span class="key">Authorization:</span> <span class="val">Bearer eyJhbGc...</span>` },
+            { id: "blank",  txt: ``, nolink: true },
+            { id: "body",   txt: `<span class="pun">{</span>` },
+            { id: "body",   txt: `<span class="pun">  "</span><span class="key">body</span><span class="pun">": "</span><span class="val">Great post — thanks!</span><span class="pun">",</span>` },
+            { id: "body",   txt: `<span class="pun">  "</span><span class="key">parentId</span><span class="pun">": </span><span class="val">12</span>` },
+            { id: "body",   txt: `<span class="pun">}</span>` },
+          ],
+          req: [
+            { id: "method", path: "req.method",      val: '"POST"',              desc: "HTTP verb." },
+            { id: "method", path: "req.params.id",   val: '"47"',                desc: "From the route pattern /api/posts/:id/comments." },
+            { id: "method", path: "req.path",        val: '"/api/posts/47/comments"', desc: "URL without query string." },
+            { id: "host",   path: "req.hostname",    val: '"api.jbeditor.com"',  desc: "From the Host header." },
+            { id: "ct",     path: "req.headers[\"content-type\"]", val: '"application/json"', desc: "Tells Express which body parser to use." },
+            { id: "ct",     path: "req.is(\"json\")", val: 'true',                desc: "Helper to test the request type." },
+            { id: "cl",     path: "req.headers[\"content-length\"]", val: '"68"',  desc: "Body size in bytes (string)." },
+            { id: "auth",   path: "req.headers.authorization", val: '"Bearer eyJhbGc..."', desc: "Auth header (lowercased)." },
+            { id: "body",   path: "req.body.body",         val: '"Great post — thanks!"', desc: "Parsed JSON. Requires express.json() middleware." },
+            { id: "body",   path: "req.body.parentId",     val: '12',                    desc: "JSON numbers come through as numbers (unlike req.query)." },
+            { id: "body",   path: "req.body",              val: '{ body: "...", parentId: 12 }', desc: "Full parsed body. undefined if express.json() isn't mounted." },
+          ],
+        },
+      };
+
+      let scenario = "get";
+      let active = "method";
+
+      function render() {
+        const s = scenarios[scenario];
+
+        document.querySelectorAll(".toggle button").forEach(b => b.classList.toggle("active", b.dataset.id === scenario));
+
+        document.getElementById("wire").innerHTML = s.wire.map((l, i) => {
+          if (l.nolink) return `<span class="ln" data-id="-">${l.txt || "&nbsp;"}</span>`;
+          const cls = active === l.id ? "ln active" : "ln";
+          return `<span class="${cls}" data-id="${l.id}">${l.txt || "&nbsp;"}</span>`;
+        }).join("");
+
+        document.getElementById("req-list").innerHTML = s.req.map((r) => {
+          const cls = active === r.id ? "req-row active" : "req-row";
+          return `<div class="${cls}" data-id="${r.id}">
+            <div><span class="path">${r.path}</span> <span class="val">${r.val}</span></div>
+            <div class="desc">${r.desc}</div>
+          </div>`;
+        }).join("");
+      }
+
+      function select(id) {
+        if (id === "-") return;
+        active = id;
+        render();
+      }
+
+      document.getElementById("toggle").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        scenario = b.dataset.id;
+        active = scenarios[scenario].req[0].id;
+        render();
+      });
+      document.getElementById("wire").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-id]");
+        if (t) select(t.dataset.id);
+      });
+      document.getElementById("req-list").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-id]");
+        if (t) select(t.dataset.id);
+      });
+
+      render();
+    </script>
+  </body>
+</html>

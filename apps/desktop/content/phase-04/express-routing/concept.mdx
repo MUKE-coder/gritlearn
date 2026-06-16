@@ -1,0 +1,346 @@
+## What Express is and routing basics
+
+You can build an HTTP API with Node's built-in `http` module — the previous concept's exercise had you do exactly that. The result works but the code is awkward: you're matching URLs by hand with `if/else`, parsing bodies by streaming chunks, and managing every header explicitly. **Express** is a thin layer on top of `http` that fixes those rough edges without hiding what Node is doing underneath.
+
+Express has been the default Node web framework for over a decade. It's small (4,000 lines of code), opinion-free (does routing + middleware, leaves the rest to you), and battle-tested (powers a huge chunk of the API traffic on the public internet). Every Node tutorial assumes Express. Every other framework — Koa, Fastify, NestJS — was built either *as* Express or *in response to* Express.
+
+This concept covers what Express is, what a route looks like, and the small handful of patterns that 95% of an API uses.
+
+<Analogy>
+Express is **a switchboard operator who knows everyone in the building.**
+
+Before automated phone systems, every call coming into an office building landed at the switchboard. The operator looked at the caller's request — "I want to speak to legal about contract 47" — and connected them to the right department's line. They had a desk full of physical plugs and a board with named jacks: "Legal," "Sales," "Marketing." Each call got plugged into the matching jack.
+
+That's exactly what Express does for HTTP requests:
+
+- A request arrives with a **method** (GET, POST, PATCH, DELETE, etc.) and a **URL** (`/api/users/47`).
+- Express looks at its **routing table** — a list of `(method, URL pattern, handler function)` triples you registered with `app.get(...)`, `app.post(...)`, etc.
+- It picks the first row that matches and calls the handler.
+- Your handler reads from the request and writes to the response.
+- Express ships the response back to the caller.
+
+Three things make Express's switchboard particularly nice:
+
+1. **The patterns are expressive.** `/users/:id` matches `/users/47` AND `/users/ab12cd` — and Express extracts `47` or `ab12cd` for you as `req.params.id`. No regex by hand.
+
+2. **The handler gets clean inputs.** `req.body` is already JSON-parsed (with middleware enabled). `req.query` is already split into an object. `req.params` already has the URL variables. You don't think about the wire format.
+
+3. **The response has helpers.** `res.json({...})` sets the right `Content-Type` and serialises. `res.status(404)` sets the code. `res.redirect("/login")` writes the Location header. No manual `writeHead`.
+
+Express doesn't *do* anything Node's `http` module can't do. It just stops you from re-implementing the same five patterns on every project.
+
+The shape of a route, in three lines:
+
+```js
+app.get("/users/:id", async (req, res) => {
+  const user = await db.user.findUnique({ where: { id: req.params.id } });
+  res.json(user);
+});
+```
+
+That's a complete read-by-ID endpoint. URL pattern, async handler, JSON response. The Express vocabulary is roughly: app, route, handler, request, response. Five things. You'll be productive in an hour.
+</Analogy>
+
+### Installing and starting Express
+
+```bash
+npm install express
+```
+
+Then `src/server.js`:
+
+```js
+import express from "express";
+
+const app = express();
+const PORT = 3000;
+
+app.get("/", (req, res) => {
+  res.json({ ok: true });
+});
+
+app.listen(PORT, () => {
+  console.log(`API → http://localhost:${PORT}`);
+});
+```
+
+Run with `npm run dev` (assuming `package.json` has `"dev": "node --watch src/server.js"`). Hit `http://localhost:3000` — get `{"ok":true}`.
+
+That's a working HTTP server. Five lines of meaningful code.
+
+### Routing — the core verbs
+
+Express maps HTTP methods to chainable handler methods on the `app` (or on a `Router`, covered below):
+
+```js
+app.get(   "/posts",       listPosts);
+app.post(  "/posts",       createPost);
+app.get(   "/posts/:id",   getPost);
+app.patch( "/posts/:id",   updatePost);
+app.delete("/posts/:id",   deletePost);
+app.put(   "/posts/:id",   replacePost);     // less common — usually PATCH
+```
+
+Each call registers a row in the routing table: `(method, pattern, handler)`. Express walks the table top to bottom on every request; first match wins.
+
+Order matters. If you registered `/users/:id` before `/users/new`, the literal `new` URL would match the parametric route first and `req.params.id === "new"`. Two ways to avoid that:
+
+- **Specific routes before parametric ones**. Put `app.get("/users/new", ...)` above `app.get("/users/:id", ...)`.
+- **Use a different prefix for static actions**. Put bulk routes under `/users/_/new` or use the convention `POST /users` for create.
+
+In practice, you'll feel the order issue when a route stops behaving and you'll move it up. By the third project you won't even think about it.
+
+### URL pattern syntax
+
+Express supports a small pattern language for routes. The 95% you need:
+
+- **Literal**: `/about` matches only `/about`.
+- **Single segment param**: `/users/:id` matches `/users/47`, extracts `id`.
+- **Multiple params**: `/orgs/:orgId/projects/:projectId` extracts both.
+- **Optional param** (Express 5 / new): `/posts{/:id}` matches `/posts` and `/posts/47`.
+- **Catch-all wildcard**: `/docs/*` matches `/docs/getting-started`, `/docs/api/users`, etc. The matched portion lives at `req.params[0]` (or in Express 5 `req.params.name` when named like `/docs/*splat`).
+
+Examples in routes:
+
+```js
+app.get("/users/:id",                 ...);  // /users/47
+app.get("/orgs/:org/repos/:repo",     ...);  // /orgs/anthropic/repos/claude
+app.get("/files/*",                   ...);  // /files/path/to/whatever.txt
+```
+
+Express 5 also supports regex patterns inside the brackets:
+
+```js
+app.get("/posts/:id(\\d+)", ...);  // only matches numeric IDs
+```
+
+99% of routes use plain `:name` placeholders. Reach for regex when validation matters at the routing layer (rare; usually do it inside the handler).
+
+### Inside the handler
+
+Every handler has the same signature: `(req, res, next)`. The third arg you call to pass control to the next middleware (covered next concept) or skip with an error. For most route handlers you ignore `next`.
+
+```js
+app.post("/posts", async (req, res) => {
+  // 1. Read input
+  const { title, body } = req.body;
+  const userId = req.user?.id;       // set by auth middleware (later)
+
+  // 2. Validate
+  if (!title || title.length === 0) {
+    return res.status(400).json({ error: "title is required" });
+  }
+
+  // 3. Do work
+  const post = await db.post.create({ data: { title, body, userId } });
+
+  // 4. Respond
+  res.status(201).json(post);
+});
+```
+
+Four steps that almost every endpoint follows. Read input. Validate. Do the work. Respond.
+
+`async`/`await` works naturally — Express 5 catches thrown errors inside async handlers and routes them through the error middleware. (Express 4 needs explicit try/catch or `express-async-errors`; in 2026 use Express 5 unless something forces you to stay on 4.)
+
+### Splitting routes into routers
+
+Stuffing every route into one `server.js` works for the first 5 routes. By route 20 it's hard to find anything. Express's **`Router`** lets you organise routes by resource:
+
+```js
+// src/routes/posts.js
+import { Router } from "express";
+import * as controller from "../controllers/posts.js";
+
+export const postsRouter = Router();
+
+postsRouter.get(   "/",      controller.list);
+postsRouter.post(  "/",      controller.create);
+postsRouter.get(   "/:id",   controller.get);
+postsRouter.patch( "/:id",   controller.update);
+postsRouter.delete("/:id",   controller.remove);
+```
+
+```js
+// src/server.js
+import express from "express";
+import { postsRouter } from "./routes/posts.js";
+import { usersRouter } from "./routes/users.js";
+
+const app = express();
+app.use("/api/posts", postsRouter);   // mounts the router at /api/posts
+app.use("/api/users", usersRouter);
+
+app.listen(3000);
+```
+
+Now `GET /api/posts` hits `postsRouter`'s `GET /`. The router's local pattern is relative to the mount point.
+
+Routers can also have their own middleware. This composition is what scales an Express app from 5 routes to 500 without the file becoming unreadable.
+
+Convention I'd recommend:
+
+```
+src/
+├── server.js            ← create app, mount routers, app.listen
+├── routes/
+│   ├── posts.js         ← postsRouter
+│   ├── users.js         ← usersRouter
+│   └── auth.js          ← authRouter
+├── controllers/
+│   ├── posts.js         ← handler functions (list, create, etc.)
+│   ├── users.js
+│   └── auth.js
+├── middleware/
+│   ├── auth.js          ← requireAuth, requireRole
+│   ├── error.js         ← errorHandler
+│   └── validate.js      ← zodValidate(schema)
+├── lib/
+│   ├── db.js            ← Postgres client / Prisma client
+│   └── env.js           ← validated env (Zod)
+└── services/            ← business logic that needs to be tested alone
+```
+
+Some teams skip the controllers/ layer and put handlers in the route files directly. For projects above ~30 routes the separation pays off; below that it's overhead.
+
+### Status codes — pick the right one
+
+Express's `res.status(n)` writes the status code. Common ones for an API:
+
+| Code | Name | When |
+|--|--|--|
+| `200` | OK | Read succeeded. (Default if you don't set it.) |
+| `201` | Created | Create succeeded (POST). |
+| `204` | No Content | Delete or update with no body to return. |
+| `400` | Bad Request | Client sent invalid input (failed validation). |
+| `401` | Unauthorized | Not signed in / token missing or expired. |
+| `403` | Forbidden | Signed in but not allowed (wrong role / not the owner). |
+| `404` | Not Found | Resource doesn't exist. |
+| `409` | Conflict | Duplicate (e.g. email already exists). |
+| `422` | Unprocessable Entity | Validation failed on semantically-valid input. |
+| `500` | Internal Server Error | Your bug, not the client's. |
+
+The default `200` is fine for reads. For creates always `201`. For deletes return `204` (no body) unless you need to return the deleted record.
+
+### A complete tiny API
+
+To make it concrete — a working in-memory API in 30 lines:
+
+```js
+// src/server.js
+import express from "express";
+
+const app = express();
+app.use(express.json());                            // parse JSON bodies → req.body
+
+let tasks = [
+  { id: 1, title: "Write docs",  done: false },
+  { id: 2, title: "Ship Phase 4", done: false },
+];
+let nextId = 3;
+
+app.get("/api/tasks", (req, res) => {
+  res.json(tasks);
+});
+
+app.post("/api/tasks", (req, res) => {
+  const { title } = req.body;
+  if (!title) return res.status(400).json({ error: "title required" });
+  const task = { id: nextId++, title, done: false };
+  tasks.push(task);
+  res.status(201).json(task);
+});
+
+app.patch("/api/tasks/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return res.status(404).json({ error: "not found" });
+  Object.assign(task, req.body);
+  res.json(task);
+});
+
+app.delete("/api/tasks/:id", (req, res) => {
+  const id = Number(req.params.id);
+  tasks = tasks.filter((t) => t.id !== id);
+  res.status(204).end();
+});
+
+app.listen(3000, () => console.log("→ http://localhost:3000"));
+```
+
+That's a working REST CRUD API. Five routes, JSON in, JSON out. Hit it with curl, hit it from a React app, hit it from Postman — same behavior.
+
+The in-memory `let tasks = [...]` is just a placeholder for the database we'll wire up in the `express-postgres` concept later. Everything else here is production-shaped.
+
+### When to NOT use Express
+
+In 2026 Express remains the default but it's not the only choice:
+
+- **Fastify** — same shape, ~3× faster, better TypeScript story. Worth knowing.
+- **Hono** — modern, edge-runtime friendly (works on Cloudflare Workers + Bun + Deno). Lightweight.
+- **NestJS** — opinionated framework with dependency injection, decorators, lots of structure. Good for big teams; over-engineered for small apps.
+- **tRPC** — typed RPC over HTTP, end-to-end TypeScript types. Best when both ends are TS in the same monorepo.
+
+Pick Express to learn. The patterns transfer cleanly — once you understand routing + middleware + req/res, you can pick up any of the alternatives in a day.
+
+<ExampleProject
+  src="route-shape"
+  title="Anatomy of an Express route"
+  description="Hover over each part of `app.post('/api/tasks', requireAuth, async (req, res) => { ... })` to see what it does. Visual breakdown of method / URL pattern / middleware / handler signature / req / res. Use as a one-page reference."
+/>
+
+<Exercise
+  title="Swap your stdlib API for Express"
+  starter={`Continue from the 'tiny API with Node's stdlib' exercise in the
+previous concept. Re-implement it with Express and feel how much
+shorter it gets.
+
+  1. cd into your my-first-api project from before.
+
+  2. npm install express   (Express is already in your deps from
+     the previous exercise, so this is a no-op or just a version
+     check.)
+
+  3. Replace your server.js with the in-memory tasks API from the
+     concept above.
+
+  4. Convert each stdlib endpoint:
+     - The manual 'if (req.method === "GET" && url.pathname === "/tasks")'
+       becomes 'app.get("/tasks", ...)'.
+     - The manual 'req.on("data", ...)' for body parsing becomes
+       'app.use(express.json())' + 'req.body'.
+     - The manual 'res.writeHead(201)' becomes 'res.status(201)
+       .json(...)'.
+
+  5. Add two more endpoints:
+     - PATCH /tasks/:id to toggle 'done'
+     - DELETE /tasks/:id to remove
+
+  6. Test all five with curl:
+       curl http://localhost:3000/tasks
+       curl -X POST http://localhost:3000/tasks \\
+            -H "Content-Type: application/json" \\
+            -d '{"title":"Phase 4 batch 2"}'
+       curl -X PATCH http://localhost:3000/tasks/1 \\
+            -H "Content-Type: application/json" \\
+            -d '{"done":true}'
+       curl -X DELETE http://localhost:3000/tasks/1
+
+  7. Split the routes into a router:
+     - Create src/routes/tasks.js exporting a Router
+     - In server.js: app.use("/api/tasks", tasksRouter)
+     - Update routes to use just "/" and "/:id" (the /api/tasks
+       prefix comes from the mount point now)
+
+  8. Optional: deliberately register a route called "/api/tasks/all"
+     AFTER "/api/tasks/:id" and observe what happens when you hit it.
+     Then move it BEFORE the parametric route and observe again.
+     That's the route-order rule from the concept, in your hands.
+
+Count the lines of code in your Express version vs the stdlib
+version from the previous exercise. The Express version should be
+about half the size — the savings come almost entirely from not
+hand-rolling URL matching, body parsing, and response formatting.
+Express's value as a thin layer becomes obvious when you've done it
+without Express first.`}
+/>

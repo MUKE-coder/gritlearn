@@ -1,0 +1,404 @@
+## Middleware
+
+Almost every Express handler does some work that has nothing to do with its specific job. Every authenticated endpoint checks the token. Every endpoint that accepts JSON parses the body. Every endpoint logs the request. If you wrote that code into every handler, you'd repeat the same five lines forever and any one bug would have to be fixed in twenty places.
+
+**Middleware** is Express's answer. A middleware is a function that runs *before* (or *around*) a route handler, with access to `req` and `res`, and the ability to either pass control onward or short-circuit by responding itself. The same function can be applied to every route in the app, to a single router, or to one specific route. The Express request lifecycle is, more accurately, *a chain of middleware functions ending in a handler*.
+
+Master this and you can express almost any cross-cutting concern — auth, validation, logging, rate limiting, CORS, file uploads — without touching the handler.
+
+<Analogy>
+Middleware is **the layered security at an airport.**
+
+A passenger walks from the curb to the gate through a series of checkpoints. At each one, the passenger either passes the check (and continues to the next station) or fails and is turned around right there. The check at each station is *focused* on one thing:
+
+- **Boarding-pass desk**: do you have a ticket? If yes, get a stamped boarding pass. If no, you're sent back.
+- **ID check**: does your ID match the ticket? If yes, continue. If no, turned away.
+- **TSA scan**: any contraband in your bag? If yes, contraband removed (or you're sent back). If clean, continue.
+- **Gate scan**: you reach the actual destination — the airplane.
+
+At every station, *something is added* to the passenger (a boarding pass stamp, a security cleared sticker, a wristband) or *something fails*. The passenger only reaches the gate if every station gave them a pass. Each station is **focused, reusable, and composable** — the security check is the same whether you're flying domestic, international, or first class.
+
+Express middleware works exactly that way:
+
+```
+request → [JSON parser] → [cookie parser] → [logger] → [requireAuth]
+       → [validateBody] → [handler] → response
+```
+
+Each middleware function:
+- Reads the request.
+- Maybe modifies it (adds something to `req`, like `req.user` after auth).
+- Either calls `next()` to pass to the next station, OR sends a response itself to short-circuit.
+- Or throws an error, which Express catches and routes to an error middleware.
+
+The handler at the end of the chain is where the actual route logic runs. By the time it runs, the request has been parsed, the user has been authenticated, the body has been validated, the logger has timestamped the start. Each piece is one focused function. Each is reusable across every route that needs it.
+
+Three rules of middleware:
+
+1. **Order matters.** Middleware is applied in registration order. `app.use(express.json())` must come BEFORE any route that reads `req.body`. `app.use(logger)` at the top means every request gets logged.
+
+2. **Call `next()` exactly once.** Forgetting to call `next()` hangs the request. Calling it twice errors. Sending a response *and* calling `next()` is a bug — pick one.
+
+3. **Anything on the request, anything in the closure.** Middleware sees the same `req` and `res` the handler does. Anything you set on `req` (`req.user`, `req.tenant`) is visible downstream. This is how auth middleware shares the authenticated user with the handler.
+</Analogy>
+
+### The middleware signature
+
+```js
+function myMiddleware(req, res, next) {
+  // 1. Read what you need from req.
+  const token = req.headers.authorization;
+
+  // 2. Do something — typically attach to req, or short-circuit.
+  if (!token) {
+    return res.status(401).json({ error: "Token required" });   // short-circuit
+  }
+  req.tokenHash = hash(token);                                  // attach data
+
+  // 3. Pass control onward.
+  next();
+}
+```
+
+Three things every middleware does, in order. Read, decide, pass on (or short-circuit).
+
+Async middleware works the same way — Express 5 catches thrown errors automatically:
+
+```js
+async function requireAuth(req, res, next) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  if (!token) return res.status(401).json({ error: "Auth required" });
+
+  const user = await verifyJWT(token);
+  if (!user) return res.status(401).json({ error: "Invalid token" });
+
+  req.user = user;
+  next();
+}
+```
+
+### How to use middleware — three scopes
+
+```js
+// 1. Global — every route gets it.
+app.use(express.json());                       // body parser, every route
+app.use(cors());                                // CORS, every route
+app.use(logger);                                // logger, every route
+
+// 2. Router-scoped — only routes mounted on this router.
+const adminRouter = Router();
+adminRouter.use(requireAuth);                   // every /admin/* route is authed
+adminRouter.use(requireRole("admin"));          // every /admin/* needs admin role
+adminRouter.get("/dashboard", listAdminPages);
+app.use("/admin", adminRouter);
+
+// 3. Route-specific — applied as a positional argument before the handler.
+app.post(
+  "/api/posts",
+  requireAuth,
+  zodValidate(CreatePostSchema),
+  async (req, res) => { ... }
+);
+```
+
+The same middleware function can play any of those roles. `requireAuth` mounted as `app.use(requireAuth)` would apply to every route. As a router-level mount it applies to a sub-tree. As a route argument it applies to one endpoint.
+
+Pick the right scope for the right cross-cutting concern:
+
+- **Body parsers, CORS, logging** → global.
+- **Auth on a feature area** → router-scoped (`/admin/*`, `/api/*`).
+- **Validation, role checks** → route-specific.
+
+### Common built-in / package middlewares
+
+You'll reach for these in every project:
+
+```js
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+
+app.use(helmet());                              // security headers
+app.use(cors({ origin: "https://myapp.com" })); // CORS
+app.use(morgan("dev"));                          // request logging
+app.use(express.json({ limit: "1mb" }));         // JSON body parsing
+app.use(express.urlencoded({ extended: true })); // form body parsing
+app.use(cookieParser(SECRET));                   // req.cookies
+app.use(rateLimit({ windowMs: 60_000, max: 100 })); // rate limit
+```
+
+Each is one `npm install`. Each is widely used and battle-tested. **Don't write your own** for these standard concerns unless you have a specific reason.
+
+### Writing your own — the patterns
+
+**Logger** — log every request with timing:
+
+```js
+function logger(req, res, next) {
+  const start = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - start;
+    console.log(`${req.method} ${req.url} → ${res.statusCode} (${ms}ms)`);
+  });
+  next();
+}
+app.use(logger);
+```
+
+The `res.on("finish")` listener fires after Express sends the response, giving you accurate timings without intercepting the response stream.
+
+**Auth — Bearer token to req.user:**
+
+```js
+import jwt from "jsonwebtoken";
+
+export async function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: { code: "NO_TOKEN", message: "Authorization required" } });
+  }
+  const token = header.slice(7);
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { id: payload.sub, role: payload.role };
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: { code: "INVALID_TOKEN", message: "Token invalid or expired" } });
+  }
+}
+```
+
+**Role gate — depends on req.user being set:**
+
+```js
+export function requireRole(...allowed) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+    if (!allowed.includes(req.user.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    next();
+  };
+}
+
+// Use:
+adminRouter.use(requireAuth, requireRole("admin"));
+moderatorRouter.use(requireAuth, requireRole("admin", "moderator"));
+```
+
+The factory pattern — `requireRole(...allowed)` returns the actual middleware — lets you parameterize without writing a new middleware per role combo.
+
+**Zod validation factory** — covered briefly in the previous concept:
+
+```js
+export function zodValidate(schema, source = "body") {
+  return (req, res, next) => {
+    const parsed = schema.safeParse(req[source]);
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: "VALIDATION_ERROR", details: parsed.error.format() } });
+    }
+    req[source] = parsed.data;
+    next();
+  };
+}
+
+// Use:
+app.post("/api/posts",
+  requireAuth,
+  zodValidate(CreatePostSchema),
+  createPost,
+);
+```
+
+After the validate middleware, `req.body` is *guaranteed* to match `CreatePostSchema`. The handler can trust it.
+
+### Error-handling middleware — the special signature
+
+A middleware with **four arguments** `(err, req, res, next)` is treated as an error handler. Register it last:
+
+```js
+app.use((err, req, res, next) => {
+  if (err.status && err.message) {
+    return res.status(err.status).json({ error: { message: err.message } });
+  }
+  console.error("[unhandled]", err);
+  res.status(500).json({ error: { message: "Internal server error" } });
+});
+```
+
+Now anywhere in a handler:
+
+```js
+app.get("/api/posts/:id", async (req, res) => {
+  const post = await db.post.findUnique({ where: { id: req.params.id } });
+  if (!post) {
+    const err = new Error("Post not found");
+    err.status = 404;
+    throw err;            // Express catches → error middleware → 404 response
+  }
+  res.json(post);
+});
+```
+
+Or with a custom error class:
+
+```js
+export class HttpError extends Error {
+  constructor(status, message, code) {
+    super(message);
+    this.status = status;
+    this.code   = code;
+  }
+}
+
+// In handlers:
+if (!post) throw new HttpError(404, "Post not found", "NOT_FOUND");
+```
+
+Error middleware centralizes error response shape. Every endpoint can `throw` and get a consistent `{ error: { ... } }` response without re-implementing the shape.
+
+### A typical Express app setup, end to end
+
+Putting all of this together — what `server.js` looks like in a real project:
+
+```js
+// src/server.js
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
+
+import { env } from "./lib/env.js";
+import { postsRouter } from "./routes/posts.js";
+import { usersRouter } from "./routes/users.js";
+import { authRouter }  from "./routes/auth.js";
+import { errorHandler } from "./middleware/error.js";
+
+const app = express();
+
+// ── Global middleware (registered FIRST — order matters) ──────────────
+app.use(helmet());                                    // security headers
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+app.use(express.json({ limit: "1mb" }));              // body parser
+app.use(cookieParser(env.COOKIE_SECRET));             // cookie parser
+app.use(morgan("combined"));                          // logging
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));   // rate limit
+
+// ── Routers (mounted on their resource path) ──────────────────────────
+app.use("/api/auth",  authRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/posts", postsRouter);
+
+// ── Catch-all 404 (any unmatched route) ───────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
+});
+
+// ── Error handler (LAST — has the (err, req, res, next) signature) ────
+app.use(errorHandler);
+
+app.listen(env.PORT, () => {
+  console.log(`API → http://localhost:${env.PORT}`);
+});
+```
+
+That's the production shape. Every Express project you'll touch looks broadly like this. Middleware before routers. Routers in resource order. 404 catch-all second-to-last. Error handler last.
+
+### Middleware ordering — the gotchas
+
+The most common Express bug: middleware in the wrong order. A short list:
+
+- **`express.json()` before any handler that reads `req.body`.** Otherwise `req.body === undefined`.
+- **`cors()` before authentication.** Otherwise the browser preflight `OPTIONS` request gets a 401 before CORS can write its headers.
+- **Error handler last.** Otherwise it never runs — Express only calls error middleware after all regular middleware.
+- **Logger first.** So even failed-auth requests get logged.
+- **Rate limit AFTER auth?** Depends on your goal. To rate-limit per IP, put it first. To rate-limit per user, put it after auth (so `req.user` is available).
+
+If something behaves weirdly, the first thing to check is "is the middleware order right?"
+
+### Anti-patterns to skip
+
+- **Massive global middleware lists.** If your `app.use(...)` block is 30 lines, you're applying things globally that should be route-scoped. Pull cross-cutting that's actually only for some routes out into routers.
+- **Middleware that modifies the *response* without setting up listeners on `res.on(...)`.** You can't change `res.json(...)` after it's sent. Hook `finish` if you need to react to the outcome.
+- **Heavy work in middleware that runs for every route.** Don't call the database on every request to enrich `req.tenant` if only 1 route in 50 needs it. Lazy-load instead.
+- **Multiple body parsers.** `express.json()` AND `body-parser`'s `.json()` would both parse the body, second one wins, weird bugs follow. Pick one.
+
+<ExampleProject
+  src="middleware-chain"
+  title="Trace a request through the middleware chain"
+  description="Click 'Send request' and watch a request walk through cors → logger → requireAuth → zodValidate → handler. Each middleware lights up green when it runs, with a callout for what it did. Toggle a failing auth or invalid body to see the chain short-circuit."
+/>
+
+<Exercise
+  title="Build the four-layer middleware stack for your API"
+  starter={`Take the Express API you built in the previous concept's exercise
+(the /api/tasks CRUD app) and layer in four middleware:
+
+  1. Logger (write your own — log method, url, status, ms).
+       function logger(req, res, next) {
+         const start = Date.now();
+         res.on("finish", () => {
+           console.log(\`\${req.method} \${req.url} → \${res.statusCode} (\${Date.now() - start}ms)\`);
+         });
+         next();
+       }
+       app.use(logger);
+
+  2. Auth (factory pattern).
+     - Read Authorization header. If missing or not 'Bearer demo',
+       respond 401.
+     - If valid, set req.user = { id: 1, email: "demo@test.local" }
+       and call next().
+     - Apply to POST/PATCH/DELETE routes (the write paths), not GET.
+
+  3. Body validation (Zod factory).
+       npm install zod
+       import { z } from "zod";
+       const TaskSchema = z.object({ title: z.string().min(1) });
+
+       function zodValidate(schema) {
+         return (req, res, next) => {
+           const parsed = schema.safeParse(req.body);
+           if (!parsed.success) {
+             return res.status(400).json({
+               error: { code: "VALIDATION_ERROR", details: parsed.error.format() }
+             });
+           }
+           req.body = parsed.data;
+           next();
+         };
+       }
+       app.post("/api/tasks", requireAuth, zodValidate(TaskSchema), createTask);
+
+  4. Error handler (last).
+       app.use((err, req, res, next) => {
+         console.error(err);
+         res.status(err.status || 500).json({
+           error: { code: err.code || "INTERNAL", message: err.message }
+         });
+       });
+
+  Test the four layers:
+    a) GET /api/tasks → no auth needed, returns 200, logger fires.
+    b) POST /api/tasks WITHOUT Authorization → 401 from requireAuth.
+    c) POST /api/tasks with Authorization but no body → 400 from
+       zodValidate.
+    d) POST /api/tasks with Authorization + valid body → 201.
+    e) Add a throw in your handler — see the error handler catch it
+       and respond 500.
+
+  Check the console: every request prints a log line. Every error has
+  a consistent shape ({ error: { code, message } }). Every write path
+  is gated by auth + validation, but the route handler itself is just
+  the business logic.
+
+That's the middleware pattern you'll use for every API from now on.
+The handler becomes a thin line about *what the endpoint does*; all
+the *how* (auth, validation, logging, errors) lives in middleware
+that's reusable across every route.`}
+/>

@@ -1,0 +1,249 @@
+<!--
+  Trace a request walking through the middleware chain.
+  Click "Send" to step a fake POST /api/posts through:
+    1. cors    2. logger    3. requireAuth    4. zodValidate    5. handler
+  Each station lights up green when it runs.
+  Toggle "fail auth" / "fail body" to see the chain short-circuit.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Trace a request through Express middleware</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; }
+
+      .controls {
+        display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0;
+        align-items: center;
+      }
+      .controls button {
+        padding: 0.5rem 0.95rem; border-radius: 6px; border: 1px solid #15803d;
+        background: #15803d; color: #fff; cursor: pointer; font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .controls button.secondary { background: #fff; color: #18181b; border-color: #d4d4d8; }
+      .controls label { font-size: 0.84rem; display: inline-flex; align-items: center; gap: 0.35rem; }
+      .controls input[type="checkbox"] { accent-color: #15803d; }
+
+      .chain {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem;
+        margin: 1rem 0;
+      }
+      .station {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.65rem 0.7rem; text-align: center; font-size: 0.78rem;
+        transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+        position: relative;
+      }
+      .station .num {
+        font-family: ui-monospace, monospace; font-size: 0.68rem; color: #71717a;
+        text-transform: uppercase; letter-spacing: 0.08em;
+      }
+      .station .name { font-weight: 600; margin-top: 0.2rem; }
+      .station.active {
+        background: #fef3c7; border-color: #f59e0b;
+        box-shadow: 0 0 0 2px #fde68a;
+      }
+      .station.passed {
+        background: #dcfce7; border-color: #16a34a; color: #166534;
+      }
+      .station.failed {
+        background: #fee2e2; border-color: #dc2626; color: #7f1d1d;
+      }
+      .station.pending { opacity: 0.5; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 8px; padding: 0.9rem; background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .req-box {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+        padding: 0.65rem 0.85rem; font-family: ui-monospace, monospace; font-size: 0.78rem;
+        white-space: pre-wrap; word-break: break-all;
+      }
+
+      .log {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        background: #0a0a0d; color: #ededee; padding: 0.65rem 0.85rem;
+        border-radius: 6px; max-height: 12rem; overflow-y: auto;
+      }
+      .log .ts { color: #71717a; margin-right: 0.5rem; }
+      .log .ok { color: #4ade80; }
+      .log .fail { color: #f87171; }
+      .log .info { color: #38bdf8; }
+
+      .outcome {
+        margin-top: 0.7rem; padding: 0.65rem 0.85rem; border-radius: 6px;
+        font-size: 0.85rem;
+      }
+      .outcome.pass { background: #ecfdf5; border-left: 3px solid #16a34a; color: #166534; }
+      .outcome.fail { background: #fee2e2; border-left: 3px solid #dc2626; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>Trace a request through Express middleware</h1>
+    <p>Click <strong>Send request</strong> to walk a POST /api/posts through the chain. Each middleware lights up as it runs. Toggle the failure switches to see the chain short-circuit.</p>
+
+    <div class="controls">
+      <button id="send">Send request</button>
+      <button id="reset" class="secondary">Reset</button>
+      <label><input type="checkbox" id="fail-auth"> Missing auth header</label>
+      <label><input type="checkbox" id="fail-body"> Invalid body</label>
+    </div>
+
+    <div class="chain" id="chain">
+      <div class="station pending" data-id="cors">     <div class="num">1</div><div class="name">cors</div></div>
+      <div class="station pending" data-id="logger">   <div class="num">2</div><div class="name">logger</div></div>
+      <div class="station pending" data-id="auth">     <div class="num">3</div><div class="name">requireAuth</div></div>
+      <div class="station pending" data-id="validate"> <div class="num">4</div><div class="name">zodValidate</div></div>
+      <div class="station pending" data-id="handler">  <div class="num">5</div><div class="name">handler</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Request being sent</h2>
+        <div class="req-box" id="req-box"></div>
+      </div>
+      <div class="col">
+        <h2>Server log</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+
+    <div id="outcome"></div>
+
+    <script>
+      const stations = ["cors", "logger", "auth", "validate", "handler"];
+
+      function buildReq() {
+        const failAuth = document.getElementById("fail-auth").checked;
+        const failBody = document.getElementById("fail-body").checked;
+        return {
+          method: "POST",
+          url: "/api/posts",
+          headers: {
+            "Content-Type": "application/json",
+            ...(failAuth ? {} : { "Authorization": "Bearer demo-token" }),
+            "Origin": "https://web.jbeditor.com",
+          },
+          body: failBody ? { /* missing required title */ } : { title: "First post" },
+        };
+      }
+
+      function renderReq(r) {
+        document.getElementById("req-box").textContent =
+          `${r.method} ${r.url}\n` +
+          Object.entries(r.headers).map(([k, v]) => `${k}: ${v}`).join("\n") +
+          `\n\n` + JSON.stringify(r.body);
+      }
+
+      function setStation(id, state) {
+        const el = document.querySelector(`.station[data-id="${id}"]`);
+        if (!el) return;
+        el.className = "station " + state;
+      }
+
+      function resetChain() {
+        stations.forEach((s) => setStation(s, "pending"));
+        document.getElementById("log").innerHTML = "";
+        document.getElementById("outcome").innerHTML = "";
+      }
+
+      function nowTs() {
+        const d = new Date();
+        return d.toLocaleTimeString("en-GB", { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
+      }
+      function addLog(msg, kind = "info") {
+        const div = document.createElement("div");
+        div.innerHTML = `<span class="ts">${nowTs()}</span><span class="${kind}">${msg}</span>`;
+        document.getElementById("log").appendChild(div);
+        document.getElementById("log").scrollTop = 9999;
+      }
+
+      function setOutcome(kind, html) {
+        document.getElementById("outcome").innerHTML = `<div class="outcome ${kind}">${html}</div>`;
+      }
+
+      function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+      async function send() {
+        resetChain();
+        const req = buildReq();
+        renderReq(req);
+
+        // 1. cors
+        setStation("cors", "active");
+        addLog("cors() — checking Origin against allowed list...", "info");
+        await wait(400);
+        setStation("cors", "passed");
+        addLog("cors() — Origin https://web.jbeditor.com allowed. next()", "ok");
+
+        // 2. logger
+        setStation("logger", "active");
+        addLog("logger — opening request timer + res.on('finish') listener", "info");
+        await wait(300);
+        setStation("logger", "passed");
+        addLog("logger — next()", "ok");
+
+        // 3. requireAuth
+        setStation("auth", "active");
+        if (!req.headers.Authorization) {
+          addLog("requireAuth — Authorization header missing → res.status(401)", "fail");
+          await wait(500);
+          setStation("auth", "failed");
+          ["validate", "handler"].forEach((s) => setStation(s, "pending"));
+          addLog("POST /api/posts → 401 (12ms)", "fail");
+          setOutcome("fail", `<strong>Short-circuited at requireAuth.</strong> The handler never ran. The chain stops the moment a middleware sends a response.`);
+          return;
+        }
+        addLog("requireAuth — Bearer token found, verifying JWT...", "info");
+        await wait(500);
+        addLog("requireAuth — token valid, setting req.user = { id: 1 }. next()", "ok");
+        setStation("auth", "passed");
+
+        // 4. zodValidate
+        setStation("validate", "active");
+        if (!req.body.title) {
+          addLog("zodValidate — req.body fails schema (title required) → 400", "fail");
+          await wait(500);
+          setStation("validate", "failed");
+          setStation("handler", "pending");
+          addLog("POST /api/posts → 400 (18ms)", "fail");
+          setOutcome("fail", `<strong>Short-circuited at zodValidate.</strong> The validation layer caught a bad payload before the handler could touch the database.`);
+          return;
+        }
+        addLog("zodValidate — req.body parsed and accepted. next()", "ok");
+        await wait(400);
+        setStation("validate", "passed");
+
+        // 5. handler
+        setStation("handler", "active");
+        addLog("handler — await db.post.create({ data: req.body, userId: req.user.id })", "info");
+        await wait(800);
+        addLog("handler — db.post.create returned { id: 1, title: 'First post' }", "ok");
+        await wait(200);
+        addLog("handler — res.status(201).json(post)", "ok");
+        setStation("handler", "passed");
+        addLog("POST /api/posts → 201 (24ms)", "ok");
+        setOutcome("pass", `<strong>Full chain passed.</strong> Every middleware did its one job, the handler ran with a guaranteed-valid req.body and an authenticated req.user. The response shape was set by the handler; the cross-cutting concerns lived in the chain.`);
+      }
+
+      document.getElementById("send").addEventListener("click", send);
+      document.getElementById("reset").addEventListener("click", () => {
+        resetChain();
+        renderReq(buildReq());
+      });
+      document.getElementById("fail-auth").addEventListener("change", () => renderReq(buildReq()));
+      document.getElementById("fail-body").addEventListener("change", () => renderReq(buildReq()));
+
+      renderReq(buildReq());
+    </script>
+  </body>
+</html>

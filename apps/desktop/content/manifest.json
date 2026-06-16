@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 18,
   "phases": [
     {
       "id": "phase-01",
@@ -118,9 +118,9 @@
         { "slug": "phase-04/why-split-frontend-backend", "title": "Why split frontend and backend", "available": true },
         { "slug": "phase-04/what-is-nodejs", "title": "What Node.js is", "available": true },
         { "slug": "phase-04/node-modules-npm", "title": "Node modules and npm", "available": true },
-        { "slug": "phase-04/express-routing", "title": "What Express is and routing basics", "available": false },
-        { "slug": "phase-04/request-response", "title": "Request and response objects", "available": false },
-        { "slug": "phase-04/middleware", "title": "Middleware", "available": false },
+        { "slug": "phase-04/express-routing", "title": "What Express is and routing basics", "available": true },
+        { "slug": "phase-04/request-response", "title": "Request and response objects", "available": true },
+        { "slug": "phase-04/middleware", "title": "Middleware", "available": true },
         { "slug": "phase-04/rest-endpoints", "title": "Building REST endpoints", "available": false },
         { "slug": "phase-04/express-postgres", "title": "Connecting Express to PostgreSQL", "available": false },
         { "slug": "phase-04/express-mongodb", "title": "Connecting Express to MongoDB", "available": false },
