@@ -21,6 +21,18 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.7",
+    releasedAt: "2026-06-17",
+    headline: "Language services, snippets, and Git",
+    highlights: [
+      { kind: "feature", body: "Inline TypeScript / JavaScript diagnostics, hover docs, and autocomplete — Monaco's bundled TS worker is now wired up with JSX support and sensible defaults for student code." },
+      { kind: "feature", body: "Curated snippet library for HTML / CSS / JS / TS / React / Go / Python. Type 'html5' + Tab for the boilerplate, 'flex' for a centered flex row, 'useState' for the React hook pair, 'errcheck' for the Go pattern." },
+      { kind: "feature", body: "Git tab in the bottom panel: lists modified / added / deleted / untracked files with status badges, click to open, polls every 4 seconds." },
+      { kind: "feature", body: "Monaco diff gutter — colored line strips for added (green), modified (amber), and deleted (red) lines, just like VSCode." },
+      { kind: "polish",  body: "Silenced 'cannot find module' errors for student code so red squiggles only mean something the student actually wrote wrong." },
+    ],
+  },
+  {
     version: "0.4.6",
     releasedAt: "2026-06-17",
     headline: "Integrated terminal + Live Server",

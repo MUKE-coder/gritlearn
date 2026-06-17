@@ -94,6 +94,25 @@ html, body, #app {
   background: var(--text-muted);
 }
 
+/* Monaco git-status gutter strips. The Monaco editor's
+   "linesDecorationsClassName" is set per-hunk in monaco-git-gutter.ts;
+   here we give each class its left-edge colour bar. */
+.git-gutter-added {
+  background-color: #16a34a;
+  width: 3px !important;
+  margin-left: 3px;
+}
+.git-gutter-modified {
+  background-color: #f59e0b;
+  width: 3px !important;
+  margin-left: 3px;
+}
+.git-gutter-deleted {
+  background-color: #dc2626;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
 /* Focus ring matches GRIT_STYLE_GUIDE */
 *:focus-visible {
   outline: 2px solid var(--accent);

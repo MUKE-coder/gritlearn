@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { useWorkspace } from "@/lib/workspace-store";
 import { useEditorPrefs } from "@/lib/editor-prefs";
 import { registerMonacoThemes, monacoThemeId } from "@/lib/monaco-themes";
+import { applyGitGutter } from "@/lib/monaco-git-gutter";
 import "@/lib/monaco-setup";
 
 // Tell @monaco-editor/react to use the local monaco instance instead of
@@ -17,10 +18,31 @@ loader.config({ monaco });
 registerMonacoThemes(monaco);
 
 export function MonacoPane() {
-  const { activeTab, activeTabIndex, updateActiveContent, saveActiveTab } = useWorkspace();
+  const { activeTab, activeTabIndex, updateActiveContent, saveActiveTab, rootPath } = useWorkspace();
   const { prefs } = useEditorPrefs();
 
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const gutterColRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
+
+  // Pull fresh git hunks + redraw the gutter strips. Called after
+  // the editor mounts, after the active tab changes, and after a
+  // save (since saving may produce a new diff against HEAD).
+  const refreshGutter = useCallback(async () => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    gutterColRef.current?.clear();
+    gutterColRef.current = null;
+    if (!activeTab?.path || !rootPath) return;
+    const col = await applyGitGutter(ed, monaco, rootPath, activeTab.path);
+    gutterColRef.current = col;
+  }, [activeTab?.path, rootPath]);
+
+  useEffect(() => {
+    void refreshGutter();
+    // Re-run when the active tab's saved content changes (i.e. after
+    // a save flushed dirty → clean).
+  }, [refreshGutter, activeTab?.savedContent]);
 
   // Bind Ctrl/Cmd+S → save active tab. Listening at the window level (not
   // on the editor) so the shortcut works while the file tree has focus too.
@@ -53,12 +75,15 @@ export function MonacoPane() {
   }, [activeTab?.content, activeTab?.savedContent, activeTab?.path, prefs.autoSave, prefs.autoSaveDelayMs, saveActiveTab]);
 
   const handleMount: OnMount = (editor) => {
+    editorRef.current = editor;
     // Default Monaco's Cmd/Ctrl+K binding fights our command palette;
     // disable it inside the editor so the global shortcut wins.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
       const event = new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true });
       window.dispatchEvent(event);
     });
+    // First paint of the git gutter.
+    void refreshGutter();
   };
 
   if (!activeTab) {

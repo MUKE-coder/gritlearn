@@ -10,8 +10,9 @@
 // flipping between them keeps state intact.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Globe, Play, Square, StopCircle, Terminal as TerminalIcon, X } from "lucide-react";
+import { ChevronDown, GitBranch, Globe, Play, Square, StopCircle, Terminal as TerminalIcon, X } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-store";
+import { GitPanel } from "./git-panel";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — generated at build time
 import * as App from "../../../wailsjs/go/main/App";
@@ -19,7 +20,7 @@ import * as App from "../../../wailsjs/go/main/App";
 // @ts-ignore — generated at build time
 import { EventsOn } from "../../../wailsjs/runtime";
 
-type Tab = "terminal" | "live-server";
+type Tab = "terminal" | "live-server" | "git";
 
 interface BottomPanelProps {
   onClose: () => void;
@@ -41,6 +42,10 @@ export function BottomPanel({ onClose, phaseId }: BottomPanelProps) {
             <Globe className="h-3.5 w-3.5" />
             Live Server
           </TabButton>
+          <TabButton active={tab === "git"} onClick={() => setTab("git")}>
+            <GitBranch className="h-3.5 w-3.5" />
+            Git
+          </TabButton>
         </div>
         <button
           onClick={onClose}
@@ -51,7 +56,9 @@ export function BottomPanel({ onClose, phaseId }: BottomPanelProps) {
         </button>
       </div>
       <div className="min-h-0 flex-1">
-        {tab === "terminal" ? <TerminalPane phaseId={phaseId} /> : <LiveServerPane />}
+        {tab === "terminal" && <TerminalPane phaseId={phaseId} />}
+        {tab === "live-server" && <LiveServerPane />}
+        {tab === "git" && <GitPanel />}
       </div>
     </div>
   );
