@@ -34,6 +34,7 @@ type App struct {
 	apiURL   string
 	live     *LiveServer
 	runner   *CommandRunner
+	pty      *PtyManager
 }
 
 func NewApp() *App {
@@ -41,7 +42,33 @@ func NewApp() *App {
 		kc:     NewKeychain(),
 		live:   NewLiveServer(),
 		runner: NewCommandRunner(),
+		pty:    NewPtyManager(),
 	}
+}
+
+// PtyOpen starts a new shell session anchored at cwd and returns the
+// session id. The frontend xterm.js component uses the id to route
+// pty:data events and to call PtyWrite/PtyResize/PtyClose on input.
+func (a *App) PtyOpen(cwd string, cols, rows int) (string, error) {
+	return a.pty.Open(cwd, cols, rows)
+}
+
+// PtyWrite forwards user keystrokes (already encoded as raw bytes
+// in a JS string) to the shell's stdin.
+func (a *App) PtyWrite(id, data string) error {
+	return a.pty.Write(id, data)
+}
+
+// PtyResize updates the PTY dimensions when xterm-addon-fit calculates
+// a new column/row count from the pane size.
+func (a *App) PtyResize(id string, cols, rows int) error {
+	return a.pty.Resize(id, cols, rows)
+}
+
+// PtyClose tears down a shell session — called when the student closes
+// the terminal tab.
+func (a *App) PtyClose(id string) {
+	a.pty.Close(id)
 }
 
 // RunCommand kicks off `command` inside `cwd` and returns the id
@@ -106,6 +133,7 @@ func (a *App) OpenInBrowser(url string) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.runner.SetContext(ctx)
+	a.pty.SetContext(ctx)
 
 	a.apiURL = os.Getenv("VITE_API_URL")
 	if a.apiURL == "" {

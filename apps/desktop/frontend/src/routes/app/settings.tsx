@@ -1,10 +1,15 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/lib/theme-provider";
 import { useEditorPrefs } from "@/lib/editor-prefs";
 import { MONACO_THEME_OPTIONS } from "@/lib/monaco-themes";
-import { Moon, Sun } from "lucide-react";
+import { usePluginHost } from "@/lib/plugin-host";
+import { AlertTriangle, Loader2, Moon, Plug, Sun, Trash2 } from "lucide-react";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — generated at build time
+import * as App from "../../../wailsjs/go/main/App";
 
 export const Route = createFileRoute("/app/settings")({
   component: SettingsPage,
@@ -132,6 +137,9 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* ─── Plugins ───────────────────────────────────────────── */}
+        <PluginsCard />
+
         {/* ─── Keyboard shortcuts ───────────────────────────────── */}
         <Card>
           <CardContent className="p-6">
@@ -231,4 +239,148 @@ function ShortcutRow({ label, keys }: { label: string; keys: string }) {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+function PluginsCard() {
+  const { records, refresh } = usePluginHost();
+  const [installUrl, setInstallUrl] = useState("");
+  const [manifestUrl, setManifestUrl] = useState("");
+  const [installing, setInstalling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const install = async () => {
+    if (!installUrl.trim()) return;
+    setInstalling(true);
+    setError(null);
+    try {
+      await App.InstallPlugin(installUrl.trim(), manifestUrl.trim() || "");
+      setInstallUrl("");
+      setManifestUrl("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const toggle = async (id: string, enabled: boolean) => {
+    try {
+      await App.SetPluginEnabled(id, enabled);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const uninstall = async (id: string, name: string) => {
+    if (!confirm(`Uninstall "${name}"? Its files will be removed from disk.`)) return;
+    try {
+      await App.UninstallPlugin(id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-6">
+        <div>
+          <h3 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+            <Plug className="h-4 w-4 text-accent" />
+            Plugins
+          </h3>
+          <p className="mt-1 text-[13px] text-foreground-secondary">
+            Extend JEditor by installing community plugins. Each plugin gets the
+            same access as the editor itself — only install from sources you trust.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Plugins run with full access to your editor. There's no sandbox —
+              treat them like any other code you'd run on your machine.
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-md border border-border bg-surface-2 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-foreground-muted">
+            Install from URL
+          </div>
+          <input
+            value={installUrl}
+            onChange={(e) => setInstallUrl(e.target.value)}
+            placeholder="https://example.com/my-plugin.js"
+            className="h-9 w-full rounded border border-border bg-surface-1 px-3 font-mono text-[12.5px] text-foreground placeholder:text-foreground-muted"
+          />
+          <input
+            value={manifestUrl}
+            onChange={(e) => setManifestUrl(e.target.value)}
+            placeholder="https://example.com/manifest.json  (optional, falls back to inline)"
+            className="h-9 w-full rounded border border-border bg-surface-1 px-3 font-mono text-[11.5px] text-foreground placeholder:text-foreground-muted"
+          />
+          <div className="flex items-center justify-end gap-2">
+            {error && <span className="text-[12px] text-danger">{error}</span>}
+            <button
+              onClick={install}
+              disabled={installing || !installUrl.trim()}
+              className="flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[12px] font-semibold text-zinc-900 hover:bg-accent-hover disabled:opacity-50"
+            >
+              {installing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {installing ? "Installing…" : "Install"}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {records.length === 0 ? (
+            <p className="text-[12.5px] text-foreground-muted">
+              No plugins installed yet.
+            </p>
+          ) : (
+            records.map((rec) => (
+              <div
+                key={rec.manifest.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-2 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[13px] font-medium text-foreground">
+                      {rec.manifest.name || rec.manifest.id}
+                    </span>
+                    <span className="rounded border border-border bg-surface-1 px-1.5 py-0.5 font-mono text-[10px] text-foreground-muted">
+                      v{rec.manifest.version || "?"}
+                    </span>
+                  </div>
+                  {rec.manifest.description && (
+                    <div className="mt-0.5 truncate text-[11.5px] text-foreground-secondary">
+                      {rec.manifest.description}
+                    </div>
+                  )}
+                  <div className="mt-0.5 truncate font-mono text-[10px] text-foreground-muted">
+                    {rec.manifest.id}
+                  </div>
+                </div>
+                <Toggle
+                  value={rec.enabled}
+                  onChange={(v) => void toggle(rec.manifest.id, v)}
+                />
+                <button
+                  onClick={() => void uninstall(rec.manifest.id, rec.manifest.name || rec.manifest.id)}
+                  title="Uninstall"
+                  className="rounded p-1.5 text-foreground-muted hover:bg-danger/15 hover:text-danger"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }

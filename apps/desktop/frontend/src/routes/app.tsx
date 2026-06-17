@@ -4,11 +4,13 @@ import { TitleBar } from "@/components/layout/title-bar";
 import { SessionStatusBanner } from "@/components/layout/session-status-banner";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { UpdateBanner } from "@/components/update-banner";
-import { WorkspaceProvider } from "@/lib/workspace-store";
+import { PluginToaster } from "@/components/plugin-toaster";
+import { useWorkspace, WorkspaceProvider } from "@/lib/workspace-store";
 import { CurriculumProvider } from "@/lib/curriculum-store";
 import { ProgressProvider } from "@/lib/progress-store";
 import { SyncProvider } from "@/lib/sync-provider";
 import { EditorPrefsProvider } from "@/lib/editor-prefs";
+import { PluginHostProvider } from "@/lib/plugin-host";
 import { useShortcuts } from "@/lib/use-shortcuts";
 
 export const Route = createFileRoute("/app")({
@@ -48,23 +50,36 @@ function AppLayout() {
       <CurriculumProvider>
         <SyncProvider>
         <WorkspaceProvider>
-          <div className="flex h-screen flex-col bg-background">
-            <TitleBar />
-            <UpdateBanner />
-            <SessionStatusBanner />
+          <PluginHostWrapper>
+            <div className="flex h-screen flex-col bg-background">
+              <TitleBar />
+              <UpdateBanner />
+              <SessionStatusBanner />
 
-            {/* No padding here — EditorShell fills the whole canvas. Sub-routes
-                like /app/profile add their own padding via PageHeader. */}
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <Outlet />
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <Outlet />
+              </div>
+
+              <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+              <PluginToaster />
             </div>
-
-            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-          </div>
+          </PluginHostWrapper>
         </WorkspaceProvider>
         </SyncProvider>
       </CurriculumProvider>
     </ProgressProvider>
     </EditorPrefsProvider>
   );
+}
+
+// PluginHostWrapper exists so we can read from useWorkspace() (which
+// requires being inside WorkspaceProvider) and hand the workspace
+// adapter to the plugin host.
+function PluginHostWrapper({ children }: { children: React.ReactNode }) {
+  const ws = useWorkspace();
+  const adapter = {
+    openFile: ws.openFile,
+    getRoot: () => ws.rootPath,
+  };
+  return <PluginHostProvider workspace={adapter}>{children}</PluginHostProvider>;
 }

@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.7";
+export const FALLBACK_VERSION = "0.4.8";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-17T09:30:00Z",
+  releasedAt: "2026-06-17T11:00:00Z",
   releaseNotes:
-    "JEditor v0.4.7 — language services + snippets + Git. Inline TypeScript / JavaScript diagnostics + hover + autocomplete via Monaco's bundled TS worker (with sensible defaults for student code — JSX enabled, 'cannot find module' silenced). Curated snippet library for HTML / CSS / JS / TS / React / Go / Python — type 'html5', 'flex', 'useState', 'errcheck' + Tab. New Git tab in the bottom panel lists modified / added / deleted / untracked files (polls every 4s). Monaco gutter shows colored strips for added / modified / deleted lines, just like VSCode.",
+    "JEditor v0.4.8 — full PTY terminal + plugin scaffolding. The Terminal tab is now a real xterm.js shell powered by ConPTY on Windows / openpty on Unix: Ctrl+C signals, ncurses apps like vim and top, arrow-key history, the works. New plugin system: install single-file JS plugins from a URL via Settings, register commands, listen for events (fileOpen, fileSaved), open files, and emit UI toasts via the JEditor global. Plugins run unsandboxed — install from sources you trust.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

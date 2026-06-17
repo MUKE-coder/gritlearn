@@ -21,6 +21,18 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.8",
+    releasedAt: "2026-06-17",
+    headline: "Full PTY terminal + plugin scaffolding",
+    highlights: [
+      { kind: "feature", body: "Real terminal — the Terminal tab is now xterm.js wired to a PTY (ConPTY on Windows, openpty on Unix). Ctrl+C signals, ncurses apps (vim, top), arrow-key history, the works." },
+      { kind: "feature", body: "Plugin system — install single-file JS plugins from a URL via Settings. The JEditor global exposes commands, events (fileOpen / fileSaved), workspace.openFile, and UI toasts." },
+      { kind: "feature", body: "Plugin manager in Settings: install, enable / disable, uninstall, see id + version + description." },
+      { kind: "polish",  body: "Plugins are deliberately unsandboxed — the Settings page is explicit: 'treat them like any other code you'd run on your machine'." },
+      { kind: "breaking", body: "Old line-based Terminal pane removed (the new PTY terminal replaces it)." },
+    ],
+  },
+  {
     version: "0.4.7",
     releasedAt: "2026-06-17",
     headline: "Language services, snippets, and Git",
