@@ -67,9 +67,15 @@ export function useOnlineStatus() {
       }
     };
 
+    // Manual re-check trigger — TitleBar's ConnectionIndicator
+    // dispatches this so the student can force a fresh heartbeat
+    // without waiting for the next 15s interval tick.
+    const handleRecheck = () => void ping();
+
     if (typeof window !== "undefined") {
       window.addEventListener("online", handleOnline);
       window.addEventListener("offline", handleOffline);
+      window.addEventListener("JEditor:recheck-online", handleRecheck);
     }
 
     return () => {
@@ -78,6 +84,7 @@ export function useOnlineStatus() {
       if (typeof window !== "undefined") {
         window.removeEventListener("online", handleOnline);
         window.removeEventListener("offline", handleOffline);
+        window.removeEventListener("JEditor:recheck-online", handleRecheck);
       }
     };
   }, []);

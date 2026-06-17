@@ -12,15 +12,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
-  File,
   FilePlus,
   Folder,
-  FolderOpen,
   FolderPlus,
   Pencil,
   Trash2,
 } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-store";
+import { FileIcon } from "./file-icon";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — generated at build time
@@ -152,15 +151,7 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
             ) : (
               <span className="w-3" />
             )}
-            {node.is_dir ? (
-              expanded ? (
-                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-accent" />
-              ) : (
-                <Folder className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
-              )
-            ) : (
-              <File className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
-            )}
+            <FileIcon name={node.name} isDir={node.is_dir} expanded={expanded} />
             <span className="truncate font-mono">{node.name}</span>
           </button>
         )}
@@ -270,11 +261,7 @@ function InlineNameInput({ initial, depth, isDir, onCommit, onCancel }: InlineNa
       style={{ paddingLeft: 8 + depth * 12 }}
     >
       <span className="w-3" />
-      {isDir ? (
-        <Folder className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
-      ) : (
-        <File className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
-      )}
+      <FileIcon name={value || "new"} isDir={isDir} />
       <input
         ref={ref}
         value={value}

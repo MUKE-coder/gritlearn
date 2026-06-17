@@ -68,7 +68,7 @@ interface ExampleProjectProps {
 }
 
 export function ExampleProject({ src, title, description, conceptSlug }: ExampleProjectProps) {
-  const { setRoot } = useWorkspace();
+  const { setRoot, openFile } = useWorkspace();
   const { recordExampleOpened } = useProgress();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,9 +86,41 @@ export function ExampleProject({ src, title, description, conceptSlug }: Example
       // file tree shows the example immediately. The student can edit
       // freely — the source-of-truth copy in the binary stays untouched.
       setRoot(dst);
+      // Also auto-open an interesting starter file so the user lands in
+      // a buffer instead of an empty editor — the Files panel is
+      // collapsed by default in the new lesson view and showing only
+      // the file tree is easy to miss. Surface the example's
+      // "index.html" first (or README.md, or first file we find).
+      try {
+        const entries = (await App.ListDirectory(dst)) as Array<{ name: string; path: string; is_dir: boolean }>;
+        const PRIORITY = ["index.html", "index.tsx", "index.ts", "index.js", "main.go", "README.md", "app.tsx", "app.ts"];
+        let pick = entries
+          .filter((e) => !e.is_dir)
+          .sort((a, b) => {
+            const ai = PRIORITY.findIndex((p) => p.toLowerCase() === a.name.toLowerCase());
+            const bi = PRIORITY.findIndex((p) => p.toLowerCase() === b.name.toLowerCase());
+            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+          })[0];
+        // No top-level file? Open the first file from the first folder.
+        if (!pick) {
+          const firstDir = entries.find((e) => e.is_dir);
+          if (firstDir) {
+            const nested = (await App.ListDirectory(firstDir.path)) as Array<{ name: string; path: string; is_dir: boolean }>;
+            const nestedFile = nested.find((e) => !e.is_dir);
+            if (nestedFile) pick = nestedFile;
+          }
+        }
+        if (pick) await openFile(pick.path);
+      } catch {
+        // Best-effort — if we can't auto-pick a file, the file tree
+        // still has the freshly-copied example in it.
+      }
       // Touching an example pushes the concept's status up to
       // "in_progress" so the sidebar dot reflects real engagement.
       void recordExampleOpened(conceptSlug, src);
+      // Signal the lesson view to reveal the Files panel, so the
+      // student can see the file tree of the example they just opened.
+      window.dispatchEvent(new CustomEvent("JEditor:show-files"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -109,7 +141,7 @@ export function ExampleProject({ src, title, description, conceptSlug }: Example
         <button
           onClick={() => void handleOpen()}
           disabled={busy}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover disabled:opacity-60"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-semibold text-zinc-900 shadow-sm hover:bg-accent-hover disabled:opacity-60"
         >
           <FolderOpen className="h-3.5 w-3.5" />
           {busy ? "Opening…" : "Open in editor"}

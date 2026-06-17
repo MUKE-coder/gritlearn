@@ -13,6 +13,7 @@ import type { ComponentType, ReactNode } from "react";
 import { evaluate } from "@mdx-js/mdx";
 import * as runtime from "react/jsx-runtime";
 import { teachingComponents, ExampleProject } from "./teaching-blocks";
+import { CodeBlock } from "./code-block";
 
 interface MdxRendererProps {
   /** Raw MDX source as returned by GetConceptMDX. */
@@ -34,7 +35,14 @@ export function MdxRenderer({ source, conceptSlug }: MdxRendererProps) {
     const ScopedExampleProject = (
       props: Omit<React.ComponentProps<typeof ExampleProject>, "conceptSlug">,
     ) => <ExampleProject {...props} conceptSlug={conceptSlug} />;
-    return { ...teachingComponents, ExampleProject: ScopedExampleProject };
+    // Override <pre> so fenced code blocks render through our
+    // CodeBlock (Monaco-coloured + copy button). Inline `code` keeps
+    // the default style from globals.css's .prose-mdx code rule.
+    return {
+      ...teachingComponents,
+      ExampleProject: ScopedExampleProject,
+      pre: CodeBlock,
+    };
   }, [conceptSlug]);
 
   useEffect(() => {

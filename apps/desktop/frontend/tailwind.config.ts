@@ -27,6 +27,10 @@ export default {
         // CSS variable bindings for runtime theming
         background: "var(--bg-primary)",
         surface: "var(--bg-secondary)",
+        // Alias: "surface-1" is the same layer as "surface" — useful
+        // when a component wants the ladder spelled out (1/2/3) for
+        // readability instead of mixing "surface" with "surface-2".
+        "surface-1": "var(--bg-secondary)",
         "surface-2": "var(--bg-tertiary)",
         "surface-3": "var(--bg-elevated)",
         "surface-hover": "var(--bg-hover)",

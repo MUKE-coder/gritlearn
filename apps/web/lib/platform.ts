@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.3";
+export const FALLBACK_VERSION = "0.4.4";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-16T09:00:00Z",
+  releasedAt: "2026-06-17T03:00:00Z",
   releaseNotes:
-    "JEditor v0.4.3 — Boot.dev-style learning shell. /app now lands on a Phase Picker (Web Frontend, Backend, …) with per-phase progress bars. Each phase opens a focused two-pane view: lesson content on the left, editor on the right, with a draggable splitter to resize. Top bar has chapter + lesson dropdowns and a Next button; the dot row shows progress through the current chapter. The misleading folder-plus button in the file tree is gone — replaced by inline New File / New Folder + a right-click menu for rename/delete that actually works in-app.",
+    "JEditor v0.4.4 — editor polish pass. New themes (Monokai Pro default, Dracula, One Dark, GitHub Light) you can switch from Settings. Code snippets in lessons now ship with syntax highlighting and a Copy button. File tree gets type-aware coloured icons (HTML/CSS/JS/TS/JSON/MD/Go/Python). Title bar gains a manual Check-for-Updates button + Light/Dark toggle + clickable Online indicator that forces a re-check. Settings page adds font size / tab size / word wrap / minimap / auto-save controls. Fixed the transparent dropdown bug, the bad-contrast Open-in-Editor button, and made Open-in-Editor actually open the starter file + reveal the Files panel.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

@@ -8,6 +8,7 @@ import { WorkspaceProvider } from "@/lib/workspace-store";
 import { CurriculumProvider } from "@/lib/curriculum-store";
 import { ProgressProvider } from "@/lib/progress-store";
 import { SyncProvider } from "@/lib/sync-provider";
+import { EditorPrefsProvider } from "@/lib/editor-prefs";
 import { useShortcuts } from "@/lib/use-shortcuts";
 
 export const Route = createFileRoute("/app")({
@@ -42,6 +43,7 @@ function AppLayout() {
   // Provider wraps the full /app subtree so the editor, command palette,
   // and any future panels all read from the same workspace state.
   return (
+    <EditorPrefsProvider>
     <ProgressProvider>
       <CurriculumProvider>
         <SyncProvider>
@@ -63,5 +65,6 @@ function AppLayout() {
         </SyncProvider>
       </CurriculumProvider>
     </ProgressProvider>
+    </EditorPrefsProvider>
   );
 }

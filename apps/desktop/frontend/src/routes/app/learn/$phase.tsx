@@ -48,6 +48,15 @@ function LessonViewPage() {
   );
   const chapters: Chapter[] = useMemo(() => (phase ? chaptersForPhase(phase) : []), [phase]);
 
+  // The MDX <ExampleProject> emits this event after copying the
+  // example into the workspace, so the student sees the file tree
+  // and can browse the example they just opened.
+  useEffect(() => {
+    const onShow = () => setFilesVisible(true);
+    window.addEventListener("JEditor:show-files", onShow);
+    return () => window.removeEventListener("JEditor:show-files", onShow);
+  }, []);
+
   // Pick a starting concept on phase change: prefer the existing
   // selection if it's already inside this phase, otherwise the first
   // non-completed available concept, otherwise the first concept.
