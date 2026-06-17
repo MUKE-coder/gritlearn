@@ -43,6 +43,12 @@ interface WorkspaceState {
    *  so the UI stays in sync with disk without us needing a real
    *  filesystem watcher in Go. */
   treeVersion: number;
+  /** In-app clipboard for the file tree's cut/copy/paste. Lives here
+   *  (not on the OS clipboard) so Paste targets nodes inside the
+   *  tree, not random text in other apps. */
+  treeClipboard:
+    | { path: string; op: "cut" | "copy" }
+    | null;
 }
 
 const initialState: WorkspaceState = {
@@ -51,6 +57,7 @@ const initialState: WorkspaceState = {
   activeTabIndex: -1,
   previewVisible: false,
   treeVersion: 0,
+  treeClipboard: null,
 };
 
 type Action =
@@ -62,7 +69,8 @@ type Action =
   | { type: "mark-saved"; index: number; savedContent: string }
   | { type: "set-preview"; visible: boolean }
   | { type: "bump-tree" }
-  | { type: "rename-tab"; oldPath: string; newPath: string };
+  | { type: "rename-tab"; oldPath: string; newPath: string }
+  | { type: "set-clipboard"; clip: WorkspaceState["treeClipboard"] };
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
   switch (action.type) {
@@ -123,6 +131,9 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
           return { ...t, path: action.newPath, name, language: languageForPath(action.newPath) };
         }),
       };
+
+    case "set-clipboard":
+      return { ...state, treeClipboard: action.clip };
   }
 }
 
@@ -146,9 +157,19 @@ export interface WorkspaceContextValue extends WorkspaceState {
   /** Rename or move a file/folder. Bumps treeVersion + retitles any
    *  open tab for that path. */
   renameNode: (oldPath: string, newName: string) => Promise<void>;
+  /** Move a node to a different parent directory (drag-and-drop). */
+  moveNode: (srcPath: string, destDir: string) => Promise<void>;
   /** Delete a file or folder tree. Bumps treeVersion + closes any open
    *  tabs whose path lived underneath it. */
   deleteNode: (path: string) => Promise<void>;
+  /** Duplicate a file/folder next to itself, picking a "copy of" name. */
+  duplicateNode: (path: string) => Promise<void>;
+  /** Stash a path on the tree clipboard for a later Paste. */
+  setClipboard: (clip: WorkspaceState["treeClipboard"]) => void;
+  /** Apply the stashed clipboard to a destination directory. */
+  pasteClipboard: (destDir: string) => Promise<void>;
+  /** Open the OS file manager focused on path. */
+  revealInExplorer: (path: string) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -290,6 +311,69 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [state.tabs],
   );
 
+  const baseName = useCallback((path: string) => {
+    const sep = path.includes("\\") ? "\\" : "/";
+    const idx = path.lastIndexOf(sep);
+    return idx === -1 ? path : path.slice(idx + 1);
+  }, []);
+
+  const moveNode = useCallback(
+    async (srcPath: string, destDir: string) => {
+      if (srcPath === destDir) return;
+      // Don't drop a node onto its current parent — that's a no-op.
+      if (dirOf(srcPath) === destDir) return;
+      const name = baseName(srcPath);
+      const dest = joinPath(destDir, name);
+      // Refuse to move a folder INTO itself (or a child of itself).
+      if (dest.startsWith(srcPath + "/") || dest.startsWith(srcPath + "\\") || dest === srcPath) {
+        throw new Error("Can't move a folder into itself");
+      }
+      await App.RenameFileNode(srcPath, dest);
+      dispatch({ type: "rename-tab", oldPath: srcPath, newPath: dest });
+      dispatch({ type: "bump-tree" });
+    },
+    [dirOf, joinPath, baseName],
+  );
+
+  const duplicateNode = useCallback(async (path: string) => {
+    const dst = await App.UniqueCopyPath(path);
+    await App.CopyFileNode(path, dst);
+    dispatch({ type: "bump-tree" });
+  }, []);
+
+  const setClipboard = useCallback((clip: WorkspaceState["treeClipboard"]) => {
+    dispatch({ type: "set-clipboard", clip });
+  }, []);
+
+  const pasteClipboard = useCallback(
+    async (destDir: string) => {
+      const clip = state.treeClipboard;
+      if (!clip) return;
+      const name = baseName(clip.path);
+      let dest = joinPath(destDir, name);
+      // If the target name already exists, fall back to a "copy of"
+      // variant so paste never silently overwrites.
+      if (await App.FileExists(dest)) {
+        dest = await App.UniqueCopyPath(dest);
+      }
+      if (clip.op === "cut") {
+        await App.RenameFileNode(clip.path, dest);
+        dispatch({ type: "rename-tab", oldPath: clip.path, newPath: dest });
+        dispatch({ type: "set-clipboard", clip: null });
+      } else {
+        await App.CopyFileNode(clip.path, dest);
+        // Copy stays on the clipboard so the user can paste it
+        // again into another folder.
+      }
+      dispatch({ type: "bump-tree" });
+    },
+    [state.treeClipboard, baseName, joinPath],
+  );
+
+  const revealInExplorer = useCallback(async (path: string) => {
+    await App.RevealInExplorer(path);
+  }, []);
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       ...state,
@@ -306,7 +390,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       createFile,
       createFolder,
       renameNode,
+      moveNode,
       deleteNode,
+      duplicateNode,
+      setClipboard,
+      pasteClipboard,
+      revealInExplorer,
     }),
     [
       state,
@@ -322,7 +411,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       createFile,
       createFolder,
       renameNode,
+      moveNode,
       deleteNode,
+      duplicateNode,
+      setClipboard,
+      pasteClipboard,
+      revealInExplorer,
     ],
   );
 
@@ -347,7 +441,12 @@ const noopWorkspaceContext: WorkspaceContextValue = {
   createFile:          async () => {},
   createFolder:        async () => {},
   renameNode:          async () => {},
+  moveNode:            async () => {},
   deleteNode:          async () => {},
+  duplicateNode:       async () => {},
+  setClipboard:        () => {},
+  pasteClipboard:      async () => {},
+  revealInExplorer:    async () => {},
 };
 
 export function useWorkspace(): WorkspaceContextValue {

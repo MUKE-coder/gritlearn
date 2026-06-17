@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"sort"
@@ -280,6 +281,134 @@ func (a *App) RenameFileNode(oldPath, newPath string) error {
 		return fmt.Errorf("rename %s → %s: %w", oldPath, newPath, err)
 	}
 	return nil
+}
+
+// CopyFileNode duplicates a file or directory tree from src to dst.
+// Used by the file tree's Copy/Paste + Duplicate actions. Refuses to
+// overwrite existing paths — the caller should compute a unique
+// destination first (e.g. "foo copy.html"). Refuses to copy a folder
+// into itself (would recurse forever).
+func (a *App) CopyFileNode(src, dst string) error {
+	if src == dst {
+		return fmt.Errorf("source and destination are the same")
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return fmt.Errorf("already exists: %s", dst)
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", src, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", dst, err)
+	}
+	if info.IsDir() {
+		// Reject if dst is inside src so we don't recurse infinitely.
+		absSrc, _ := filepath.Abs(src)
+		absDst, _ := filepath.Abs(dst)
+		if strings.HasPrefix(absDst+string(filepath.Separator), absSrc+string(filepath.Separator)) {
+			return fmt.Errorf("can't copy folder into itself")
+		}
+		return copyDir(src, dst)
+	}
+	return copyFileBytes(src, dst, info.Mode())
+}
+
+func copyFileBytes(src, dst string, mode os.FileMode) error {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", src, err)
+	}
+	if err := os.WriteFile(dst, b, mode); err != nil {
+		return fmt.Errorf("write %s: %w", dst, err)
+	}
+	return nil
+}
+
+func copyDir(src, dst string) error {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		sp := filepath.Join(src, e.Name())
+		dp := filepath.Join(dst, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
+		if e.IsDir() {
+			if err := copyDir(sp, dp); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFileBytes(sp, dp, info.Mode()); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// UniqueCopyPath returns a non-colliding "copy of" filename for the
+// given source. "foo.html" → "foo copy.html", and if that exists too,
+// "foo copy 2.html", etc. Folder names get the same treatment without
+// the extension split. Used by the Duplicate action so the UI doesn't
+// have to recompute this client-side and risk a race with the disk.
+func (a *App) UniqueCopyPath(srcPath string) string {
+	dir := filepath.Dir(srcPath)
+	base := filepath.Base(srcPath)
+	ext := filepath.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+
+	candidate := filepath.Join(dir, stem+" copy"+ext)
+	if _, err := os.Stat(candidate); os.IsNotExist(err) {
+		return candidate
+	}
+	for i := 2; i < 1000; i++ {
+		candidate = filepath.Join(dir, fmt.Sprintf("%s copy %d%s", stem, i, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	// 1000 collisions? Just append a nanosecond suffix and call it done.
+	return filepath.Join(dir, fmt.Sprintf("%s copy %d%s", stem, os.Getpid(), ext))
+}
+
+// RevealInExplorer opens the OS file manager focused on `path`.
+//   Windows: explorer /select,"path"
+//   macOS:   open -R "path"
+//   Linux:   xdg-open "dir"  (selecting a specific file isn't portable)
+// Falls back to opening the parent dir if /select fails.
+func (a *App) RevealInExplorer(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+	switch goruntime.GOOS {
+	case "windows":
+		// explorer.exe always returns exit code 1, even on success.
+		// Don't surface that as an error — only treat "could not
+		// start the process" as failure.
+		cmd := exec.Command("explorer.exe", "/select,", path)
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("explorer /select: %w", err)
+		}
+		return nil
+	case "darwin":
+		cmd := exec.Command("open", "-R", path)
+		return cmd.Start()
+	default:
+		// Linux/BSD: open the containing directory; selecting a file
+		// would require file-manager-specific D-Bus calls.
+		dir := path
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			dir = filepath.Dir(path)
+		}
+		return exec.Command("xdg-open", dir).Start()
+	}
 }
 
 // ─── System info ──────────────────────────────────────────────────

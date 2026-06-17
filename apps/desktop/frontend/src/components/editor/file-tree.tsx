@@ -2,20 +2,25 @@
 // Each folder lazy-loads its children the first time it's expanded.
 // Selecting a file calls workspace.openFile(path).
 //
-// New in v0.4.3: in-app create / rename / delete. The header has
-// explicit New File + New Folder buttons (no more confusing
-// FolderPlus → OS picker), every node gets a right-click menu, and
-// treeVersion in workspace-store invalidates the affected branch so
-// the UI re-fetches without us needing a real filesystem watcher.
+// v0.4.3 — inline create/rename/delete + treeVersion-driven refetch.
+// v0.4.5 — HTML5 drag-and-drop between folders, expanded right-click
+//          menu (cut/copy/paste/duplicate/copy-path/reveal-in-explorer)
+//          and type-aware coloured icons via <FileIcon>.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
+  Clipboard,
+  ClipboardPaste,
+  Copy,
+  ExternalLink,
   FilePlus,
-  Folder,
+  Files,
   FolderPlus,
+  Folder,
   Pencil,
+  Scissors,
   Trash2,
 } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-store";
@@ -37,13 +42,16 @@ type PendingCreate =
   | null;
 
 interface TreeContext {
-  /** Path where an in-progress New File / New Folder row should render. */
   pending: PendingCreate;
   setPending: (p: PendingCreate) => void;
-  /** Path currently being renamed inline. */
   renaming: string | null;
   setRenaming: (p: string | null) => void;
 }
+
+// MIME-ish type for our internal drag payload. Keeps it impossible
+// to accidentally drop random files from the desktop here (those'd
+// land on text/uri-list or files instead).
+const DRAG_TYPE = "application/x-jeditor-tree-path";
 
 interface TreeNodeProps {
   node: FileNode;
@@ -57,8 +65,11 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
   const [children, setChildren] = useState<FileNode[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const treeVersion = ws.treeVersion;
+  const cutPath = ws.treeClipboard?.op === "cut" ? ws.treeClipboard.path : null;
+  const isCut = cutPath === node.path;
 
   const refetch = useCallback(async () => {
     if (!node.is_dir) return;
@@ -74,10 +85,6 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
     }
   }, [node.is_dir, node.path]);
 
-  // Re-fetch this folder's children whenever the workspace's treeVersion
-  // bumps (file created/renamed/deleted). Folders that haven't been
-  // expanded skip the refetch entirely — children is null and stays
-  // null until first expand.
   useEffect(() => {
     if (!expanded || !node.is_dir) return;
     void refetch();
@@ -98,13 +105,41 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
   const isActive = !node.is_dir && ws.activeTab?.path === node.path;
   const isRenaming = ctx.renaming === node.path;
 
-  // The pending New File row renders directly below this node when
-  // (a) this node is the parent folder of the pending op, AND
-  // (b) this folder is currently expanded.
   const pendingHere =
     node.is_dir && expanded && ctx.pending && ctx.pending.parent === node.path
       ? ctx.pending
       : null;
+
+  // ─── Drag and drop ───────────────────────────────────────────
+  const onDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData(DRAG_TYPE, node.path);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e: React.DragEvent) => {
+    if (!node.is_dir) return;
+    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+  };
+  const onDragLeave = () => setDragOver(false);
+  const onDrop = async (e: React.DragEvent) => {
+    setDragOver(false);
+    if (!node.is_dir) return;
+    const src = e.dataTransfer.getData(DRAG_TYPE);
+    if (!src || src === node.path) return;
+    e.preventDefault();
+    try {
+      await ws.moveNode(src, node.path);
+      if (!expanded) {
+        setExpanded(true);
+        await refetch();
+      }
+    } catch (err) {
+      console.error("move failed", err);
+      alert(`Move failed: ${err}`);
+    }
+  };
 
   return (
     <>
@@ -135,11 +170,22 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
           />
         ) : (
           <button
+            draggable
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
             onClick={toggle}
+            onDoubleClick={(e) => {
+              // Double-click on a file = open and focus.  On a folder =
+              // recursively expand its first level.
+              e.stopPropagation();
+              if (!node.is_dir) void ws.openFile(node.path);
+            }}
             title={node.path}
-            className={`flex w-full items-center gap-1 px-2 py-[3px] text-left text-[13px] hover:bg-surface-2 ${
-              isActive ? "bg-accent/15 text-foreground" : "text-foreground-secondary"
-            }`}
+            className={`flex w-full items-center gap-1 px-2 py-[3px] text-left text-[13px] transition-colors ${
+              isActive ? "bg-accent/15 text-foreground" : "text-foreground-secondary hover:bg-surface-2"
+            } ${dragOver ? "bg-accent/25 ring-1 ring-inset ring-accent" : ""} ${isCut ? "opacity-50" : ""}`}
             style={{ paddingLeft: 8 + depth * 12 }}
           >
             {node.is_dir ? (
@@ -157,33 +203,15 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
         )}
 
         {menu && (
-          <ContextMenu
+          <NodeContextMenu
             x={menu.x}
             y={menu.y}
-            isDir={node.is_dir}
+            node={node}
+            ctx={ctx}
             onClose={() => setMenu(null)}
-            onNewFile={() => {
+            onExpand={() => {
               if (node.is_dir) {
                 setExpanded(true);
-                ctx.setPending({ kind: "file", parent: node.path });
-              }
-            }}
-            onNewFolder={() => {
-              if (node.is_dir) {
-                setExpanded(true);
-                ctx.setPending({ kind: "folder", parent: node.path });
-              }
-            }}
-            onRename={() => ctx.setRenaming(node.path)}
-            onDelete={async () => {
-              if (!confirm(`Delete ${node.name}?${node.is_dir ? " This removes the folder and everything in it." : ""}`)) {
-                return;
-              }
-              try {
-                await ws.deleteNode(node.path);
-              } catch (err) {
-                console.error("delete failed", err);
-                alert(`Delete failed: ${err}`);
               }
             }}
           />
@@ -246,8 +274,6 @@ function InlineNameInput({ initial, depth, isDir, onCommit, onCancel }: InlineNa
 
   useEffect(() => {
     ref.current?.focus();
-    // For renames: select the basename so typing replaces the whole
-    // name without nuking the extension if the user types carefully.
     if (initial) {
       const dot = initial.lastIndexOf(".");
       if (dot > 0) ref.current?.setSelectionRange(0, dot);
@@ -277,63 +303,172 @@ function InlineNameInput({ initial, depth, isDir, onCommit, onCancel }: InlineNa
   );
 }
 
-interface ContextMenuProps {
+interface NodeContextMenuProps {
   x: number;
   y: number;
-  isDir: boolean;
+  node: FileNode;
+  ctx: TreeContext;
   onClose: () => void;
-  onNewFile: () => void;
-  onNewFolder: () => void;
-  onRename: () => void;
-  onDelete: () => void;
+  onExpand: () => void;
 }
 
-function ContextMenu({ x, y, isDir, onClose, onNewFile, onNewFolder, onRename, onDelete }: ContextMenuProps) {
+function NodeContextMenu({ x, y, node, ctx, onClose, onExpand }: NodeContextMenuProps) {
+  const ws = useWorkspace();
+  const hasClipboard = ws.treeClipboard !== null;
+  const isDir = node.is_dir;
+
   useEffect(() => {
     const close = () => onClose();
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
     window.addEventListener("click", close);
     window.addEventListener("contextmenu", close);
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") close();
-    });
+    window.addEventListener("keydown", onEsc);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("contextmenu", close);
+      window.removeEventListener("keydown", onEsc);
     };
   }, [onClose]);
 
-  const Item = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) => (
+  const Item = ({
+    icon,
+    label,
+    onClick,
+    danger = false,
+    disabled = false,
+    shortcut,
+  }: {
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+    disabled?: boolean;
+    shortcut?: string;
+  }) => (
     <button
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
+        if (disabled) return;
         onClose();
         onClick();
       }}
-      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-foreground hover:bg-surface-2"
+      className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[12px] ${
+        disabled
+          ? "cursor-not-allowed text-foreground-muted opacity-50"
+          : danger
+          ? "text-danger hover:bg-danger/10"
+          : "text-foreground hover:bg-surface-2"
+      }`}
     >
-      {icon}
-      {label}
+      <span className="flex items-center gap-2">
+        {icon}
+        {label}
+      </span>
+      {shortcut && (
+        <span className="font-mono text-[10px] text-foreground-muted">{shortcut}</span>
+      )}
     </button>
   );
+
+  const Divider = () => <div className="my-1 border-t border-border-subtle" />;
 
   return (
     <div
       style={{ left: x, top: y }}
-      className="fixed z-50 min-w-[160px] rounded-md border border-border bg-surface-1 py-1 shadow-lg"
+      className="fixed z-50 min-w-[200px] rounded-md border border-border bg-surface-1 py-1 shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
       {isDir && (
         <>
-          <Item icon={<FilePlus className="h-3.5 w-3.5" />} label="New File" onClick={onNewFile} />
-          <Item icon={<FolderPlus className="h-3.5 w-3.5" />} label="New Folder" onClick={onNewFolder} />
-          <div className="my-1 border-t border-border-subtle" />
+          <Item
+            icon={<FilePlus className="h-3.5 w-3.5" />}
+            label="New File"
+            onClick={() => {
+              onExpand();
+              ctx.setPending({ kind: "file", parent: node.path });
+            }}
+          />
+          <Item
+            icon={<FolderPlus className="h-3.5 w-3.5" />}
+            label="New Folder"
+            onClick={() => {
+              onExpand();
+              ctx.setPending({ kind: "folder", parent: node.path });
+            }}
+          />
+          <Divider />
         </>
       )}
-      <Item icon={<Pencil className="h-3.5 w-3.5" />} label="Rename" onClick={onRename} />
+      <Item
+        icon={<Scissors className="h-3.5 w-3.5" />}
+        label="Cut"
+        shortcut="Ctrl+X"
+        onClick={() => ws.setClipboard({ path: node.path, op: "cut" })}
+      />
+      <Item
+        icon={<Copy className="h-3.5 w-3.5" />}
+        label="Copy"
+        shortcut="Ctrl+C"
+        onClick={() => ws.setClipboard({ path: node.path, op: "copy" })}
+      />
+      {isDir && (
+        <Item
+          icon={<ClipboardPaste className="h-3.5 w-3.5" />}
+          label="Paste"
+          shortcut="Ctrl+V"
+          disabled={!hasClipboard}
+          onClick={() => void ws.pasteClipboard(node.path)}
+        />
+      )}
+      <Item
+        icon={<Files className="h-3.5 w-3.5" />}
+        label="Duplicate"
+        shortcut="Ctrl+D"
+        onClick={() => void ws.duplicateNode(node.path)}
+      />
+      <Divider />
+      <Item
+        icon={<Clipboard className="h-3.5 w-3.5" />}
+        label="Copy Path"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(node.path);
+          } catch {
+            // Clipboard blocked; not critical.
+          }
+        }}
+      />
+      <Item
+        icon={<ExternalLink className="h-3.5 w-3.5" />}
+        label="Reveal in File Explorer"
+        onClick={() => void ws.revealInExplorer(node.path)}
+      />
+      <Divider />
+      <Item
+        icon={<Pencil className="h-3.5 w-3.5" />}
+        label="Rename"
+        shortcut="F2"
+        onClick={() => ctx.setRenaming(node.path)}
+      />
       <Item
         icon={<Trash2 className="h-3.5 w-3.5 text-danger" />}
         label="Delete"
-        onClick={onDelete}
+        shortcut="Del"
+        danger
+        onClick={async () => {
+          if (!confirm(`Delete ${node.name}?${node.is_dir ? " This removes the folder and everything in it." : ""}`)) {
+            return;
+          }
+          try {
+            await ws.deleteNode(node.path);
+          } catch (err) {
+            console.error("delete failed", err);
+            alert(`Delete failed: ${err}`);
+          }
+        }}
       />
     </div>
   );
@@ -345,6 +480,7 @@ export function FileTree() {
   const [rootChildren, setRootChildren] = useState<FileNode[] | null>(null);
   const [pending, setPending] = useState<PendingCreate>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [rootDragOver, setRootDragOver] = useState(false);
 
   useEffect(() => {
     if (!rootPath) {
@@ -373,7 +509,7 @@ export function FileTree() {
         <p className="text-[13px] text-foreground-secondary">No folder open</p>
         <button
           onClick={() => void openFolder()}
-          className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover"
+          className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-zinc-900 hover:bg-accent-hover"
         >
           Open Folder
         </button>
@@ -384,6 +520,21 @@ export function FileTree() {
 
   const folderName = rootPath.split(/[\\/]/).pop() || rootPath;
   const ctx: TreeContext = { pending, setPending, renaming, setRenaming };
+
+  // Drop a dragged node onto the empty root area = move it to the
+  // top level of the workspace.
+  const onRootDrop = async (e: React.DragEvent) => {
+    setRootDragOver(false);
+    const src = e.dataTransfer.getData(DRAG_TYPE);
+    if (!src) return;
+    e.preventDefault();
+    try {
+      await ws.moveNode(src, rootPath);
+    } catch (err) {
+      console.error("move-to-root failed", err);
+      alert(`Move failed: ${err}`);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -418,7 +569,19 @@ export function FileTree() {
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-1">
+      <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setRootDragOver(true);
+        }}
+        onDragLeave={() => setRootDragOver(false)}
+        onDrop={onRootDrop}
+        className={`flex-1 overflow-y-auto py-1 transition-colors ${
+          rootDragOver ? "bg-accent/5 ring-1 ring-inset ring-accent/40" : ""
+        }`}
+      >
         {rootChildren === null ? (
           <div className="px-3 py-2 text-[12px] text-foreground-muted">Loading…</div>
         ) : (
