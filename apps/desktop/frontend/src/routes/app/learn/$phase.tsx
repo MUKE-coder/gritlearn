@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, ChevronDown, Files, Grid3x3, Home, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, Files, Grid3x3, Home, Search, Terminal } from "lucide-react";
 import {
   chaptersForPhase,
   useCurriculum,
@@ -27,6 +27,7 @@ import { EditorTabs } from "@/components/editor/editor-tabs";
 import { FileTree } from "@/components/editor/file-tree";
 import { PreviewPane } from "@/components/editor/preview-pane";
 import { BottomPanel } from "@/components/editor/bottom-panel";
+import { SearchPanel } from "@/components/editor/search-panel";
 
 export const Route = createFileRoute("/app/learn/$phase")({
   beforeLoad: ({ params }) => {
@@ -42,7 +43,9 @@ function LessonViewPage() {
   const { manifest, selectedSlug, selectConcept } = useCurriculum();
   const { rows } = useProgress();
   const navigate = useNavigate();
-  const [filesVisible, setFilesVisible] = useState(false);
+  // Left side panel — exclusive: at most one of "files" or "search"
+  // shows at a time, both off = no panel.
+  const [sidePanel, setSidePanel] = useState<"none" | "files" | "search">("none");
   const [bottomVisible, setBottomVisible] = useState(false);
 
   const phase: PhaseListing | undefined = useMemo(
@@ -59,7 +62,7 @@ function LessonViewPage() {
   // example into the workspace, so the student sees the file tree
   // and can browse the example they just opened.
   useEffect(() => {
-    const onShow = () => setFilesVisible(true);
+    const onShow = () => setSidePanel("files");
     window.addEventListener("JEditor:show-files", onShow);
     return () => window.removeEventListener("JEditor:show-files", onShow);
   }, []);
@@ -114,8 +117,8 @@ function LessonViewPage() {
         onBackToPhases={() => navigate({ to: "/app" })}
         onPrev={prevConcept ? () => selectConcept(prevConcept.slug) : undefined}
         onNext={nextConcept ? () => selectConcept(nextConcept.slug) : undefined}
-        filesVisible={filesVisible}
-        onToggleFiles={() => setFilesVisible((v) => !v)}
+        sidePanel={sidePanel}
+        onSetSidePanel={setSidePanel}
         bottomVisible={bottomVisible}
         onToggleBottom={() => setBottomVisible((v) => !v)}
       />
@@ -146,7 +149,7 @@ function LessonViewPage() {
             }
             right={
               <EditorPane
-                filesVisible={filesVisible}
+                sidePanel={sidePanel}
                 bottomVisible={bottomVisible}
                 onCloseBottom={() => setBottomVisible(false)}
                 phaseId={phase.id}
@@ -174,8 +177,8 @@ interface TopBarProps {
   onBackToPhases: () => void;
   onPrev?: () => void;
   onNext?: () => void;
-  filesVisible: boolean;
-  onToggleFiles: () => void;
+  sidePanel: "none" | "files" | "search";
+  onSetSidePanel: (p: "none" | "files" | "search") => void;
   bottomVisible: boolean;
   onToggleBottom: () => void;
 }
@@ -189,8 +192,8 @@ function TopBar({
   onBackToPhases,
   onPrev,
   onNext,
-  filesVisible,
-  onToggleFiles,
+  sidePanel,
+  onSetSidePanel,
   bottomVisible,
   onToggleBottom,
 }: TopBarProps) {
@@ -236,14 +239,24 @@ function TopBar({
       </div>
 
       <button
-        onClick={onToggleFiles}
-        title={filesVisible ? "Hide files panel" : "Show files panel"}
+        onClick={() => onSetSidePanel(sidePanel === "files" ? "none" : "files")}
+        title={sidePanel === "files" ? "Hide files panel" : "Show files panel"}
         className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
-          filesVisible ? "bg-accent/15 text-accent" : "text-foreground-secondary hover:bg-surface-2 hover:text-foreground"
+          sidePanel === "files" ? "bg-accent/15 text-accent" : "text-foreground-secondary hover:bg-surface-2 hover:text-foreground"
         }`}
       >
         <Files className="h-3.5 w-3.5" />
         Files
+      </button>
+      <button
+        onClick={() => onSetSidePanel(sidePanel === "search" ? "none" : "search")}
+        title={sidePanel === "search" ? "Hide search" : "Search across workspace"}
+        className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
+          sidePanel === "search" ? "bg-accent/15 text-accent" : "text-foreground-secondary hover:bg-surface-2 hover:text-foreground"
+        }`}
+      >
+        <Search className="h-3.5 w-3.5" />
+        Search
       </button>
       <button
         onClick={onToggleBottom}
@@ -390,23 +403,23 @@ function DotRow({
 // ─── Right pane: tabs + Monaco + optional file tree + bottom panel ─
 
 interface EditorPaneProps {
-  filesVisible: boolean;
+  sidePanel: "none" | "files" | "search";
   bottomVisible: boolean;
   onCloseBottom: () => void;
   phaseId?: string;
 }
 
-function EditorPane({ filesVisible, bottomVisible, onCloseBottom, phaseId }: EditorPaneProps) {
+function EditorPane({ sidePanel, bottomVisible, onCloseBottom, phaseId }: EditorPaneProps) {
   // The editor stack:
-  //   [ optional FileTree | (tabs + Monaco + preview) ]
+  //   [ optional SidePanel | (tabs + Monaco + preview) ]
   //                          ^ above
-  //   [ optional BottomPanel (Terminal / Live Server) ]
+  //   [ optional BottomPanel (Terminal / Live Server / Git) ]
   //                          ^ resizable vertical splitter, only when shown
   const top = (
     <div className="flex h-full min-h-0 w-full bg-background">
-      {filesVisible && (
-        <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-border bg-surface-1">
-          <FileTree />
+      {sidePanel !== "none" && (
+        <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-border bg-surface-1">
+          {sidePanel === "files" ? <FileTree /> : <SearchPanel />}
         </aside>
       )}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">

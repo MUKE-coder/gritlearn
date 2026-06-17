@@ -21,6 +21,18 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.9",
+    releasedAt: "2026-06-17",
+    headline: "Workspace search + Git source control",
+    highlights: [
+      { kind: "feature", body: "Workspace-wide search across the open folder — regex, case-sensitive, whole-word toggles, include/exclude globs, results grouped by file." },
+      { kind: "feature", body: "Replace All — runs per-file via atomic temp-write so a mid-pass failure can't corrupt the workspace." },
+      { kind: "feature", body: "Git panel writes: stage / unstage / discard per file, commit composer (Ctrl+Enter to commit), Push, Pull, branch indicator with ahead/behind counts." },
+      { kind: "feature", body: "Non-repo folders show an 'Initialise a git repo here' button — no need to drop into the terminal for git init." },
+      { kind: "polish",  body: "Side panel is now exclusive — Files and Search are mutually exclusive (they live in the same 260px column)." },
+    ],
+  },
+  {
     version: "0.4.8",
     releasedAt: "2026-06-17",
     headline: "Full PTY terminal + plugin scaffolding",

@@ -23,6 +23,10 @@ import (
 	"strings"
 )
 
+// _ keeps strconv used in case future edits drop the last consumer
+// — the import is also used by GitBranch's ahead/behind parsing.
+var _ = strconv.Atoi
+
 // GitStatusEntry is one row of the source-control panel.
 type GitStatusEntry struct {
 	Path   string `json:"path"`   // path relative to repo root, e.g. "src/app.tsx"
@@ -251,4 +255,140 @@ func repoRoot(dir string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// ─── Write ops ────────────────────────────────────────────────
+
+// GitBranchInfo describes the current branch + its upstream tracking
+// state so the UI can show "main → origin/main, 2 ahead" without
+// having to make three separate calls.
+type GitBranchInfo struct {
+	Branch   string `json:"branch"`
+	Upstream string `json:"upstream"`
+	Ahead    int    `json:"ahead"`
+	Behind   int    `json:"behind"`
+}
+
+// GitBranch returns the current branch + upstream tracking. Detached
+// HEAD reports the short SHA in Branch.
+func (a *App) GitBranch(dir string) (GitBranchInfo, error) {
+	info := GitBranchInfo{}
+	br, err := runGit(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return info, err
+	}
+	br = strings.TrimSpace(br)
+	if br == "HEAD" {
+		// Detached — use short SHA so the UI shows something useful.
+		sha, _ := runGit(dir, "rev-parse", "--short", "HEAD")
+		info.Branch = strings.TrimSpace(sha)
+		return info, nil
+	}
+	info.Branch = br
+
+	// upstream + ahead/behind. Quiet failure when no upstream is set —
+	// the user just hasn't pushed yet.
+	up, err := runGit(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	if err != nil {
+		return info, nil
+	}
+	info.Upstream = strings.TrimSpace(up)
+	counts, err := runGit(dir, "rev-list", "--left-right", "--count", "HEAD..."+info.Upstream)
+	if err == nil {
+		parts := strings.Fields(strings.TrimSpace(counts))
+		if len(parts) == 2 {
+			info.Ahead, _ = strconv.Atoi(parts[0])
+			info.Behind, _ = strconv.Atoi(parts[1])
+		}
+	}
+	return info, nil
+}
+
+// GitStage adds files to the index. Pass an empty slice to stage
+// everything (`git add -A`).
+func (a *App) GitStage(dir string, paths []string) error {
+	args := []string{"add"}
+	if len(paths) == 0 {
+		args = append(args, "-A")
+	} else {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	_, err := runGit(dir, args...)
+	return err
+}
+
+// GitUnstage moves changes back out of the index (`git reset HEAD -- path`).
+func (a *App) GitUnstage(dir string, paths []string) error {
+	args := []string{"reset", "HEAD"}
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	_, err := runGit(dir, args...)
+	return err
+}
+
+// GitDiscard reverts uncommitted changes for `paths` (`git checkout --`).
+// For untracked files, this is a no-op — git itself rejects them.
+func (a *App) GitDiscard(dir string, paths []string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("no paths supplied")
+	}
+	args := append([]string{"checkout", "--"}, paths...)
+	_, err := runGit(dir, args...)
+	return err
+}
+
+// GitCommit creates a commit with the supplied message. The UI is
+// expected to have staged the files first. Returns the resulting
+// commit SHA so the caller can show "Committed abc1234".
+func (a *App) GitCommit(dir, message string) (string, error) {
+	if strings.TrimSpace(message) == "" {
+		return "", fmt.Errorf("commit message is empty")
+	}
+	if _, err := runGit(dir, "commit", "-m", message); err != nil {
+		return "", err
+	}
+	sha, _ := runGit(dir, "rev-parse", "--short", "HEAD")
+	return strings.TrimSpace(sha), nil
+}
+
+// GitPush pushes the current branch to its upstream. If no upstream is
+// configured, calls `git push --set-upstream origin <branch>` so the
+// first push from a brand-new branch "just works".
+func (a *App) GitPush(dir string) (string, error) {
+	info, _ := a.GitBranch(dir)
+	if info.Upstream == "" && info.Branch != "" {
+		out, err := runGit(dir, "push", "--set-upstream", "origin", info.Branch)
+		return out, err
+	}
+	return runGit(dir, "push")
+}
+
+// GitPull fetches + fast-forwards the current branch.
+func (a *App) GitPull(dir string) (string, error) {
+	return runGit(dir, "pull", "--ff-only")
+}
+
+// GitInit creates a new git repo in `dir` so the Git panel comes
+// alive without the student having to drop into the terminal.
+func (a *App) GitInit(dir string) error {
+	_, err := runGit(dir, "init")
+	return err
+}
+
+// runGit shells out to `git` with the supplied args in `dir`. Returns
+// stdout + stderr combined so the caller can surface failures in the
+// UI. Errors include the git exit-status text.
+func runGit(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return out.String(), fmt.Errorf("git %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(out.String()))
+	}
+	return out.String(), nil
 }

@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.8";
+export const FALLBACK_VERSION = "0.4.9";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-17T11:00:00Z",
+  releasedAt: "2026-06-17T13:30:00Z",
   releaseNotes:
-    "JEditor v0.4.8 — full PTY terminal + plugin scaffolding. The Terminal tab is now a real xterm.js shell powered by ConPTY on Windows / openpty on Unix: Ctrl+C signals, ncurses apps like vim and top, arrow-key history, the works. New plugin system: install single-file JS plugins from a URL via Settings, register commands, listen for events (fileOpen, fileSaved), open files, and emit UI toasts via the JEditor global. Plugins run unsandboxed — install from sources you trust.",
+    "JEditor v0.4.9 — workspace search + Git source control. New Search button in the top bar opens a left-side panel: workspace-wide search across the open folder with regex, case-sensitive, and whole-word toggles, plus include/exclude globs. Replace All runs per-file via an atomic temp-write so a mid-pass failure can't corrupt the workspace. Git panel grows write capabilities: stage / unstage / discard per file, commit composer with Ctrl+Enter, push / pull buttons, branch indicator with ahead/behind counts. Non-repo folders get an 'Initialise a git repo here' button so students don't have to drop into the terminal.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.
