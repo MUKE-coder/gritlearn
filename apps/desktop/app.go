@@ -32,16 +32,80 @@ type App struct {
 	sync     *sync.Engine
 	progress *progress.Store
 	apiURL   string
+	live     *LiveServer
+	runner   *CommandRunner
 }
 
 func NewApp() *App {
 	return &App{
-		kc: NewKeychain(),
+		kc:     NewKeychain(),
+		live:   NewLiveServer(),
+		runner: NewCommandRunner(),
 	}
+}
+
+// RunCommand kicks off `command` inside `cwd` and returns the id
+// streamed events will carry. Sample usage from the Run pane:
+//   const id = await App.RunCommand(rootPath, "pnpm install")
+//   EventsOn("runner:line", e => { if (e.id === id) append(e.text) })
+func (a *App) RunCommand(cwd, command string) (string, error) {
+	return a.runner.Run(cwd, command)
+}
+
+// StopCommand cancels a running command by id (returned from
+// RunCommand). No-op if the id isn't running anymore.
+func (a *App) StopCommand(id string) {
+	a.runner.Stop(id)
+}
+
+// StartLiveServer brings up the live-reload HTTP server for the given
+// directory and returns the bound URL ("http://127.0.0.1:NNNN").
+// Calling it while a server is already running for a different root
+// transparently restarts the server with the new root.
+func (a *App) StartLiveServer(root string) (string, error) {
+	port, err := a.live.Start(root)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", port), nil
+}
+
+// StopLiveServer tears down the server. Safe to call when nothing is
+// running.
+func (a *App) StopLiveServer() error {
+	return a.live.Stop()
+}
+
+// LiveServerStatus reports the server's state to the UI so the
+// "Live Server" button can show "Running" + the bound URL.
+type LiveServerStatus struct {
+	Running bool   `json:"running"`
+	URL     string `json:"url"`
+	Root    string `json:"root"`
+}
+
+func (a *App) GetLiveServerStatus() LiveServerStatus {
+	port := a.live.Port()
+	if port == 0 {
+		return LiveServerStatus{Running: false}
+	}
+	return LiveServerStatus{
+		Running: true,
+		URL:     fmt.Sprintf("http://127.0.0.1:%d", port),
+		Root:    a.live.Root(),
+	}
+}
+
+// OpenInBrowser opens an external URL in the user's default browser.
+// Used by the "Live Server" button so the student doesn't have to
+// alt-tab to a terminal and curl/click anything.
+func (a *App) OpenInBrowser(url string) {
+	wailsruntime.BrowserOpenURL(a.ctx, url)
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.runner.SetContext(ctx)
 
 	a.apiURL = os.Getenv("VITE_API_URL")
 	if a.apiURL == "" {

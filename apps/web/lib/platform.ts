@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.5";
+export const FALLBACK_VERSION = "0.4.6";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-17T04:30:00Z",
+  releasedAt: "2026-06-17T07:00:00Z",
   releaseNotes:
-    "JEditor v0.4.5 — VSCode-style file tree. Drag-and-drop files between folders. Right-click any node for Cut / Copy / Paste / Duplicate / Copy Path / Reveal in File Explorer / Rename / Delete. Cut nodes dim to half-opacity until you paste them. Paste falls back to a 'copy of …' name when the destination already has one, so it never silently overwrites.",
+    "JEditor v0.4.6 — terminal + Live Server. New Terminal toggle in the top bar opens a bottom panel below the editor: type any shell command (pnpm install, go run ., git status), stream output, hit Stop. The panel also has a Live Server tab — click Go Live and JEditor spins up a local HTTP server on 127.0.0.1 serving the open folder with auto-reload on save. Quick-command buttons adapt to the phase you're in. File tree gains keyboard shortcuts: F2 rename, Delete, Ctrl+X/C/V/D for cut/copy/paste/duplicate. Backend phase now picks up tab-size 4 the first time you visit it.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

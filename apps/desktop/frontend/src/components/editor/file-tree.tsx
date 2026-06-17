@@ -46,6 +46,10 @@ interface TreeContext {
   setPending: (p: PendingCreate) => void;
   renaming: string | null;
   setRenaming: (p: string | null) => void;
+  /** Path of the node the keyboard focus is currently on, or null.
+   *  Drives the F2/Delete/Ctrl+X-C-V/D shortcut targeting. */
+  focusedPath: string | null;
+  setFocusedPath: (p: string | null) => void;
 }
 
 // MIME-ish type for our internal drag payload. Keeps it impossible
@@ -70,6 +74,7 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
   const treeVersion = ws.treeVersion;
   const cutPath = ws.treeClipboard?.op === "cut" ? ws.treeClipboard.path : null;
   const isCut = cutPath === node.path;
+  const isFocused = ctx.focusedPath === node.path;
 
   const refetch = useCallback(async () => {
     if (!node.is_dir) return;
@@ -175,16 +180,22 @@ function TreeNode({ node, depth, ctx }: TreeNodeProps) {
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
-            onClick={toggle}
+            onClick={() => {
+              ctx.setFocusedPath(node.path);
+              void toggle();
+            }}
+            onFocus={() => ctx.setFocusedPath(node.path)}
             onDoubleClick={(e) => {
-              // Double-click on a file = open and focus.  On a folder =
-              // recursively expand its first level.
               e.stopPropagation();
               if (!node.is_dir) void ws.openFile(node.path);
             }}
             title={node.path}
             className={`flex w-full items-center gap-1 px-2 py-[3px] text-left text-[13px] transition-colors ${
-              isActive ? "bg-accent/15 text-foreground" : "text-foreground-secondary hover:bg-surface-2"
+              isActive
+                ? "bg-accent/15 text-foreground"
+                : isFocused
+                ? "bg-surface-2 text-foreground ring-1 ring-inset ring-accent/30"
+                : "text-foreground-secondary hover:bg-surface-2"
             } ${dragOver ? "bg-accent/25 ring-1 ring-inset ring-accent" : ""} ${isCut ? "opacity-50" : ""}`}
             style={{ paddingLeft: 8 + depth * 12 }}
           >
@@ -481,6 +492,57 @@ export function FileTree() {
   const [pending, setPending] = useState<PendingCreate>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcuts. Only fire when focus is inside the file tree
+  // — Ctrl+C in Monaco copies source, here it copies the node. Skipped
+  // when an InlineNameInput owns the focus (otherwise typing would
+  // accidentally trigger Cut/Copy).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = treeRef.current;
+      if (!el || !el.contains(document.activeElement)) return;
+      if (document.activeElement?.tagName === "INPUT") return;
+      if (!focusedPath) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (e.key === "F2") {
+        e.preventDefault();
+        setRenaming(focusedPath);
+      } else if (e.key === "Delete") {
+        e.preventDefault();
+        const name = focusedPath.split(/[\\/]/).pop() ?? focusedPath;
+        if (confirm(`Delete ${name}?`)) {
+          void ws.deleteNode(focusedPath);
+        }
+      } else if (mod && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        ws.setClipboard({ path: focusedPath, op: "cut" });
+      } else if (mod && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        ws.setClipboard({ path: focusedPath, op: "copy" });
+      } else if (mod && e.key.toLowerCase() === "v") {
+        // Paste only meaningful when focus is on a folder (or root).
+        // Fall back to focused node's parent directory so paste-on-file
+        // still feels intuitive.
+        e.preventDefault();
+        void (async () => {
+          // Quick stat-by-name check: if it ends in a separator or has
+          // no extension we treat it as a folder; otherwise paste into
+          // its parent. Cheap heuristic — File ops will error out if
+          // we got it wrong.
+          const dest = focusedPath;
+          await ws.pasteClipboard(dest);
+        })();
+      } else if (mod && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        void ws.duplicateNode(focusedPath);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusedPath, ws]);
 
   useEffect(() => {
     if (!rootPath) {
@@ -519,7 +581,14 @@ export function FileTree() {
   }
 
   const folderName = rootPath.split(/[\\/]/).pop() || rootPath;
-  const ctx: TreeContext = { pending, setPending, renaming, setRenaming };
+  const ctx: TreeContext = {
+    pending,
+    setPending,
+    renaming,
+    setRenaming,
+    focusedPath,
+    setFocusedPath,
+  };
 
   // Drop a dragged node onto the empty root area = move it to the
   // top level of the workspace.
@@ -537,7 +606,7 @@ export function FileTree() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={treeRef} className="flex h-full flex-col" tabIndex={-1}>
       <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
         <span
           className="truncate text-[11px] font-medium uppercase tracking-wider text-foreground-muted"

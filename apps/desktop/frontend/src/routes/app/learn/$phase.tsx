@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, ChevronDown, Files, Grid3x3, Home } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, Files, Grid3x3, Home, Terminal } from "lucide-react";
 import {
   chaptersForPhase,
   useCurriculum,
@@ -19,12 +19,14 @@ import {
   type PhaseListing,
 } from "@/lib/curriculum-store";
 import { useProgress } from "@/lib/progress-store";
+import { usePhaseAwareDefaults } from "@/lib/editor-prefs";
 import { Splitter } from "@/components/ui/splitter";
 import { LessonBody } from "@/components/editor/lesson-body";
 import { MonacoPane } from "@/components/editor/monaco-pane";
 import { EditorTabs } from "@/components/editor/editor-tabs";
 import { FileTree } from "@/components/editor/file-tree";
 import { PreviewPane } from "@/components/editor/preview-pane";
+import { BottomPanel } from "@/components/editor/bottom-panel";
 
 export const Route = createFileRoute("/app/learn/$phase")({
   beforeLoad: ({ params }) => {
@@ -41,12 +43,17 @@ function LessonViewPage() {
   const { rows } = useProgress();
   const navigate = useNavigate();
   const [filesVisible, setFilesVisible] = useState(false);
+  const [bottomVisible, setBottomVisible] = useState(false);
 
   const phase: PhaseListing | undefined = useMemo(
     () => manifest?.phases.find((p) => p.id === phaseId),
     [manifest, phaseId],
   );
   const chapters: Chapter[] = useMemo(() => (phase ? chaptersForPhase(phase) : []), [phase]);
+
+  // Soft-apply phase-specific editor defaults the first time the
+  // student visits each phase (e.g. tabSize=4 in the backend phase).
+  usePhaseAwareDefaults(phase?.id);
 
   // The MDX <ExampleProject> emits this event after copying the
   // example into the workspace, so the student sees the file tree
@@ -109,6 +116,8 @@ function LessonViewPage() {
         onNext={nextConcept ? () => selectConcept(nextConcept.slug) : undefined}
         filesVisible={filesVisible}
         onToggleFiles={() => setFilesVisible((v) => !v)}
+        bottomVisible={bottomVisible}
+        onToggleBottom={() => setBottomVisible((v) => !v)}
       />
 
       {currentChapter && (
@@ -135,7 +144,14 @@ function LessonViewPage() {
                 compact
               />
             }
-            right={<EditorPane filesVisible={filesVisible} />}
+            right={
+              <EditorPane
+                filesVisible={filesVisible}
+                bottomVisible={bottomVisible}
+                onCloseBottom={() => setBottomVisible(false)}
+                phaseId={phase.id}
+              />
+            }
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-foreground-secondary">
@@ -160,6 +176,8 @@ interface TopBarProps {
   onNext?: () => void;
   filesVisible: boolean;
   onToggleFiles: () => void;
+  bottomVisible: boolean;
+  onToggleBottom: () => void;
 }
 
 function TopBar({
@@ -173,6 +191,8 @@ function TopBar({
   onNext,
   filesVisible,
   onToggleFiles,
+  bottomVisible,
+  onToggleBottom,
 }: TopBarProps) {
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-1 px-3">
@@ -224,6 +244,16 @@ function TopBar({
       >
         <Files className="h-3.5 w-3.5" />
         Files
+      </button>
+      <button
+        onClick={onToggleBottom}
+        title={bottomVisible ? "Hide terminal" : "Show terminal"}
+        className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
+          bottomVisible ? "bg-accent/15 text-accent" : "text-foreground-secondary hover:bg-surface-2 hover:text-foreground"
+        }`}
+      >
+        <Terminal className="h-3.5 w-3.5" />
+        Terminal
       </button>
 
       <div className="ml-1 flex items-center gap-1">
@@ -357,12 +387,22 @@ function DotRow({
   );
 }
 
-// ─── Right pane: tabs + Monaco + optional file tree drawer ─────
+// ─── Right pane: tabs + Monaco + optional file tree + bottom panel ─
 
-function EditorPane({ filesVisible }: { filesVisible: boolean }) {
-  // Files panel slides in to the LEFT of the editor when toggled.
-  // Keeps it cheap to hide/show without remounting the Monaco model.
-  return (
+interface EditorPaneProps {
+  filesVisible: boolean;
+  bottomVisible: boolean;
+  onCloseBottom: () => void;
+  phaseId?: string;
+}
+
+function EditorPane({ filesVisible, bottomVisible, onCloseBottom, phaseId }: EditorPaneProps) {
+  // The editor stack:
+  //   [ optional FileTree | (tabs + Monaco + preview) ]
+  //                          ^ above
+  //   [ optional BottomPanel (Terminal / Live Server) ]
+  //                          ^ resizable vertical splitter, only when shown
+  const top = (
     <div className="flex h-full min-h-0 w-full bg-background">
       {filesVisible && (
         <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-border bg-surface-1">
@@ -379,5 +419,20 @@ function EditorPane({ filesVisible }: { filesVisible: boolean }) {
         </div>
       </main>
     </div>
+  );
+
+  if (!bottomVisible) return top;
+
+  return (
+    <Splitter
+      orientation="vertical"
+      storageKey="learn:splitBottom"
+      defaultLeftPct={65}
+      minLeftPct={30}
+      maxLeftPct={85}
+      className="h-full w-full"
+      left={top}
+      right={<BottomPanel onClose={onCloseBottom} phaseId={phaseId} />}
+    />
   );
 }

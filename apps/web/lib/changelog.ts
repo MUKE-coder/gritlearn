@@ -21,6 +21,18 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.6",
+    releasedAt: "2026-06-17",
+    headline: "Integrated terminal + Live Server",
+    highlights: [
+      { kind: "feature", body: "Terminal button in the top bar opens a bottom panel — type any shell command (pnpm install, go run ., git status), see streamed output, hit Stop to cancel." },
+      { kind: "feature", body: "Live Server tab in the same panel: click Go Live and the open folder is served from a local 127.0.0.1 port with auto-reload on every save (HTML / CSS / JS)." },
+      { kind: "feature", body: "Quick-command buttons in the terminal adapt to the current phase (pnpm dev shows for Backend, ls for Frontend)." },
+      { kind: "feature", body: "File tree keyboard shortcuts: F2 to rename, Delete to remove, Ctrl+X/C/V/D for cut/copy/paste/duplicate." },
+      { kind: "feature", body: "Phase-aware editor defaults — the first time you visit Backend phase, tab size soft-switches to 4." },
+    ],
+  },
+  {
     version: "0.4.5",
     releasedAt: "2026-06-17",
     headline: "VSCode-style file tree",

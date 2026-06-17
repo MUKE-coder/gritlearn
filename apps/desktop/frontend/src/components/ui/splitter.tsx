@@ -22,6 +22,8 @@ interface SplitterProps {
   /** Persist the split ratio to localStorage under this key, so the
    *  layout sticks across reloads. Omit for ephemeral splits. */
   storageKey?: string;
+  /** "horizontal" = left/right; "vertical" = top/bottom. */
+  orientation?: "horizontal" | "vertical";
   className?: string;
 }
 
@@ -32,6 +34,7 @@ export function Splitter({
   minLeftPct = 18,
   maxLeftPct = 82,
   storageKey,
+  orientation = "horizontal",
   className = "",
 }: SplitterProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,12 +56,15 @@ export function Splitter({
   // 6px-wide divider strip.
   const draggingRef = useRef(false);
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, []);
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      draggingRef.current = true;
+      document.body.style.cursor = orientation === "vertical" ? "row-resize" : "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [orientation],
+  );
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -66,7 +72,10 @@ export function Splitter({
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      const pct =
+        orientation === "vertical"
+          ? ((e.clientY - rect.top) / rect.height) * 100
+          : ((e.clientX - rect.left) / rect.width) * 100;
       const clamped = Math.min(maxLeftPct, Math.max(minLeftPct, pct));
       setLeftPct(clamped);
     };
@@ -92,27 +101,33 @@ export function Splitter({
     };
   }, [leftPct, maxLeftPct, minLeftPct, storageKey]);
 
+  const vertical = orientation === "vertical";
   return (
     <div
       ref={containerRef}
-      className={`flex min-h-0 min-w-0 ${className}`}
+      className={`flex min-h-0 min-w-0 ${vertical ? "flex-col" : "flex-row"} ${className}`}
     >
       <div
         className="flex min-h-0 min-w-0 flex-col overflow-hidden"
-        style={{ width: `${leftPct}%` }}
+        style={vertical ? { height: `${leftPct}%` } : { width: `${leftPct}%` }}
       >
         {left}
       </div>
       <div
         role="separator"
-        aria-orientation="vertical"
+        aria-orientation={vertical ? "horizontal" : "vertical"}
         onMouseDown={onMouseDown}
         onDoubleClick={() => setLeftPct(defaultLeftPct)}
-        className="group relative w-1.5 shrink-0 cursor-col-resize bg-border/40 transition-colors hover:bg-accent/60"
+        className={`group relative shrink-0 bg-border/40 transition-colors hover:bg-accent/60 ${
+          vertical ? "h-1.5 cursor-row-resize" : "w-1.5 cursor-col-resize"
+        }`}
         title="Drag to resize · Double-click to reset"
       >
-        {/* Wider hit area so the drag target isn't pixel-perfect */}
-        <span className="absolute inset-y-0 -left-1 -right-1" />
+        <span
+          className={`absolute ${
+            vertical ? "inset-x-0 -top-1 -bottom-1" : "inset-y-0 -left-1 -right-1"
+          }`}
+        />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {right}

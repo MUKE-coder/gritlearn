@@ -79,3 +79,46 @@ export function useEditorPrefs(): EditorPrefsContextValue {
   const ctx = useContext(EditorPrefsContext);
   return ctx ?? noopCtx;
 }
+
+// Sensible per-phase overrides applied as soft defaults the first time
+// the student enters a phase. Doesn't override their explicit choices —
+// see usePhaseAwareDefaults below.
+const PHASE_DEFAULTS: Record<string, Partial<EditorPrefs>> = {
+  // Frontend lessons live in HTML/CSS/JSX where 2-space is canon.
+  "phase-01": { tabSize: 2 },
+  "phase-02": { tabSize: 2 },
+  "phase-03": { tabSize: 2 },
+  // Backend lessons include Go + Python in places — both prefer
+  // wider tab stops by community convention.
+  "phase-04": { tabSize: 4, fontSize: 14 },
+};
+
+const PHASE_SEEN_KEY = "JEditor.phase-defaults-seen";
+
+// usePhaseAwareDefaults — call from the lesson view route with the
+// current phaseId. The first time a phase is visited, soft-apply its
+// PHASE_DEFAULTS so the editor matches the language's conventions.
+// Tracked per-phase in localStorage so we never silently overwrite
+// the student's later tweaks: once a phase is "seen", we never apply
+// its defaults again.
+export function usePhaseAwareDefaults(phaseId: string | undefined) {
+  const { setPrefs } = useEditorPrefs();
+  useEffect(() => {
+    if (typeof window === "undefined" || !phaseId) return;
+    const defaults = PHASE_DEFAULTS[phaseId];
+    if (!defaults) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(localStorage.getItem(PHASE_SEEN_KEY) ?? "[]") as string[];
+    } catch {
+      // ignore corrupt key
+    }
+    if (seen.includes(phaseId)) return;
+    setPrefs(defaults);
+    try {
+      localStorage.setItem(PHASE_SEEN_KEY, JSON.stringify([...seen, phaseId]));
+    } catch {
+      // quota — non-fatal, just means we'll re-apply on next visit
+    }
+  }, [phaseId, setPrefs]);
+}
