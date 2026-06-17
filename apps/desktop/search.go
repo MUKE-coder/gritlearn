@@ -179,6 +179,53 @@ func (a *App) SearchWorkspace(root string, req SearchRequest) ([]SearchHit, erro
 
 var errStopSearch = errors.New("search: hit cap reached")
 
+// WorkspaceFile is one row of the Cmd+P quick-open picker. Path is
+// absolute; Rel is forward-slashed so it sorts + displays cleanly.
+type WorkspaceFile struct {
+	Path string `json:"path"`
+	Rel  string `json:"rel"`
+}
+
+// WorkspaceFiles walks the open folder once and returns every file
+// path (capped at 5000). Used by Cmd+P to power the fuzzy file
+// picker — fast because there's no per-file open, just a walk.
+func (a *App) WorkspaceFiles(root string) ([]WorkspaceFile, error) {
+	const maxFiles = 5000
+	out := make([]WorkspaceFile, 0, 256)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			base := info.Name()
+			if skipDirs[base] || (strings.HasPrefix(base, ".") && base != ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(info.Name()))
+		if skipExtensions[ext] {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		if rel == "" {
+			rel = info.Name()
+		}
+		out = append(out, WorkspaceFile{
+			Path: path,
+			Rel:  filepath.ToSlash(rel),
+		})
+		if len(out) >= maxFiles {
+			return errStopSearch
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errStopSearch) {
+		return nil, err
+	}
+	return out, nil
+}
+
 // buildMatcher returns a closure that finds the first match in a
 // line + reports the byte offsets. Encoding is UTF-8 throughout so
 // the offsets line up with what Monaco's column counter uses.

@@ -28,6 +28,8 @@ import { FileTree } from "@/components/editor/file-tree";
 import { PreviewPane } from "@/components/editor/preview-pane";
 import { BottomPanel } from "@/components/editor/bottom-panel";
 import { SearchPanel } from "@/components/editor/search-panel";
+import { StatusBar } from "@/components/editor/status-bar";
+import { Breadcrumbs } from "@/components/editor/breadcrumbs";
 
 export const Route = createFileRoute("/app/learn/$phase")({
   beforeLoad: ({ params }) => {
@@ -106,6 +108,9 @@ function LessonViewPage() {
     ? phase.concepts[flatIndex + 1]
     : null;
 
+  // Whenever the bottom panel hides, default it back to terminal so
+  // re-opening shows the most-likely-used tab. (No-op when it's
+  // already terminal.)
   return (
     <div className="flex h-full w-full min-h-0 flex-col bg-background">
       <TopBar
@@ -152,6 +157,7 @@ function LessonViewPage() {
                 sidePanel={sidePanel}
                 bottomVisible={bottomVisible}
                 onCloseBottom={() => setBottomVisible(false)}
+                onRevealFiles={() => setSidePanel("files")}
                 phaseId={phase.id}
               />
             }
@@ -162,6 +168,14 @@ function LessonViewPage() {
           </div>
         )}
       </div>
+      <StatusBar
+        onClickGit={() => {
+          setBottomVisible(true);
+          // Bottom panel already remembers its last tab; the user
+          // can tap Git themselves if they want. (Switching tabs
+          // here would require lifting BottomPanel's tab state up.)
+        }}
+      />
     </div>
   );
 }
@@ -406,10 +420,11 @@ interface EditorPaneProps {
   sidePanel: "none" | "files" | "search";
   bottomVisible: boolean;
   onCloseBottom: () => void;
+  onRevealFiles: () => void;
   phaseId?: string;
 }
 
-function EditorPane({ sidePanel, bottomVisible, onCloseBottom, phaseId }: EditorPaneProps) {
+function EditorPane({ sidePanel, bottomVisible, onCloseBottom, onRevealFiles, phaseId }: EditorPaneProps) {
   // The editor stack:
   //   [ optional SidePanel | (tabs + Monaco + preview) ]
   //                          ^ above
@@ -424,6 +439,7 @@ function EditorPane({ sidePanel, bottomVisible, onCloseBottom, phaseId }: Editor
       )}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <EditorTabs />
+        <Breadcrumbs onRevealFiles={onRevealFiles} />
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             <MonacoPane />

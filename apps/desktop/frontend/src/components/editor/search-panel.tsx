@@ -109,9 +109,7 @@ export function SearchPanel() {
   };
 
   const openAt = (hit: SearchHit) => {
-    void openFile(hit.path);
-    // Optional: when we later have an "open at line" capability we
-    // can pass hit.line and the editor scrolls to it.
+    void openFile(hit.path, hit.line);
   };
 
   return (

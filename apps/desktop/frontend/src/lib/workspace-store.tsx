@@ -7,7 +7,7 @@
 // and tree expansion all live in memory; closing the app forgets them.
 // Persisting "last folder" / "open tabs" lands in B7's offline polish.
 
-import { createContext, useCallback, useContext, useMemo, useReducer } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 import type { ReactNode } from "react";
 import { languageForPath } from "./monaco-setup";
 
@@ -27,6 +27,15 @@ export interface OpenTab {
   content: string;
   /** Monaco language id (e.g. "html", "typescript"). */
   language: string;
+  /** Bumped each time `openFile(path, cursorLine)` is called for an
+   *  already-open tab — Monaco watches this counter and re-scrolls. */
+  revealVersion: number;
+  /** 1-based line the editor should reveal next time it sees a new
+   *  revealVersion. Cleared back to 0 once Monaco has scrolled. */
+  revealLine: number;
+  /** Pinned tabs stick to the left of the tab bar + survive
+   *  "Close Others / Close All". */
+  pinned: boolean;
 }
 
 interface WorkspaceState {
@@ -63,7 +72,12 @@ const initialState: WorkspaceState = {
 type Action =
   | { type: "set-root"; path: string | null }
   | { type: "open-tab"; tab: OpenTab }
+  | { type: "reveal-tab"; path: string; line: number }
   | { type: "close-tab"; index: number }
+  | { type: "close-others"; keepIndex: number }
+  | { type: "close-right"; fromIndex: number }
+  | { type: "close-all" }
+  | { type: "toggle-pin"; index: number }
   | { type: "select-tab"; index: number }
   | { type: "update-content"; index: number; content: string }
   | { type: "mark-saved"; index: number; savedContent: string }
@@ -90,12 +104,62 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       };
     }
 
+    case "reveal-tab": {
+      const idx = state.tabs.findIndex((t) => t.path === action.path);
+      if (idx === -1) return state;
+      return {
+        ...state,
+        activeTabIndex: idx,
+        tabs: state.tabs.map((t, i) =>
+          i === idx
+            ? { ...t, revealLine: action.line, revealVersion: t.revealVersion + 1 }
+            : t,
+        ),
+      };
+    }
+
     case "close-tab": {
       const nextTabs = state.tabs.filter((_, i) => i !== action.index);
       let nextActive = state.activeTabIndex;
       if (nextTabs.length === 0) nextActive = -1;
       else if (action.index < state.activeTabIndex) nextActive = state.activeTabIndex - 1;
       else if (action.index === state.activeTabIndex) nextActive = Math.min(action.index, nextTabs.length - 1);
+      return { ...state, tabs: nextTabs, activeTabIndex: nextActive };
+    }
+
+    case "close-others": {
+      // Keep the chosen tab + any pinned tabs.
+      const keep = state.tabs[action.keepIndex];
+      if (!keep) return state;
+      const nextTabs = state.tabs.filter((t, i) => i === action.keepIndex || t.pinned);
+      const nextActive = nextTabs.findIndex((t) => t === keep);
+      return { ...state, tabs: nextTabs, activeTabIndex: nextActive };
+    }
+
+    case "close-right": {
+      const nextTabs = state.tabs.filter((t, i) => i <= action.fromIndex || t.pinned);
+      const nextActive = Math.min(state.activeTabIndex, nextTabs.length - 1);
+      return { ...state, tabs: nextTabs, activeTabIndex: nextActive };
+    }
+
+    case "close-all": {
+      const nextTabs = state.tabs.filter((t) => t.pinned);
+      const nextActive = nextTabs.length === 0 ? -1 : 0;
+      return { ...state, tabs: nextTabs, activeTabIndex: nextActive };
+    }
+
+    case "toggle-pin": {
+      const updated = state.tabs.map((t, i) =>
+        i === action.index ? { ...t, pinned: !t.pinned } : t,
+      );
+      // Re-sort: pinned tabs always come first.
+      const pinned = updated.filter((t) => t.pinned);
+      const rest = updated.filter((t) => !t.pinned);
+      const nextTabs = [...pinned, ...rest];
+      const targetPath = updated[state.activeTabIndex]?.path;
+      const nextActive = targetPath != null
+        ? nextTabs.findIndex((t) => t.path === targetPath)
+        : -1;
       return { ...state, tabs: nextTabs, activeTabIndex: nextActive };
     }
 
@@ -142,8 +206,15 @@ export interface WorkspaceContextValue extends WorkspaceState {
   openFolder: () => Promise<void>;
   /** Set the workspace root programmatically — used by "Open example project". */
   setRoot: (path: string) => void;
-  openFile: (path: string) => Promise<void>;
+  /** Open a file in a tab. `cursorLine` is 1-based and asks the editor
+   *  to scroll to that line on mount (used by workspace search +
+   *  open-at-line + breadcrumb jumps). */
+  openFile: (path: string, cursorLine?: number) => Promise<void>;
   closeTab: (index: number) => void;
+  closeOthers: (keepIndex: number) => void;
+  closeRight: (fromIndex: number) => void;
+  closeAll: () => void;
+  togglePin: (index: number) => void;
   selectTab: (index: number) => void;
   updateActiveContent: (content: string) => void;
   saveActiveTab: () => Promise<void>;
@@ -170,24 +241,73 @@ export interface WorkspaceContextValue extends WorkspaceState {
   pasteClipboard: (destDir: string) => Promise<void>;
   /** Open the OS file manager focused on path. */
   revealInExplorer: (path: string) => Promise<void>;
+  /** Recently opened folders, most-recent first, capped at 8. */
+  getRecentFolders: () => string[];
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
+const PERSIST_KEY = "JEditor.workspace-state.v2";
+
+interface PersistedWorkspace {
+  rootPath: string | null;
+  tabs: Array<{ path: string; pinned: boolean }>;
+  activeIndex: number;
+  recentFolders: string[];
+}
+
+function readPersisted(): PersistedWorkspace | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedWorkspace;
+  } catch {
+    return null;
+  }
+}
+
+function writePersisted(state: PersistedWorkspace) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
+  } catch {
+    // Quota errors etc — silent; the workspace still works for the
+    // current session.
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // Recent folders are tracked separately from the reducer so reading
+  // them doesn't trigger a re-render of the whole editor on every
+  // open-folder call.
+  const recentFoldersRef = useRef<string[]>([]);
 
   const openFolder = useCallback(async () => {
     const dir = await App.OpenDirectoryDialog("Open a folder");
     if (!dir) return; // User cancelled — leave the current workspace alone.
     dispatch({ type: "set-root", path: dir });
+    recentFoldersRef.current = [
+      dir,
+      ...recentFoldersRef.current.filter((d) => d !== dir),
+    ].slice(0, 8);
   }, []);
 
   const setRoot = useCallback((dir: string) => {
     dispatch({ type: "set-root", path: dir });
+    recentFoldersRef.current = [
+      dir,
+      ...recentFoldersRef.current.filter((d) => d !== dir),
+    ].slice(0, 8);
   }, []);
 
-  const openFile = useCallback(async (path: string) => {
+  const openFile = useCallback(async (path: string, cursorLine?: number) => {
+    // If already open, just reveal it (jump to line if requested,
+    // otherwise just focus the existing tab).
+    if (cursorLine && cursorLine > 0) {
+      dispatch({ type: "reveal-tab", path, line: cursorLine });
+    }
     const content = await App.ReadFile(path);
     const name = path.split(/[\\/]/).pop() ?? path;
     dispatch({
@@ -198,12 +318,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         savedContent: content,
         content,
         language: languageForPath(path),
+        revealVersion: cursorLine ? 1 : 0,
+        revealLine: cursorLine ?? 0,
+        pinned: false,
       },
     });
+    if (cursorLine && cursorLine > 0) {
+      // open-tab for an already-open path is a no-op except focus.
+      // For a freshly opened file we need a second dispatch so the
+      // reveal counter bumps after the tab exists.
+      dispatch({ type: "reveal-tab", path, line: cursorLine });
+    }
   }, []);
 
   const closeTab = useCallback((index: number) => {
     dispatch({ type: "close-tab", index });
+  }, []);
+
+  const closeOthers = useCallback((keepIndex: number) => {
+    dispatch({ type: "close-others", keepIndex });
+  }, []);
+
+  const closeRight = useCallback((fromIndex: number) => {
+    dispatch({ type: "close-right", fromIndex });
+  }, []);
+
+  const closeAll = useCallback(() => {
+    dispatch({ type: "close-all" });
+  }, []);
+
+  const togglePin = useCallback((index: number) => {
+    dispatch({ type: "toggle-pin", index });
   }, []);
 
   const selectTab = useCallback((index: number) => {
@@ -266,6 +411,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           savedContent: content,
           content,
           language: languageForPath(full),
+          revealVersion: 0,
+          revealLine: 0,
+          pinned: false,
         },
       });
     },
@@ -374,6 +522,66 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await App.RevealInExplorer(path);
   }, []);
 
+  const getRecentFolders = useCallback(() => recentFoldersRef.current, []);
+
+  // Rehydrate on first mount: restore the last workspace + open tabs.
+  // We dispatch set-root before reading files so the file tree starts
+  // populating in parallel with tab loads.
+  useEffect(() => {
+    const persisted = readPersisted();
+    if (!persisted) return;
+    if (persisted.recentFolders) {
+      recentFoldersRef.current = persisted.recentFolders;
+    }
+    if (persisted.rootPath) {
+      dispatch({ type: "set-root", path: persisted.rootPath });
+    }
+    if (persisted.tabs?.length) {
+      (async () => {
+        for (let i = 0; i < persisted.tabs.length; i++) {
+          const t = persisted.tabs[i];
+          try {
+            const content = await App.ReadFile(t.path);
+            const name = t.path.split(/[\\/]/).pop() ?? t.path;
+            dispatch({
+              type: "open-tab",
+              tab: {
+                path: t.path,
+                name,
+                savedContent: content,
+                content,
+                language: languageForPath(t.path),
+                revealVersion: 0,
+                revealLine: 0,
+                pinned: t.pinned,
+              },
+            });
+          } catch {
+            // File deleted between sessions — skip silently.
+          }
+        }
+        if (persisted.activeIndex >= 0) {
+          dispatch({ type: "select-tab", index: persisted.activeIndex });
+        }
+      })();
+    }
+  }, []);
+
+  // Persist on every reducer change. Skip the very first run where
+  // state is initial (otherwise we clobber persisted state before
+  // the rehydrate effect lands its dispatches).
+  useEffect(() => {
+    if (state.rootPath === null && state.tabs.length === 0) return;
+    writePersisted({
+      rootPath: state.rootPath,
+      tabs: state.tabs
+        .filter((t) => t.path) // skip unsaved scratch buffers
+        .map((t) => ({ path: t.path, pinned: t.pinned })),
+      activeIndex: state.activeTabIndex,
+      recentFolders: recentFoldersRef.current,
+    });
+  }, [state.rootPath, state.tabs, state.activeTabIndex]);
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       ...state,
@@ -382,6 +590,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setRoot,
       openFile,
       closeTab,
+      closeOthers,
+      closeRight,
+      closeAll,
+      togglePin,
       selectTab,
       updateActiveContent,
       saveActiveTab,
@@ -396,6 +608,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setClipboard,
       pasteClipboard,
       revealInExplorer,
+      getRecentFolders,
     }),
     [
       state,
@@ -403,6 +616,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setRoot,
       openFile,
       closeTab,
+      closeOthers,
+      closeRight,
+      closeAll,
+      togglePin,
       selectTab,
       updateActiveContent,
       saveActiveTab,
@@ -417,6 +634,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setClipboard,
       pasteClipboard,
       revealInExplorer,
+      getRecentFolders,
     ],
   );
 
@@ -438,6 +656,10 @@ const noopWorkspaceContext: WorkspaceContextValue = {
   saveActiveTab:       async () => {},
   setPreviewVisible:   () => {},
   togglePreview:       () => {},
+  closeOthers:         () => {},
+  closeRight:          () => {},
+  closeAll:            () => {},
+  togglePin:           () => {},
   createFile:          async () => {},
   createFolder:        async () => {},
   renameNode:          async () => {},
@@ -447,6 +669,7 @@ const noopWorkspaceContext: WorkspaceContextValue = {
   setClipboard:        () => {},
   pasteClipboard:      async () => {},
   revealInExplorer:    async () => {},
+  getRecentFolders:    () => [],
 };
 
 export function useWorkspace(): WorkspaceContextValue {

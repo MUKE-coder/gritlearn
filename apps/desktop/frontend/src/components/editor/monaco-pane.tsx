@@ -82,9 +82,39 @@ export function MonacoPane() {
       const event = new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true });
       window.dispatchEvent(event);
     });
+    // Forward cursor position changes to the status bar (which
+    // listens on a window-level event so it doesn't have to thread a
+    // ref through the layout).
+    editor.onDidChangeCursorPosition((e) => {
+      window.dispatchEvent(
+        new CustomEvent("JEditor:cursor-position", {
+          detail: { line: e.position.lineNumber, col: e.position.column },
+        }),
+      );
+    });
     // First paint of the git gutter.
     void refreshGutter();
+    // If the tab was opened with a target line (search result, etc),
+    // scroll to it after mount.
+    if (activeTab?.revealLine && activeTab.revealLine > 0) {
+      editor.revealLineInCenter(activeTab.revealLine);
+      editor.setPosition({ lineNumber: activeTab.revealLine, column: 1 });
+      editor.focus();
+    }
   };
+
+  // Watch revealVersion — bumped each time openFile(path, line) is
+  // called for an already-open tab — so subsequent search-result
+  // clicks re-scroll the same buffer.
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed || !activeTab) return;
+    if (activeTab.revealLine > 0) {
+      ed.revealLineInCenter(activeTab.revealLine);
+      ed.setPosition({ lineNumber: activeTab.revealLine, column: 1 });
+      ed.focus();
+    }
+  }, [activeTab?.revealVersion, activeTab?.revealLine]);
 
   if (!activeTab) {
     return (

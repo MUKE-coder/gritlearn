@@ -21,6 +21,20 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.10",
+    releasedAt: "2026-06-17",
+    headline: "Pro polish — status bar, Cmd+P, workspace persistence",
+    highlights: [
+      { kind: "feature", body: "Status bar at the bottom: git branch with ahead/behind counts, workspace name, cursor line:col, language, file, unsaved-file count." },
+      { kind: "feature", body: "Cmd+P quick-open: fuzzy-search every file in the workspace and jump straight to it. Type 'app.tsx' to find apps/web/app.tsx, etc." },
+      { kind: "feature", body: "Workspace persistence: launching the app re-opens your last folder and every open tab in its previous order. Pinned tabs survive 'Close Others' and 'Close All'." },
+      { kind: "feature", body: "Open-at-line: clicking a search result scrolls the editor straight to the matching line." },
+      { kind: "feature", body: "Tab right-click menu: close / close others / close to the right / close all / pin / unpin / copy path / reveal in explorer. Middle-click any tab to close it." },
+      { kind: "feature", body: "Breadcrumbs above the editor showing workspace > folder > file. Click the workspace name to reveal the file tree." },
+      { kind: "feature", body: "Recent folders in the command palette — switch workspaces without re-using the folder picker every time." },
+    ],
+  },
+  {
     version: "0.4.9",
     releasedAt: "2026-06-17",
     headline: "Workspace search + Git source control",
