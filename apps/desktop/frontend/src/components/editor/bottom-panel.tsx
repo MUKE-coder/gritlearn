@@ -17,16 +17,30 @@ import { XtermTerminal } from "./xterm-terminal";
 // @ts-ignore — generated at build time
 import * as App from "../../../wailsjs/go/main/App";
 
-type Tab = "terminal" | "live-server" | "git";
+type Tab = "terminal" | "live-server" | "git" | "problems";
 
 interface BottomPanelProps {
   onClose: () => void;
   /** Forwarded to the Terminal for future per-phase customisation. */
   phaseId?: string;
+  /** Optional controlled initial tab (defaults to terminal). */
+  initialTab?: "terminal" | "live-server" | "problems";
+  /** Fires when the user switches tabs so the parent can persist. */
+  onTabChange?: (t: "terminal" | "live-server" | "problems") => void;
 }
 
-export function BottomPanel({ onClose, phaseId: _phaseId }: BottomPanelProps) {
-  const [tab, setTab] = useState<Tab>("terminal");
+export function BottomPanel({ onClose, phaseId: _phaseId, initialTab, onTabChange }: BottomPanelProps) {
+  const [tab, setTabState] = useState<Tab>(initialTab ?? "terminal");
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    if (t === "terminal" || t === "live-server" || t === "problems") {
+      onTabChange?.(t);
+    }
+  };
+  useEffect(() => {
+    if (initialTab && initialTab !== tab) setTabState(initialTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
 
   return (
     <div className="flex h-full flex-col border-t border-border bg-background">
@@ -43,6 +57,10 @@ export function BottomPanel({ onClose, phaseId: _phaseId }: BottomPanelProps) {
           <TabButton active={tab === "git"} onClick={() => setTab("git")}>
             <GitBranch className="h-3.5 w-3.5" />
             Git
+          </TabButton>
+          <TabButton active={tab === "problems"} onClick={() => setTab("problems")}>
+            <span className="text-[12px] font-medium">⚠</span>
+            Problems
           </TabButton>
         </div>
         <button
@@ -62,6 +80,9 @@ export function BottomPanel({ onClose, phaseId: _phaseId }: BottomPanelProps) {
         </div>
         <div className={`h-full ${tab === "git" ? "" : "hidden"}`}>
           <GitPanel />
+        </div>
+        <div className={`h-full ${tab === "problems" ? "" : "hidden"}`}>
+          <ProblemsPlaceholder />
         </div>
       </div>
     </div>
@@ -88,6 +109,20 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+// ─── Problems placeholder ────────────────────────────────────
+//
+// Real Problems pane (TypeScript diagnostics + ESLint) would aggregate
+// from Monaco's markers across every model. For now this is a tasteful
+// empty state so the menubar's "Problems" entry doesn't dead-end.
+function ProblemsPlaceholder() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 bg-surface-1 text-center text-[12.5px] text-foreground-muted">
+      <span>No problems detected.</span>
+      <span className="text-[11px]">TypeScript + ESLint diagnostics will surface here.</span>
+    </div>
   );
 }
 

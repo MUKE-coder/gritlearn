@@ -82,6 +82,16 @@ export function MonacoPane() {
       const event = new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true });
       window.dispatchEvent(event);
     });
+    // Listen for menubar-driven editor commands ("Find in File", etc).
+    const onRun = (e: Event) => {
+      const id = (e as CustomEvent).detail as string;
+      if (id) editor.trigger("menubar", id, null);
+    };
+    window.addEventListener("JEditor:run-editor-command", onRun);
+    // Clean up via Monaco's dispose lifecycle when the editor is torn down.
+    editor.onDidDispose(() => {
+      window.removeEventListener("JEditor:run-editor-command", onRun);
+    });
     // Forward cursor position changes to the status bar (which
     // listens on a window-level event so it doesn't have to thread a
     // ref through the layout).

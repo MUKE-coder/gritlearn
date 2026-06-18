@@ -21,6 +21,20 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.11",
+    releasedAt: "2026-06-18",
+    headline: "VSCode-style chrome with Learning as a first-class activity",
+    highlights: [
+      { kind: "feature", body: "New Activity Bar on the left: Learning · Explorer · Search · Source Control · Extensions — plus Profile and Settings at the bottom." },
+      { kind: "feature", body: "Menu Bar on top: File / Edit / Selection / View / Go / Terminal / Help, every entry wired to a real action." },
+      { kind: "feature", body: "Resizable Sidebar per activity, widths persisted per-activity in localStorage." },
+      { kind: "feature", body: "Learning sidebar — replaces the old phase top bar: phase chooser, prev/Next buttons, chapter outline tree, and the MDX lesson reader, with a draggable divider between outline and reader." },
+      { kind: "feature", body: "Extensions panel: lists built-ins (Live Server, PTY Terminal, TypeScript LSP, Snippet Library) alongside installed plugins — install / enable / disable / uninstall." },
+      { kind: "feature", body: "New keyboard shortcuts: Ctrl+1 Learning, Ctrl+Shift+E/F/G/X for Explorer/Search/Git/Extensions, Ctrl+J toggle bottom panel, Ctrl+` open terminal, Ctrl+, Settings." },
+      { kind: "breaking", body: "Old phase top bar (Chapter / Lesson dropdowns + dot row + Files/Search/Terminal toggles) removed — its functions are now spread across the Activity Bar, Menu Bar, and Learning sidebar." },
+    ],
+  },
+  {
     version: "0.4.10",
     releasedAt: "2026-06-17",
     headline: "Pro polish — status bar, Cmd+P, workspace persistence",

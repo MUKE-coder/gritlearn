@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.10";
+export const FALLBACK_VERSION = "0.4.11";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-17T16:00:00Z",
+  releasedAt: "2026-06-18T03:00:00Z",
   releaseNotes:
-    "JEditor v0.4.10 — pro polish pass. Status bar at the bottom (git branch + ahead/behind, workspace, cursor line:col, language, file). Cmd+P quick-open: fuzzy-search every file in the workspace, jump straight to it. Workspace persistence: launching the app re-opens your last folder and every tab. Open-at-line: clicking a search result scrolls the editor to the match. Tab right-click menu: close / close others / close to the right / close all / pin / unpin / copy path / reveal. Breadcrumbs above the editor (workspace > folder > file). Middle-click a tab to close it.",
+    "JEditor v0.4.11 — VSCode-style chrome with Learning as a first-class activity. New Activity Bar on the left (Learning, Explorer, Search, Source Control, Extensions, Profile, Settings), Menu Bar on top (File / Edit / Selection / View / Go / Terminal / Help), resizable Sidebar per activity with persisted widths. The Learning activity replaces the old phase top bar entirely — chapter outline + lesson reader live in the sidebar with a draggable divider between them. Extensions tab lists built-ins (Live Server, PTY Terminal, TypeScript LSP, Snippets) alongside installed plugins. Settings gear at the bottom of the activity bar. Ctrl+J toggles the bottom panel, Ctrl+\\` opens terminal directly, Ctrl+Shift+E/F/G/X jump to Explorer/Search/Git/Extensions.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.
