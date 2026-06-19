@@ -7,7 +7,7 @@
 // memory).
 
 import { useNavigate } from "@tanstack/react-router";
-import { BookOpen, Files, GitBranch, Puzzle, Search, Settings, User } from "lucide-react";
+import { BookOpen, Files, GitBranch, Notebook, Puzzle, Search, Settings, User } from "lucide-react";
 import { useShell, type Activity } from "@/lib/ide-shell";
 
 interface Item {
@@ -18,11 +18,12 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { id: "learning",   label: "Learning",       icon: BookOpen, shortcut: "Ctrl+1" },
-  { id: "explorer",   label: "Explorer",       icon: Files,    shortcut: "Ctrl+Shift+E" },
-  { id: "search",     label: "Search",         icon: Search,   shortcut: "Ctrl+Shift+F" },
+  { id: "learning",   label: "Learning",       icon: BookOpen,  shortcut: "Ctrl+1" },
+  { id: "explorer",   label: "Explorer",       icon: Files,     shortcut: "Ctrl+Shift+E" },
+  { id: "search",     label: "Search",         icon: Search,    shortcut: "Ctrl+Shift+F" },
   { id: "git",        label: "Source Control", icon: GitBranch, shortcut: "Ctrl+Shift+G" },
-  { id: "extensions", label: "Extensions",     icon: Puzzle,   shortcut: "Ctrl+Shift+X" },
+  { id: "notes",      label: "Notes",          icon: Notebook,  shortcut: "Ctrl+Shift+N" },
+  { id: "extensions", label: "Extensions",     icon: Puzzle,    shortcut: "Ctrl+Shift+X" },
 ];
 
 export function ActivityBar() {

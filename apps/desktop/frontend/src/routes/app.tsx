@@ -5,6 +5,7 @@ import { SessionStatusBanner } from "@/components/layout/session-status-banner";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { UpdateBanner } from "@/components/update-banner";
 import { PluginToaster } from "@/components/plugin-toaster";
+import { StreakToaster } from "@/components/editor/streak-toaster";
 import { MenuBar } from "@/components/layout/menu-bar";
 import { ActivityBar } from "@/components/layout/activity-bar";
 import { SidebarHost } from "@/components/layout/sidebar-host";
@@ -17,6 +18,8 @@ import { ProgressProvider } from "@/lib/progress-store";
 import { SyncProvider } from "@/lib/sync-provider";
 import { EditorPrefsProvider } from "@/lib/editor-prefs";
 import { PluginHostProvider } from "@/lib/plugin-host";
+import { NotesProvider } from "@/lib/notes-store";
+import { StreakProvider } from "@/lib/streak-store";
 import { IdeShellProvider, useShell } from "@/lib/ide-shell";
 import { useShortcuts } from "@/lib/use-shortcuts";
 
@@ -52,6 +55,8 @@ function AppLayout() {
       <CurriculumProvider>
         <SyncProvider>
           <WorkspaceProvider>
+            <NotesProvider>
+            <StreakWrapper>
             <PluginHostWrapper>
               <IdeShellProvider>
                 <Chrome>
@@ -59,8 +64,11 @@ function AppLayout() {
                 </Chrome>
                 <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
                 <PluginToaster />
+                <StreakToaster />
               </IdeShellProvider>
             </PluginHostWrapper>
+            </StreakWrapper>
+            </NotesProvider>
           </WorkspaceProvider>
         </SyncProvider>
       </CurriculumProvider>
@@ -157,4 +165,20 @@ function PluginHostWrapper({ children }: { children: React.ReactNode }) {
     getRoot: () => ws.rootPath,
   };
   return <PluginHostProvider workspace={adapter}>{children}</PluginHostProvider>;
+}
+
+// StreakWrapper bridges chapter completions into a window-level
+// "JEditor:streak-toast" event the IDE chrome listens for, so we can
+// show the celebration toast without coupling the streak store to the
+// toast surface directly.
+function StreakWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <StreakProvider
+      onChapterEarned={(msg) => {
+        window.dispatchEvent(new CustomEvent("JEditor:streak-toast", { detail: msg }));
+      }}
+    >
+      {children}
+    </StreakProvider>
+  );
 }

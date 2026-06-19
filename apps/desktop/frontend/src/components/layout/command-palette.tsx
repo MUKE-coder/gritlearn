@@ -11,11 +11,13 @@ import {
   Save,
   Eye,
   FileIcon,
+  GraduationCap,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useLogout } from "@/hooks/use-auth";
 import { useWorkspace } from "@/lib/workspace-store";
+import { useCurriculum } from "@/lib/curriculum-store";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — generated at build time
 import * as App from "../../../wailsjs/go/main/App";
@@ -39,16 +41,26 @@ interface WorkspaceFile {
   rel: string;
 }
 
-type Mode = "command" | "file";
+interface CurriculumHit {
+  slug: string;
+  title: string;
+  excerpt: string;
+  line: number;
+}
+
+type Mode = "command" | "file" | "lesson";
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const workspace = useWorkspace();
+  const { manifest, selectConcept } = useCurriculum();
   const [mode, setMode] = useState<Mode>("command");
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [lessonHits, setLessonHits] = useState<CurriculumHit[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const close = () => {
@@ -70,6 +82,40 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     root: null,
     files: [],
   });
+  // Lesson search — debounced; runs whenever the query changes in
+  // lesson mode. Empty query shows nothing (the curriculum is large).
+  useEffect(() => {
+    if (!open || mode !== "lesson") return;
+    const q = query.trim();
+    if (!q) {
+      setLessonHits([]);
+      return;
+    }
+    setLessonsLoading(true);
+    const id = setTimeout(async () => {
+      try {
+        const hits = ((await App.SearchCurriculum(q)) as CurriculumHit[]) ?? [];
+        setLessonHits(hits);
+      } catch (err) {
+        console.error("[palette] curriculum search failed", err);
+        setLessonHits([]);
+      } finally {
+        setLessonsLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(id);
+  }, [open, mode, query]);
+
+  // Resolve a hit's phase route from the manifest so opening jumps to
+  // the right /app/learn/$phase URL.
+  const phaseForSlug = (slug: string): string | null => {
+    if (!manifest) return null;
+    for (const phase of manifest.phases) {
+      if (phase.concepts.some((c) => c.slug === slug)) return phase.id;
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!open || mode !== "file") return;
     if (!workspace.rootPath) {
@@ -104,6 +150,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         icon: FileIcon,
         action: () => {
           setMode("file");
+          setQuery("");
+          setSelectedIndex(0);
+        },
+      },
+      {
+        id: "lesson-search",
+        label: "Search Lessons…",
+        shortcut: "⌘L",
+        icon: GraduationCap,
+        action: () => {
+          setMode("lesson");
           setQuery("");
           setSelectedIndex(0);
         },
@@ -214,7 +271,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     return scored.map((s) => s.f);
   }, [files, query, mode]);
 
-  const visible = mode === "file" ? filteredFiles.length : filteredCommands.length;
+  const visible =
+    mode === "file"
+      ? filteredFiles.length
+      : mode === "lesson"
+      ? lessonHits.length
+      : filteredCommands.length;
 
   useEffect(() => {
     if (open) {
@@ -245,11 +307,21 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             void workspace.openFile(f.path);
             close();
           }
+        } else if (mode === "lesson") {
+          const hit = lessonHits[selectedIndex];
+          if (hit) {
+            const phaseId = phaseForSlug(hit.slug);
+            selectConcept(hit.slug);
+            if (phaseId) {
+              navigate({ to: "/app/learn/$phase", params: { phase: phaseId } });
+            }
+            close();
+          }
         } else {
           const cmd = filteredCommands[selectedIndex];
           if (cmd && !cmd.disabled) cmd.action();
         }
-      } else if (e.key === "Escape" && mode === "file") {
+      } else if (e.key === "Escape" && mode !== "command") {
         e.preventDefault();
         setMode("command");
         setQuery("");
@@ -270,6 +342,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       if (k === "p" && !e.shiftKey) {
         e.preventDefault();
         setMode("file");
+        setQuery("");
+        setSelectedIndex(0);
+        onOpenChange(true);
+      } else if (k === "l" && !e.shiftKey) {
+        // Don't intercept Ctrl+L inside Monaco / forms — it has its
+        // own meaning (logout shortcut elsewhere).  Only fire when
+        // focus is on the body / palette.
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+        e.preventDefault();
+        setMode("lesson");
         setQuery("");
         setSelectedIndex(0);
         onOpenChange(true);
@@ -300,6 +383,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               file
             </span>
           )}
+          {mode === "lesson" && (
+            <span className="rounded border border-border bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">
+              lesson
+            </span>
+          )}
           <input
             ref={inputRef}
             value={query}
@@ -307,7 +395,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder={mode === "file" ? "Search files by name…" : "Type a command or search…"}
+            placeholder={
+              mode === "file"
+                ? "Search files by name…"
+                : mode === "lesson"
+                ? "Search every lesson in the curriculum…"
+                : "Type a command or search…"
+            }
             className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-foreground-muted focus:outline-none"
           />
           <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-foreground-muted">
@@ -316,7 +410,51 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         </div>
 
         <div className="max-h-[400px] overflow-y-auto p-2">
-          {mode === "file" ? (
+          {mode === "lesson" ? (
+            lessonsLoading ? (
+              <div className="px-4 py-8 text-center text-[13px] text-foreground-muted">
+                Searching the curriculum…
+              </div>
+            ) : lessonHits.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[13px] text-foreground-muted">
+                {query.trim() ? `No lessons match "${query}"` : "Type to search every lesson in every phase."}
+              </div>
+            ) : (
+              lessonHits.map((hit, i) => {
+                const isSelected = i === selectedIndex;
+                return (
+                  <button
+                    key={hit.slug + ":" + hit.line}
+                    onClick={() => {
+                      const phaseId = phaseForSlug(hit.slug);
+                      selectConcept(hit.slug);
+                      if (phaseId) {
+                        navigate({ to: "/app/learn/$phase", params: { phase: phaseId } });
+                      }
+                      close();
+                    }}
+                    onMouseEnter={() => setSelectedIndex(i)}
+                    className={`flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left ${
+                      isSelected ? "bg-accent/10" : "hover:bg-surface-hover"
+                    }`}
+                  >
+                    <GraduationCap className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isSelected ? "text-accent" : "text-foreground-muted"}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className={`truncate text-[13px] ${isSelected ? "text-foreground" : "text-foreground-secondary"}`}>
+                        {hit.title}
+                      </div>
+                      <div className="mt-0.5 line-clamp-1 text-[11px] text-foreground-muted">
+                        {hit.excerpt}
+                      </div>
+                      <div className="mt-0.5 truncate font-mono text-[10px] text-foreground-muted">
+                        {hit.slug}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )
+          ) : mode === "file" ? (
             filteredFiles.length === 0 ? (
               <div className="px-4 py-8 text-center text-[13px] text-foreground-muted">
                 {workspace.rootPath

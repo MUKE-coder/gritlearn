@@ -21,6 +21,27 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.12",
+    releasedAt: "2026-06-19",
+    headline: "Notes, snip-to-image, streaks, lesson search",
+    highlights: [
+      { kind: "feature", body: "Notes activity — floating + button on every lesson opens a composer. Notes appear in a new Activity Bar tab grouped by phase > chapter > lesson." },
+      { kind: "feature", body: "Highlight a phrase in a lesson → 'Save as note' pill anchors a note to that text. Clicking the note's quote later scrolls back to the original phrase with a flash highlight." },
+      { kind: "feature", body: "Snip code as a shareable PNG — 5 ray.so-grade frame themes (Aurora, Carbon, Minimal, Noir, Classic). Pick the default in Settings." },
+      { kind: "feature", body: "Floating Snip pill on Monaco selections + right-click → 'Snip selection as image' + Snip button on every MDX code block." },
+      { kind: "feature", body: "Daily learning streak in the status bar + chapter-completion trophy toasts." },
+      { kind: "feature", body: "Curriculum search (Ctrl+L) — fuzzy-search every lesson in every phase by MDX content." },
+      { kind: "feature", body: "Go Live button above the editor for HTML files — click to open the file in your default browser via Live Server in one shot." },
+      { kind: "feature", body: "Emmet for HTML / CSS / JSX (type `div.box>p` + Tab) + Monaco ghost-text inline suggestions." },
+      { kind: "feature", body: "Compact Learning sidebar — phase / chapter / lesson are now dropdowns in a thin header; the lesson reader takes the entire sidebar height." },
+      { kind: "feature", body: "Rich MDX prose styling — gradient H1, accent rails on H2, vibrant strong/em/links/blockquote/tables/kbd." },
+      { kind: "feature", body: "Online / offline manual toggle in the title bar: Auto-detect, Force Online, Work Offline." },
+      { kind: "fix",     body: "No more flashing git.exe console windows on Windows (every shell-out runs with hideWindow)." },
+      { kind: "fix",     body: "Settings + Profile pages get a 'Back to editor' button + Esc shortcut." },
+      { kind: "polish",  body: "ASCII diagrams in lessons render in bright readable text instead of dim dark-on-dark." },
+    ],
+  },
+  {
     version: "0.4.11",
     releasedAt: "2026-06-18",
     headline: "VSCode-style chrome with Learning as a first-class activity",

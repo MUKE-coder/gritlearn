@@ -7,9 +7,10 @@
 // reads from React context.
 
 import { useEffect, useState } from "react";
-import { Bell, FileText, GitBranch, MapPin } from "lucide-react";
+import { Bell, FileText, Flame, GitBranch, MapPin } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace-store";
 import { useEditorPrefs } from "@/lib/editor-prefs";
+import { useStreak } from "@/lib/streak-store";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — generated at build time
 import * as App from "../../../wailsjs/go/main/App";
@@ -22,6 +23,7 @@ interface CursorPos {
 export function StatusBar({ onClickGit }: { onClickGit?: () => void }) {
   const { activeTab, rootPath, tabs } = useWorkspace();
   const { prefs } = useEditorPrefs();
+  const { state: streak } = useStreak();
   const [cursor, setCursor] = useState<CursorPos>({ line: 1, col: 1 });
   const [branch, setBranch] = useState<string>("");
 
@@ -77,6 +79,23 @@ export function StatusBar({ onClickGit }: { onClickGit?: () => void }) {
   return (
     <div className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-surface-1 px-2 text-[11px] text-foreground-secondary">
       <div className="flex items-center gap-3">
+        {streak.current > 0 && (
+          <div
+            title={`${streak.current}-day learning streak · longest ${streak.longest}`}
+            className="flex items-center gap-1 text-orange-300"
+          >
+            <Flame className="h-3 w-3" />
+            <span className="font-mono">{streak.current}</span>
+          </div>
+        )}
+        {streak.earnedChapters.length > 0 && (
+          <div
+            title={`${streak.earnedChapters.length} chapters completed`}
+            className="font-mono text-accent"
+          >
+            🏆 {streak.earnedChapters.length}
+          </div>
+        )}
         {branch && (
           <button
             onClick={onClickGit}

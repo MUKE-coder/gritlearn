@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.11";
+export const FALLBACK_VERSION = "0.4.12";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-18T03:00:00Z",
+  releasedAt: "2026-06-19T10:00:00Z",
   releaseNotes:
-    "JEditor v0.4.11 — VSCode-style chrome with Learning as a first-class activity. New Activity Bar on the left (Learning, Explorer, Search, Source Control, Extensions, Profile, Settings), Menu Bar on top (File / Edit / Selection / View / Go / Terminal / Help), resizable Sidebar per activity with persisted widths. The Learning activity replaces the old phase top bar entirely — chapter outline + lesson reader live in the sidebar with a draggable divider between them. Extensions tab lists built-ins (Live Server, PTY Terminal, TypeScript LSP, Snippets) alongside installed plugins. Settings gear at the bottom of the activity bar. Ctrl+J toggles the bottom panel, Ctrl+\\` opens terminal directly, Ctrl+Shift+E/F/G/X jump to Explorer/Search/Git/Extensions.",
+    "JEditor v0.4.12 — Notes, snip-to-image, streaks, lesson search, plus a stack of polish. New floating + button on every lesson lets you write notes (free or anchored to a highlighted phrase); the Notes activity groups them by phase > chapter > lesson and clicking jumps right back to the highlighted text. Snip code as a shareable PNG — 5 ray.so-grade frame themes (Aurora default, Carbon, Minimal, Noir, Classic), picked from Settings. New floating Snip pill on Monaco selections + a Snip button on every MDX code block. Daily streak counter with chapter-completion trophy toasts in the status bar. Ctrl+L searches every lesson in every phase by content. Go Live button above the editor for HTML files. Emmet for HTML / CSS / JSX, Monaco ghost-text inline suggestions. Compact Learning sidebar with chapter + lesson dropdowns instead of an always-on outline tree. Rich MDX prose styling (gradient h1s, accent rails on h2s, vibrant strong / em / link / blockquote / table / kbd). Settings + Profile pages get a Back-to-editor button (Esc also closes). Online/offline manual toggle in the title bar (Auto-detect / Force Online / Work Offline). No more flashing git.exe console windows on Windows.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

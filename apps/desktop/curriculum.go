@@ -48,6 +48,96 @@ func (a *App) GetConceptMDX(slug string) (string, error) {
 	return string(b), nil
 }
 
+// CurriculumHit is one match returned by SearchCurriculum. Path is
+// the concept slug so the UI can jump straight to it; Excerpt holds
+// the snippet of MDX around the hit (with surrounding context).
+type CurriculumHit struct {
+	Slug    string `json:"slug"`
+	Title   string `json:"title"`
+	Excerpt string `json:"excerpt"`
+	Line    int    `json:"line"`
+}
+
+// SearchCurriculum walks every bundled concept.mdx and returns up to
+// 50 hits ranked by where the match lands (title > heading > body).
+// Case-insensitive, no regex.
+func (a *App) SearchCurriculum(query string) ([]CurriculumHit, error) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return []CurriculumHit{}, nil
+	}
+	const maxHits = 50
+
+	hits := make([]CurriculumHit, 0, 32)
+	err := fs.WalkDir(curriculumFS, "content", func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() || filepath.Base(p) != "concept.mdx" {
+			return nil
+		}
+		b, err := curriculumFS.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		text := string(b)
+		lower := strings.ToLower(text)
+		idx := strings.Index(lower, q)
+		if idx == -1 {
+			return nil
+		}
+		// Slug is the parent directory under content/.
+		slug := strings.TrimPrefix(strings.TrimSuffix(p, "/concept.mdx"), "content/")
+
+		// Title heuristic — first "# " heading in the MDX.
+		title := slug
+		if m := firstHeading(text); m != "" {
+			title = m
+		}
+
+		// Build a ±80 char excerpt around the hit.
+		start := idx - 80
+		if start < 0 {
+			start = 0
+		}
+		end := idx + 80
+		if end > len(text) {
+			end = len(text)
+		}
+		excerpt := strings.ReplaceAll(text[start:end], "\n", " ")
+		// Compute the 1-based line of the hit so the UI can jump there.
+		line := 1 + strings.Count(text[:idx], "\n")
+
+		hits = append(hits, CurriculumHit{
+			Slug:    slug,
+			Title:   title,
+			Excerpt: excerpt,
+			Line:    line,
+		})
+		if len(hits) >= maxHits {
+			return fmt.Errorf("__cap__")
+		}
+		return nil
+	})
+	if err != nil && err.Error() != "__cap__" {
+		return nil, err
+	}
+	return hits, nil
+}
+
+// firstHeading returns the text of the first "# " heading in the
+// supplied MDX source. Used to surface a friendly title in search
+// results without having to round-trip the slug through the manifest.
+func firstHeading(src string) string {
+	for _, line := range strings.Split(src, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		}
+	}
+	return ""
+}
+
 // ExampleInfo is the on-the-wire shape of one example project that
 // ships with a concept. The frontend lists these in the <ExampleProject>
 // teaching block; clicking "Open" calls OpenExampleProject below.

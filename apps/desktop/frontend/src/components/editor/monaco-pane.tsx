@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { useWorkspace } from "@/lib/workspace-store";
 import { useEditorPrefs } from "@/lib/editor-prefs";
 import { registerMonacoThemes, monacoThemeId } from "@/lib/monaco-themes";
 import { applyGitGutter } from "@/lib/monaco-git-gutter";
+import { registerSnipAction } from "@/lib/monaco-snipper";
 import "@/lib/monaco-setup";
 
 // Tell @monaco-editor/react to use the local monaco instance instead of
@@ -24,6 +25,11 @@ export function MonacoPane() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const gutterColRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [selectionToolbar, setSelectionToolbar] = useState<null | {
+    top: number;
+    left: number;
+  }>(null);
 
   // Pull fresh git hunks + redraw the gutter strips. Called after
   // the editor mounts, after the active tab changes, and after a
@@ -88,9 +94,48 @@ export function MonacoPane() {
       if (id) editor.trigger("menubar", id, null);
     };
     window.addEventListener("JEditor:run-editor-command", onRun);
+
+    // Register "Snip selection as image" — appears in the right-click
+    // menu, the command palette, and Ctrl+K Ctrl+P. Snips the
+    // selection (or the whole file if nothing's selected). The
+    // getSnipTheme callback runs every click so the active prefs
+    // value is always picked up.
+    const snipDisposable = registerSnipAction(editor, monaco, () => prefs.snipTheme);
+
+    // Floating selection toolbar — appears above a multi-character
+    // selection. Discoverable surface for the Snip action so the
+    // student doesn't have to know it lives in the right-click menu.
+    const onSelChange = editor.onDidChangeCursorSelection(() => {
+      const sel = editor.getSelection();
+      if (!sel || sel.isEmpty()) {
+        setSelectionToolbar(null);
+        return;
+      }
+      // Skip tiny accidental selections.
+      const selText = editor.getModel()?.getValueInRange(sel) ?? "";
+      if (selText.trim().length < 2) {
+        setSelectionToolbar(null);
+        return;
+      }
+      // Anchor the toolbar above the selection's start position.
+      const pos = sel.getStartPosition();
+      const coords = editor.getScrolledVisiblePosition(pos);
+      const container = containerRef.current;
+      if (!coords || !container) {
+        setSelectionToolbar(null);
+        return;
+      }
+      setSelectionToolbar({
+        top: Math.max(2, coords.top - 30),
+        left: Math.max(4, coords.left - 8),
+      });
+    });
+
     // Clean up via Monaco's dispose lifecycle when the editor is torn down.
     editor.onDidDispose(() => {
       window.removeEventListener("JEditor:run-editor-command", onRun);
+      snipDisposable.dispose();
+      onSelChange.dispose();
     });
     // Forward cursor position changes to the status bar (which
     // listens on a window-level event so it doesn't have to thread a
@@ -138,6 +183,25 @@ export function MonacoPane() {
   }
 
   return (
+    <div ref={containerRef} className="relative h-full">
+    {selectionToolbar && (
+      <div
+        className="pointer-events-auto absolute z-30 flex items-center gap-1 rounded-md border border-border bg-surface-1 px-1.5 py-1 shadow-2xl"
+        style={{ top: selectionToolbar.top, left: selectionToolbar.left }}
+      >
+        <button
+          onClick={() => {
+            const ed = editorRef.current;
+            if (!ed) return;
+            ed.trigger("toolbar", "jeditor.snip-selection", null);
+          }}
+          title="Snip selection as image"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-foreground-secondary hover:bg-surface-2 hover:text-foreground"
+        >
+          📸 Snip
+        </button>
+      </div>
+    )}
     <Editor
       // Force a fresh editor instance per tab so Monaco's internal model
       // matches the file we're editing. Without `key`, switching tabs would
@@ -163,7 +227,25 @@ export function MonacoPane() {
         wordWrap: prefs.wordWrap,
         bracketPairColorization: { enabled: true },
         guides: { bracketPairs: true, indentation: true },
+        // VSCode-like completion behaviour: trigger on type, on dot,
+        // and on Tab; ghost-text previews next-word suggestions
+        // inline; the suggest widget hovers on demand.
+        suggest: {
+          showSnippets: true,
+          showWords: true,
+          preview: true,
+          previewMode: "subwordSmart",
+        },
+        quickSuggestions: { other: true, comments: false, strings: true },
+        suggestOnTriggerCharacters: true,
+        acceptSuggestionOnEnter: "on",
+        tabCompletion: "on",
+        inlineSuggest: { enabled: true, showToolbar: "onHover" },
+        snippetSuggestions: "top",
+        // Hover docs on symbols (TypeScript LSP fills this for ts/js).
+        hover: { enabled: true, delay: 250, sticky: true },
       }}
     />
+    </div>
   );
 }

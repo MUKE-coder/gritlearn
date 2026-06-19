@@ -22,6 +22,8 @@
     "axios": "^1.7.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "emmet-monaco-es": "^5.7.0",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^0.469.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.0.0",

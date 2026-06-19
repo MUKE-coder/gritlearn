@@ -9,6 +9,7 @@ import { SearchPanel } from "@/components/editor/search-panel";
 import { GitPanel } from "@/components/editor/git-panel";
 import { ExtensionsPanel } from "@/components/editor/extensions-panel";
 import { LearningSidebar } from "@/components/editor/learning-sidebar";
+import { NotesPanel } from "@/components/editor/notes-panel";
 
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 720;
@@ -59,6 +60,7 @@ export function SidebarHost() {
           {activity === "explorer"   && <FileTree />}
           {activity === "search"     && <SearchPanel />}
           {activity === "git"        && <GitPanel />}
+          {activity === "notes"      && <NotesPanel />}
           {activity === "extensions" && <ExtensionsPanel />}
         </div>
       </div>
@@ -80,6 +82,7 @@ function SidebarHeader({ activity }: { activity: string }) {
     explorer:   "Explorer",
     search:     "Search",
     git:        "Source Control",
+    notes:      "Notes",
     extensions: "Extensions",
   };
   return (

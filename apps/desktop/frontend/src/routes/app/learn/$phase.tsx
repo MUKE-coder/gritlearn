@@ -21,6 +21,7 @@ import { MonacoPane } from "@/components/editor/monaco-pane";
 import { EditorTabs } from "@/components/editor/editor-tabs";
 import { PreviewPane } from "@/components/editor/preview-pane";
 import { Breadcrumbs } from "@/components/editor/breadcrumbs";
+import { FileToolbar } from "@/components/editor/file-toolbar";
 
 export const Route = createFileRoute("/app/learn/$phase")({
   beforeLoad: ({ params }) => {
@@ -88,6 +89,7 @@ function LessonViewPage() {
     <div className="flex h-full min-h-0 w-full flex-col">
       <EditorTabs />
       <Breadcrumbs onRevealFiles={() => shell.setActivity("explorer")} />
+      <FileToolbar />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <MonacoPane />

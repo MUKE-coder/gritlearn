@@ -1,5 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, X } from "lucide-react";
+import { useRouter } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 export interface StatCard {
   label: string;
@@ -14,19 +16,60 @@ interface PageHeaderProps {
   description?: string;
   actions?: React.ReactNode;
   stats?: StatCard[];
+  /** Hide the auto-rendered close button. Profile + Settings keep it on. */
+  hideClose?: boolean;
 }
 
-export function PageHeader({ title, description, actions, stats }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, stats, hideClose }: PageHeaderProps) {
+  const router = useRouter();
+
+  // Esc closes the page (matches the Cancel/Esc muscle memory in
+  // every other modal-ish surface in the app).
+  useEffect(() => {
+    if (hideClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      router.navigate({ to: "/app" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router, hideClose]);
+
   return (
     <div className="mb-8">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0 flex-1">
+          {!hideClose && (
+            <button
+              onClick={() => router.navigate({ to: "/app" })}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-foreground-secondary hover:bg-surface-3 hover:text-foreground"
+              title="Back to editor (Esc)"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to editor
+              <span className="ml-1 rounded border border-border bg-surface-1 px-1 font-mono text-[9px] text-foreground-muted">
+                Esc
+              </span>
+            </button>
+          )}
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{title}</h1>
           {description && (
             <p className="mt-1 text-[14px] text-foreground-secondary">{description}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+        <div className="flex items-center gap-2 shrink-0">
+          {actions}
+          {!hideClose && (
+            <button
+              onClick={() => router.navigate({ to: "/app" })}
+              title="Close (Esc)"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-2 hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {stats && stats.length > 0 && (

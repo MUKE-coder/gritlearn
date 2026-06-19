@@ -485,6 +485,7 @@ func (a *App) RevealInExplorer(path string) error {
 		// Don't surface that as an error — only treat "could not
 		// start the process" as failure.
 		cmd := exec.Command("explorer.exe", "/select,", path)
+		hideWindow(cmd)
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("explorer /select: %w", err)
 		}

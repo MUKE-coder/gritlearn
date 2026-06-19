@@ -47,6 +47,7 @@ type GitDiffHunk struct {
 func (a *App) IsGitRepo(dir string) bool {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	cmd.Dir = dir
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return false
@@ -60,6 +61,7 @@ func (a *App) IsGitRepo(dir string) bool {
 func (a *App) GitStatus(dir string) ([]GitStatusEntry, error) {
 	cmd := exec.Command("git", "status", "--porcelain=v1", "--untracked-files=all")
 	cmd.Dir = dir
+	hideWindow(cmd)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -119,6 +121,7 @@ func (a *App) GitDiffHunks(dir, path string) ([]GitDiffHunk, error) {
 
 	cmd := exec.Command("git", "diff", "-U0", "--no-color", "--", path)
 	cmd.Dir = dir
+	hideWindow(cmd)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -162,11 +165,13 @@ func statusForFlags(x, y byte) string {
 func isUntracked(dir, path string) bool {
 	cmd := exec.Command("git", "ls-files", "--error-unmatch", "--", path)
 	cmd.Dir = dir
+	hideWindow(cmd)
 	return cmd.Run() != nil
 }
 
 func countLines(path string) (int, error) {
 	cmd := exec.Command("wc", "-l", path)
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		// wc may not exist on stock Windows; fall back to reading.
@@ -185,12 +190,15 @@ func countLines(path string) (int, error) {
 
 func countLinesByReading(path string) (int, error) {
 	cmd := exec.Command("git", "show", "HEAD:"+path)
+	hideWindow(cmd)
 	if err := cmd.Run(); err == nil {
 		// File exists in HEAD — not untracked path, shouldn't be here.
 	}
 	// Just read directly through git's cat-file-equivalent of disk.
-	b, err := exec.Command("powershell.exe", "-NoProfile", "-Command",
-		"(Get-Content -Raw '"+path+"').Length").Output()
+	psCmd := exec.Command("powershell.exe", "-NoProfile", "-Command",
+		"(Get-Content -Raw '"+path+"').Length")
+	hideWindow(psCmd)
+	b, err := psCmd.Output()
 	if err != nil {
 		return 0, err
 	}
@@ -250,6 +258,7 @@ func parseDiffHunks(diff string) []GitDiffHunk {
 func repoRoot(dir string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = dir
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -384,6 +393,7 @@ func (a *App) GitInit(dir string) error {
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	hideWindow(cmd)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

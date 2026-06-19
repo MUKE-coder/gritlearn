@@ -129,6 +129,19 @@ ts.javascriptDefaults.setDiagnosticsOptions({
 // Register the curated per-language snippet library.
 registerSnippets(monaco);
 
+// ─── Emmet ────────────────────────────────────────────────────
+// Lazy import so the Emmet bundle (~80 KB gzipped) doesn't block
+// initial editor load.
+import("emmet-monaco-es")
+  .then(({ emmetHTML, emmetCSS, emmetJSX }) => {
+    emmetHTML(monaco, ["html", "handlebars", "razor"]);
+    emmetCSS(monaco, ["css", "scss", "less"]);
+    emmetJSX(monaco, ["javascript", "typescript", "javascriptreact", "typescriptreact"]);
+  })
+  .catch((err) => {
+    console.warn("[monaco] emmet init failed", err);
+  });
+
 // Map common file extensions to Monaco language IDs. Anything not listed
 // falls back to "plaintext" — the editor still loads, just without syntax
 // highlighting, which is the right default for unknown files.

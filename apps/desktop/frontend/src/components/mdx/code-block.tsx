@@ -9,8 +9,10 @@
 //      without selecting + dragging the cursor across wrapped lines
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
+import { Camera, Check, Copy, Loader2 } from "lucide-react";
 import * as monaco from "monaco-editor";
+import { inlineMonacoTokenColors, renderSnipFrame, snipThemeById } from "@/lib/snip-themes";
+import { useEditorPrefs } from "@/lib/editor-prefs";
 import "@/lib/monaco-setup";
 
 // Crawl down the children tree to find the actual code element + its
@@ -65,21 +67,43 @@ function normalizeLang(raw: string): string {
   return m[raw] ?? raw;
 }
 
+// Languages we deliberately DON'T run through Monaco's colorize:
+// the output ends up as dark-on-dark, almost invisible, because
+// Monaco's plaintext theme renders the foreground in the editor's
+// muted "comment" colour. For ASCII diagrams (the <Illustration>
+// content most commonly hit this) we want bright readable text.
+const SKIP_COLORIZE = new Set([
+  "plaintext",
+  "text",
+  "txt",
+  "ascii",
+  "diagram",
+  "console",
+  "output",
+  "",
+]);
+
 interface CodeBlockProps {
   children?: ReactNode;
 }
 
 export function CodeBlock({ children }: CodeBlockProps) {
   const { code, lang } = extractCode(children);
+  const { prefs } = useEditorPrefs();
   const [html, setHtml] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [snipping, setSnipping] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-    // Monaco's colorize returns a Promise<string> of <span>-marked HTML.
-    // It uses the current theme — so if the user is in dark mode, the
-    // colors match the editor. Falls back to plain pre on error.
+    // Skip Monaco for plaintext / unknown — Monaco's plaintext theme
+    // renders dim grey on dark, which is unreadable for the ASCII
+    // diagrams the curriculum uses heavily.
+    if (SKIP_COLORIZE.has(lang)) {
+      setHtml(null); // render escapeHtml(code) below
+      return;
+    }
     monaco.editor
       .colorize(code, lang, { tabSize: 2 })
       .then((rendered) => {
@@ -105,36 +129,87 @@ export function CodeBlock({ children }: CodeBlockProps) {
     }
   };
 
+  // Snip — render the block into the user's chosen frame theme,
+  // raster it, download. Uses html-to-image lazy-loaded so a
+  // student who never snips doesn't pay the bundle cost.
+  const onSnip = async () => {
+    setSnipping(true);
+    try {
+      const theme = snipThemeById(prefs.snipTheme);
+      const wrapper = document.createElement("div");
+      wrapper.style.cssText = "position: fixed; left: -10000px; top: 0; z-index: -1;";
+      wrapper.innerHTML = renderSnipFrame(theme, lang, html ?? escapeHtml(code));
+      document.body.appendChild(wrapper);
+      try {
+        const target = wrapper.firstElementChild as HTMLElement | null;
+        if (!target) throw new Error("snip frame missing");
+        inlineMonacoTokenColors(target);
+        const { toPng } = await import("html-to-image");
+        const dataUrl = await toPng(target, {
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: "transparent",
+        });
+        const link = document.createElement("a");
+        link.download = `jeditor-snip-${theme.id}-${lang}-${Date.now()}.png`;
+        link.href = dataUrl;
+        link.click();
+      } finally {
+        document.body.removeChild(wrapper);
+      }
+    } catch (err) {
+      console.error("[snip] failed", err);
+      alert(`Snip failed: ${err}`);
+    } finally {
+      setSnipping(false);
+    }
+  };
+
   return (
     <div className="group relative my-4 overflow-hidden rounded-md border border-border bg-[#0a0a0d]">
       <div className="flex items-center justify-between border-b border-border-subtle bg-[#15151a] px-3 py-1">
         <span className="font-mono text-[10px] uppercase tracking-wider text-foreground-muted">
           {lang === "plaintext" ? "text" : lang}
         </span>
-        <button
-          onClick={onCopy}
-          aria-label="Copy code"
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-foreground-muted opacity-0 transition-opacity hover:bg-surface-2 hover:text-foreground group-hover:opacity-100 focus:opacity-100"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3 w-3 text-success" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3 w-3" />
-              Copy
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <button
+            onClick={() => void onSnip()}
+            aria-label="Snip as image"
+            title="Save as shareable PNG"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-foreground-muted hover:bg-surface-2 hover:text-foreground"
+          >
+            {snipping ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+            Snip
+          </button>
+          <button
+            onClick={onCopy}
+            aria-label="Copy code"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-foreground-muted hover:bg-surface-2 hover:text-foreground"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3 w-3 text-success" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" />
+                Copy
+              </>
+            )}
+          </button>
+        </div>
       </div>
       <div
         ref={ref}
-        className="overflow-x-auto px-4 py-3 font-mono text-[12.5px] leading-[1.55] text-[#e4e4ee]"
+        // Inline style forces the foreground colour to win over any
+        // Monaco span that doesn't carry an explicit colour (the
+        // plaintext theme is the worst offender — it omits a colour
+        // and the ambient one was a near-black "comment" tone).
+        style={{ color: "#e4e4ee" }}
+        className="overflow-x-auto whitespace-pre px-4 py-3 font-mono text-[12.5px] leading-[1.55]"
         // colorize returns trusted HTML produced by Monaco — its
-        // tokenisers strip nothing dangerous (they're consuming the
-        // pre-tokenized stream, not arbitrary HTML from MDX). dangerouslySetInnerHTML
+        // tokenisers strip nothing dangerous. dangerouslySetInnerHTML
         // is the right primitive here.
         dangerouslySetInnerHTML={
           html != null

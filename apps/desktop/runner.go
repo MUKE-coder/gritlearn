@@ -71,6 +71,7 @@ func (r *CommandRunner) Run(cwd, command string) (string, error) {
 	ctx, cancel := context.WithCancel(r.ctx)
 	cmd := exec.CommandContext(ctx, shellFor(command), shellArgsFor(command)...)
 	cmd.Dir = cwd
+	hideWindow(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()

@@ -12,7 +12,8 @@ export type Activity =
   | "explorer"
   | "search"
   | "git"
-  | "extensions";
+  | "extensions"
+  | "notes";
 
 interface ShellState {
   activity: Activity;
@@ -56,6 +57,7 @@ function readSidebarWidths(): Record<Activity, number> {
     search:     320,
     git:        320,
     extensions: 320,
+    notes:      320,
   };
   if (typeof window === "undefined") return defaults;
   try {

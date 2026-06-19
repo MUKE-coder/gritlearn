@@ -1,12 +1,12 @@
-import { CheckCircle2, Download, Loader2, Minus, Moon, RefreshCw, Square, Sun, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, Download, Loader2, Minus, Moon, RefreshCw, Square, Sun, Wifi, WifiOff, X, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   minimise,
   toggleMaximise,
   closeWindow,
   getPlatform,
 } from "@/lib/wails-bridge";
-import { useOnlineStatus } from "@/hooks/use-online-status";
+import { setOnlineOverride, useOnlineStatus, type OnlineOverride } from "@/hooks/use-online-status";
 import { useLatestVersion } from "@/hooks/use-latest-version";
 import { useTheme } from "@/lib/theme-provider";
 import { SyncButton } from "@/components/layout/sync-button";
@@ -143,43 +143,138 @@ function ThemeToggle() {
 }
 
 // ConnectionIndicator renders a colored dot + one-word state for the
-// API heartbeat. Clicking forces an immediate re-check by reloading
-// the hook (via React Query's query-key invalidation isn't trivial
-// here — the hook owns its own setInterval — so we use a CustomEvent
-// the hook listens for). Auto-detected; there's no manual "force
-// offline" state since faking the network would also break sync.
+// API heartbeat. Click opens a small menu with three modes:
+//   Auto-detect    — heartbeats API every 15s
+//   Force Online   — pretend the API is reachable (debug aid)
+//   Force Offline  — disable network calls (work offline mode)
+// Also has a "Re-check now" option.
 function ConnectionIndicator() {
-  const { isOnline, lastCheckedAt } = useOnlineStatus();
+  const { isOnline, lastCheckedAt, override } = useOnlineStatus();
+  const [open, setOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const label = isOnline ? "Online" : "Offline";
   const checked = lastCheckedAt ? lastCheckedAt.toLocaleTimeString() : "—";
 
-  const onClick = () => {
-    if (refreshing) return;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const recheck = () => {
     setRefreshing(true);
-    // Hook re-runs its initial ping on this event — wired up in
-    // use-online-status.ts.
     window.dispatchEvent(new CustomEvent("JEditor:recheck-online"));
     setTimeout(() => setRefreshing(false), 800);
   };
 
+  const pickMode = (m: OnlineOverride) => {
+    setOnlineOverride(m);
+    setOpen(false);
+  };
+
+  const modeBadge =
+    override === "force-online" ? "FORCED" : override === "force-offline" ? "FORCED" : null;
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={`${label} • last check ${checked} • click to change mode`}
+        aria-label={label}
+        className="flex h-titlebar items-center gap-1.5 rounded-md px-2 text-[11px] text-foreground-muted hover:bg-surface-hover"
+      >
+        {refreshing ? (
+          <RefreshCw className="h-3 w-3 animate-spin text-accent" />
+        ) : (
+          <span
+            className={`h-2 w-2 rounded-full transition-colors ${
+              isOnline ? "bg-success" : "bg-warning animate-pulse"
+            }`}
+          />
+        )}
+        <span className={isOnline ? "text-foreground-secondary" : "text-warning"}>{label}</span>
+        {modeBadge && (
+          <span className="rounded border border-accent/40 bg-accent/10 px-1 font-mono text-[9px] uppercase tracking-wider text-accent">
+            {modeBadge}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-[240px] rounded-md border border-border bg-surface-1 py-1 shadow-2xl">
+          <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-foreground-muted">
+            Connection mode
+          </div>
+          <ModeRow
+            label="Auto-detect"
+            description="Heartbeat the API every 15s"
+            icon={<Zap className="h-3.5 w-3.5" />}
+            active={override === "auto"}
+            onClick={() => pickMode("auto")}
+          />
+          <ModeRow
+            label="Force Online"
+            description="Pretend the API is reachable"
+            icon={<Wifi className="h-3.5 w-3.5 text-success" />}
+            active={override === "force-online"}
+            onClick={() => pickMode("force-online")}
+          />
+          <ModeRow
+            label="Work Offline"
+            description="Stop hitting the network"
+            icon={<WifiOff className="h-3.5 w-3.5 text-warning" />}
+            active={override === "force-offline"}
+            onClick={() => pickMode("force-offline")}
+          />
+          <div className="my-1 border-t border-border-subtle" />
+          <button
+            onClick={() => { setOpen(false); recheck(); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-foreground hover:bg-surface-2"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Re-check now
+          </button>
+          <div className="px-3 py-1 text-[10px] text-foreground-muted">
+            Last check: <span className="font-mono">{checked}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModeRow({
+  label,
+  description,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      title={`${label} • last check ${checked} • click to re-check`}
-      aria-label={label}
-      className="flex h-titlebar items-center gap-1.5 rounded-md px-2 text-[11px] text-foreground-muted hover:bg-surface-hover"
+      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left ${
+        active ? "bg-accent/10" : "hover:bg-surface-2"
+      }`}
     >
-      {refreshing ? (
-        <RefreshCw className="h-3 w-3 animate-spin text-accent" />
-      ) : (
-        <span
-          className={`h-2 w-2 rounded-full transition-colors ${
-            isOnline ? "bg-success" : "bg-warning animate-pulse"
-          }`}
-        />
-      )}
-      <span className={isOnline ? "text-foreground-secondary" : "text-warning"}>{label}</span>
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[12px] ${active ? "font-semibold text-accent" : "text-foreground"}`}>
+          {label}
+        </span>
+        <span className="block text-[10.5px] text-foreground-muted">{description}</span>
+      </span>
+      {active && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />}
     </button>
   );
 }

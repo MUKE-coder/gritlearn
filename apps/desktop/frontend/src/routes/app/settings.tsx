@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/lib/theme-provider";
 import { useEditorPrefs } from "@/lib/editor-prefs";
 import { MONACO_THEME_OPTIONS } from "@/lib/monaco-themes";
+import { SNIP_THEMES } from "@/lib/snip-themes";
 import { usePluginHost } from "@/lib/plugin-host";
 import { AlertTriangle, Loader2, Moon, Plug, Sun, Trash2 } from "lucide-react";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -133,6 +134,35 @@ function SettingsPage() {
               >
                 Reset editor settings
               </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ─── Snip theme ────────────────────────────────────────── */}
+        <Card>
+          <CardContent className="space-y-3 p-6">
+            <div>
+              <h3 className="text-[15px] font-semibold text-foreground">Snip theme</h3>
+              <p className="mt-1 text-[13px] text-foreground-secondary">
+                Frame used when you snip a code block or selection as a shareable PNG.
+                Syntax colours come from your editor theme above.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {SNIP_THEMES.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setPrefs({ snipTheme: opt.id })}
+                  className={`flex flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    prefs.snipTheme === opt.id
+                      ? "border-accent bg-accent/10"
+                      : "border-border bg-surface-2 hover:border-accent/50"
+                  }`}
+                >
+                  <span className="text-[12.5px] font-medium text-foreground">{opt.label}</span>
+                  <span className="text-[11px] text-foreground-secondary">{opt.description}</span>
+                </button>
+              ))}
             </div>
           </CardContent>
         </Card>

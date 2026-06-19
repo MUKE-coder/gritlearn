@@ -5,6 +5,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import type { SnipThemeId } from "./snip-themes";
+
 export interface EditorPrefs {
   fontSize: number;          // px — Monaco default 14
   tabSize: number;           // spaces per tab — default 2
@@ -13,6 +15,8 @@ export interface EditorPrefs {
   autoSaveDelayMs: number;   // default 800
   minimap: boolean;          // default false — minimap takes space on small screens
   monacoTheme: "vs-dark" | "monokai" | "dracula" | "one-dark" | "github-light";
+  /** Frame style used by the Snip-as-image feature. */
+  snipTheme: SnipThemeId;
 }
 
 const DEFAULTS: EditorPrefs = {
@@ -23,6 +27,7 @@ const DEFAULTS: EditorPrefs = {
   autoSaveDelayMs: 800,
   minimap: false,
   monacoTheme: "monokai",
+  snipTheme: "aurora",
 };
 
 const STORAGE_KEY = "JEditor.editor-prefs";
