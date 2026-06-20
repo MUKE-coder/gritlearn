@@ -11,7 +11,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Camera, Check, Copy, Loader2 } from "lucide-react";
 import * as monaco from "monaco-editor";
-import { inlineMonacoTokenColors, renderSnipFrame, snipThemeById } from "@/lib/snip-themes";
+import { renderSnipFrame, snipThemeById } from "@/lib/snip-themes";
+import { highlightForSnip } from "@/lib/snip-highlight";
 import { useEditorPrefs } from "@/lib/editor-prefs";
 import "@/lib/monaco-setup";
 
@@ -135,15 +136,25 @@ export function CodeBlock({ children }: CodeBlockProps) {
   const onSnip = async () => {
     setSnipping(true);
     try {
+      // Shiki produces inline-styled token spans the rasteriser can
+      // capture without any external stylesheet — the Monaco
+      // colorize output we use for the on-page block fell through
+      // to monochrome inside the snip frame.
+      let colored: string;
+      try {
+        colored = await highlightForSnip(code, lang, prefs.monacoTheme);
+      } catch (err) {
+        alert(`Snip highlighter failed to load: ${err}\n\nThe snip will render without syntax colours — check the devtools console.`);
+        colored = `<pre style="margin:0;color:#e4e4ee;font-family:'JetBrains Mono',ui-monospace,monospace;">${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
+      }
       const theme = snipThemeById(prefs.snipTheme);
       const wrapper = document.createElement("div");
       wrapper.style.cssText = "position: fixed; left: -10000px; top: 0; z-index: -1;";
-      wrapper.innerHTML = renderSnipFrame(theme, lang, html ?? escapeHtml(code));
+      wrapper.innerHTML = renderSnipFrame(theme, lang, colored);
       document.body.appendChild(wrapper);
       try {
         const target = wrapper.firstElementChild as HTMLElement | null;
         if (!target) throw new Error("snip frame missing");
-        inlineMonacoTokenColors(target);
         const { toPng } = await import("html-to-image");
         const dataUrl = await toPng(target, {
           pixelRatio: 2,

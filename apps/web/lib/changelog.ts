@@ -21,6 +21,16 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.13",
+    releasedAt: "2026-06-20",
+    headline: "Snip syntax highlighting",
+    highlights: [
+      { kind: "fix",     body: "Snipped code PNGs now carry real syntax-highlighting colours — Monokai keywords in pink, strings in yellow, etc. — instead of the monochrome they came out as in v0.4.12." },
+      { kind: "polish",  body: "Swapped Monaco's colorize for Shiki's pre-bundled full grammar set so every token ships with an inline color style html-to-image captures cleanly. Wails' file:// scheme blocked Shiki's runtime grammar fetch, so we ship them inline." },
+      { kind: "polish",  body: "Snip-highlighter errors now surface as a loud alert instead of silently producing a monochrome image." },
+    ],
+  },
+  {
     version: "0.4.12",
     releasedAt: "2026-06-19",
     headline: "Notes, snip-to-image, streaks, lesson search",

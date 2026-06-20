@@ -256,24 +256,23 @@ export function renderSnipFrame(
     `
     : "";
 
-  // Wrap the colorized output in a .monaco-editor container — Monaco's
-  // theme CSS scopes its token-colour selectors under .monaco-editor,
-  // so without this wrapper every span renders with the parent's color
-  // and the snip ends up monochrome. We also tag the editor with the
-  // active theme class for good measure; the inliner below resolves
-  // anything the wrapper class doesn't catch by reading computed
-  // colours back into inline styles before rasterisation.
+  // `colorizedHtml` is Shiki's `<pre class="shiki" style="…"><code>…`
+  // wrapper — it already carries the background-colour + per-token
+  // inline colours we want. Drop it into a sized container that
+  // applies padding without clobbering the colours.
   const bodyHtml = `
-    <pre class="monaco-editor jeditor-snip-pre" style="
-      margin: 0;
+    <div style="
       padding: ${bodyPadding};
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 14px;
       line-height: 1.65;
-      color: #e4e4ee;
-      white-space: pre;
       overflow: hidden;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    ">${colorizedHtml}</pre>
+    " class="jeditor-snip-body">${colorizedHtml}</div>
+    <style>
+      .jeditor-snip-body pre.shiki { background: transparent !important; margin: 0; padding: 0; overflow: visible; }
+      .jeditor-snip-body pre.shiki code { background: transparent !important; padding: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+      .jeditor-snip-body .line { display: block; }
+    </style>
   `;
 
   if (theme.card) {

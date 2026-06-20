@@ -97,10 +97,12 @@ export function MonacoPane() {
 
     // Register "Snip selection as image" — appears in the right-click
     // menu, the command palette, and Ctrl+K Ctrl+P. Snips the
-    // selection (or the whole file if nothing's selected). The
-    // getSnipTheme callback runs every click so the active prefs
-    // value is always picked up.
-    const snipDisposable = registerSnipAction(editor, monaco, () => prefs.snipTheme);
+    // selection (or the whole file if nothing's selected). getDeps
+    // runs every click so the active prefs are always current.
+    const snipDisposable = registerSnipAction(editor, monaco, () => ({
+      snipTheme: prefs.snipTheme,
+      editorTheme: prefs.monacoTheme,
+    }));
 
     // Floating selection toolbar — appears above a multi-character
     // selection. Discoverable surface for the Snip action so the

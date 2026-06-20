@@ -1,60 +1,43 @@
 // Monaco selection snipper — registers a "Snip selection as image"
 // action that appears in the right-click menu when the user has
-// highlighted code in the editor. Picks the frame from the user's
-// snipTheme preference (ray.so-grade presets in snip-themes.ts),
-// html-to-image's it to PNG, downloads.
+// highlighted code in the editor. Pipes through Shiki to inline
+// every token's colour, then html-to-image rasterises into a PNG
+// using the user's chosen frame theme.
 
 import type * as MonacoNS from "monaco-editor";
-import { inlineMonacoTokenColors, renderSnipFrame, snipThemeById, type SnipThemeId } from "./snip-themes";
+import { renderSnipFrame, snipThemeById, type SnipThemeId } from "./snip-themes";
+import { highlightForSnip } from "./snip-highlight";
 
 interface Disposable {
   dispose(): void;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+interface SnipDeps {
+  /** SnipTheme id the frame uses. */
+  snipTheme: SnipThemeId;
+  /** Active Monaco editor theme — Shiki picks a matching syntax palette. */
+  editorTheme: string;
 }
 
-const SKIP_COLORIZE = new Set(["plaintext", "text", "txt", ""]);
-
-async function renderSnipImage(
-  code: string,
-  lang: string,
-  monaco: typeof MonacoNS,
-  themeId: SnipThemeId,
-) {
-  // Colour via Monaco using whatever theme the editor is currently
-  // on — that way the snip's syntax colours match the editor the
-  // student was just reading.
+async function renderSnipImage(code: string, lang: string, deps: SnipDeps) {
   let html: string;
-  if (SKIP_COLORIZE.has(lang)) {
-    html = escapeHtml(code);
-  } else {
-    try {
-      html = await monaco.editor.colorize(code, lang, { tabSize: 2 });
-    } catch {
-      html = escapeHtml(code);
-    }
+  try {
+    html = await highlightForSnip(code, lang, deps.editorTheme);
+  } catch (err) {
+    alert(
+      `Snip syntax highlighter failed to load.\n\n${err}\n\nThe snip will still render but without syntax colours. Check the devtools console for details.`,
+    );
+    html = `<pre style="margin:0;color:#e4e4ee;font-family:'JetBrains Mono',ui-monospace,monospace;">${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
   }
-
-  const theme = snipThemeById(themeId);
+  const theme = snipThemeById(deps.snipTheme);
   const wrapper = document.createElement("div");
   wrapper.style.cssText = `position: fixed; left: -10000px; top: 0; z-index: -1;`;
   wrapper.innerHTML = renderSnipFrame(theme, lang, html);
   document.body.appendChild(wrapper);
 
   try {
-    // The actual rasterisable element is the first wrapper child the
-    // renderer produced (it carries the theme.wrapper background).
     const target = wrapper.firstElementChild as HTMLElement | null;
     if (!target) throw new Error("snip frame missing");
-    // Force-inline token colours from Monaco's stylesheet so the
-    // rasteriser captures syntax highlighting, not just monochrome
-    // text.
-    inlineMonacoTokenColors(target);
     const { toPng } = await import("html-to-image");
     const dataUrl = await toPng(target, {
       pixelRatio: 2,
@@ -71,13 +54,13 @@ async function renderSnipImage(
 }
 
 /** registerSnipAction wires a "Snip selection as image" action into
- *  Monaco's right-click menu + the command palette + a Cmd+K Cmd+P
- *  shortcut. `getSnipTheme` is a callback so the action always picks
- *  up the user's current preference, not the one at register-time. */
+ *  Monaco's right-click menu + a Cmd+K Cmd+P shortcut. `getDeps` is
+ *  a callback so the action always picks up the user's current prefs,
+ *  not a snapshot at register-time. */
 export function registerSnipAction(
   editor: MonacoNS.editor.IStandaloneCodeEditor,
   monaco: typeof MonacoNS,
-  getSnipTheme: () => SnipThemeId,
+  getDeps: () => SnipDeps,
 ): Disposable {
   return editor.addAction({
     id: "jeditor.snip-selection",
@@ -98,7 +81,7 @@ export function registerSnipAction(
       if (!code.trim()) return;
       const lang = model.getLanguageId();
       try {
-        await renderSnipImage(code, lang, monaco, getSnipTheme());
+        await renderSnipImage(code, lang, getDeps());
       } catch (err) {
         console.error("[snip] failed", err);
         alert(`Snip failed: ${err}`);

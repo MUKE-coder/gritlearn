@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.12";
+export const FALLBACK_VERSION = "0.4.13";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-19T10:00:00Z",
+  releasedAt: "2026-06-20T08:00:00Z",
   releaseNotes:
-    "JEditor v0.4.12 — Notes, snip-to-image, streaks, lesson search, plus a stack of polish. New floating + button on every lesson lets you write notes (free or anchored to a highlighted phrase); the Notes activity groups them by phase > chapter > lesson and clicking jumps right back to the highlighted text. Snip code as a shareable PNG — 5 ray.so-grade frame themes (Aurora default, Carbon, Minimal, Noir, Classic), picked from Settings. New floating Snip pill on Monaco selections + a Snip button on every MDX code block. Daily streak counter with chapter-completion trophy toasts in the status bar. Ctrl+L searches every lesson in every phase by content. Go Live button above the editor for HTML files. Emmet for HTML / CSS / JSX, Monaco ghost-text inline suggestions. Compact Learning sidebar with chapter + lesson dropdowns instead of an always-on outline tree. Rich MDX prose styling (gradient h1s, accent rails on h2s, vibrant strong / em / link / blockquote / table / kbd). Settings + Profile pages get a Back-to-editor button (Esc also closes). Online/offline manual toggle in the title bar (Auto-detect / Force Online / Work Offline). No more flashing git.exe console windows on Windows.",
+    "JEditor v0.4.13 — Snip syntax highlighting fixed. Snipped PNGs now carry real Monokai/Dracula/One-Dark/GitHub-Light token colours instead of monochrome text. Swapped Monaco's colorize (whose stylesheet-driven colours html-to-image couldn't see) for Shiki's pre-bundled full grammar set — every token ships with its own inline color style so the rasteriser captures it cleanly. Snip shells (5 ray.so-grade frame themes) unchanged.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.
