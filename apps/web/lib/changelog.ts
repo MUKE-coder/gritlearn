@@ -21,6 +21,19 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.17",
+    releasedAt: "2026-06-24",
+    headline: "Phase 5 (Go) Batch 4 — pointers, packages, goroutines",
+    highlights: [
+      { kind: "feature", body: "'Pointers' — the explicit version of the value-vs-reference dance: `&` and `*` in expression vs type position, `&T{}` as the new-and-init idiom, nil checks at boundaries, the unaddressable-map-value rule, when to reach for pointer vs value." },
+      { kind: "feature", body: "Pointer-vs-value side-by-side runner — pass the same struct two ways, hit Run on each, and watch the caller's data either change or stay put. The address-space diagram makes the indirection concrete." },
+      { kind: "feature", body: "'Packages and project structure' — import paths and case-based visibility (no `public`/`private` keywords), the three standard project layouts (tiny / cmd+internal / cmd+internal+pkg), `init()` functions, circular-import diagnosis, naming conventions, the `_` and `.` import aliases." },
+      { kind: "feature", body: "Package-layout explorer — three clickable project trees. Tap any directory and see its `package` clause, file contents, and a verdict on whether a sibling repo could import it. The `internal/` compiler enforcement clicks immediately." },
+      { kind: "feature", body: "'Goroutines' opens Go's concurrency story — `go f()` syntax, the `main()` exits → all goroutines die surprise, `sync.WaitGroup`, the closure-capture trap (pre-Go-1.22), context cancellation, when goroutines pay back vs not." },
+      { kind: "feature", body: "Goroutine-race simulator — 100 workers all incrementing one counter, four implementations (unsafe `++` / sync.Mutex / atomic.AddInt32 / channel). The unsafe case randomly loses 5–25 updates per run; the others reliably reach 100. Race-detector output is shown verbatim." },
+    ],
+  },
+  {
     version: "0.4.16",
     releasedAt: "2026-06-24",
     headline: "Phase 5 (Go) Batch 3 — interfaces, slices+maps, errors",

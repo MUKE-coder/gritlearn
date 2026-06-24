@@ -1,0 +1,249 @@
+## Goroutines
+
+A goroutine is **a function call that runs concurrently with everything else.** Stick `go` in front of any function call and Go schedules it onto a lightweight thread:
+
+```go
+go doWork()
+```
+
+That's the entire syntax. Goroutines are what makes Go famous — they're how `net/http` handles 100,000 concurrent connections from a single binary with no tuning. This lesson covers what a goroutine is, when to reach for one, what goes wrong if you're not careful, and how to wait for one to finish.
+
+(The next lesson, channels, covers how goroutines TALK to each other. Together they're Go's concurrency story.)
+
+<Analogy>
+A goroutine is **a small, cheap worker the runtime can multiplex onto an OS thread.** Three numbers help internalise it:
+
+- **Cost to start:** ~2 KB stack, microseconds.
+- **Cost to switch:** measured in nanoseconds — the Go scheduler handles it without bothering the OS.
+- **Practical limit per process:** hundreds of thousands. A single Go service routinely runs 10,000+ active goroutines without breaking a sweat.
+
+Compare that with **threads in C, Java, Python**: each thread costs a megabyte of stack + an OS context switch. You run out of threads at a few thousand. This is why Go gets a chapter in every "language for backend" comparison.
+
+Three follow-on effects you need to internalise immediately:
+
+1. **The program exits when `main` returns — not when all goroutines finish.** Start a goroutine, return from main, the goroutine is killed mid-flight. If you want to wait, you need something explicit (channel, WaitGroup, etc.).
+
+2. **Goroutines share memory.** Two goroutines writing the same `int` is a data race. Go has tooling (`-race`) to find these, but the language doesn't prevent them — it gives you channels + mutexes as the safe primitives instead.
+
+3. **Closures capture by reference.** The classic loop trap: `for i := 0; i < 5; i++ { go func() { fmt.Println(i) }() }` all print `5` because every closure captured the same `i`. (Go 1.22 fixed this for `for i := range` loops by giving each iteration its own scope — but you'll still see the bug in older code and other constructs.)
+
+The whole language was designed around making concurrent code cheap to express. Once you're past the gotchas, writing a 100-worker pipeline in 30 lines becomes normal.
+</Analogy>
+
+### Anatomy of a goroutine
+
+```go
+func say(s string) {
+    fmt.Println(s)
+}
+
+func main() {
+    go say("world")       // runs concurrently
+    say("hello")          // runs on the main goroutine
+    time.Sleep(time.Second)
+}
+```
+
+`go FUNC(args)` schedules the function to run. Three things to notice:
+
+- **The args are evaluated immediately.** `go say(s)` captures `s` as it is RIGHT NOW. The goroutine starts later, but it sees the value frozen at call time.
+- **The call returns immediately.** Whatever `say()` returns goes nowhere — you lose the return value. To get data back, use a channel.
+- **`time.Sleep` is here as a hack** because main() exits before "world" prints otherwise. Production code uses a `sync.WaitGroup` or a channel — never sleep.
+
+### `main()` exits → all goroutines die
+
+```go
+func main() {
+    go func() {
+        time.Sleep(time.Second)
+        fmt.Println("never prints")    // main already returned
+    }()
+}
+```
+
+Run this — nothing prints. `main()` returned immediately, the runtime tore down the program, the goroutine was killed mid-sleep. This is the #1 surprise for first-time Go writers.
+
+The fix: wait explicitly.
+
+### Waiting with `sync.WaitGroup`
+
+```go
+import "sync"
+
+func main() {
+    var wg sync.WaitGroup
+
+    for i := 0; i < 3; i++ {
+        wg.Add(1)              // tell the group "1 more goroutine to wait for"
+        go func(n int) {
+            defer wg.Done()    // mark this one done when the function returns
+            fmt.Println("worker", n)
+        }(i)                    // pass i as argument — see closure trap below
+    }
+
+    wg.Wait()                   // blocks until counter reaches 0
+}
+```
+
+Three rules:
+
+- **`Add` BEFORE the `go`**, not inside. Otherwise the parent could `Wait()` before the child has incremented the counter — race.
+- **`defer wg.Done()`** so it runs no matter how the goroutine returns (panic included, after a recover).
+- **`Wait()` blocks until every Done is called.** If you forget a Done, Wait hangs forever.
+
+This is the workhorse pattern for "fan out N tasks, wait for them all."
+
+### The closure-capture trap
+
+```go
+// Pre-Go-1.22 (and still happens with non-range loops):
+for i := 0; i < 3; i++ {
+    go func() {
+        fmt.Println(i)     // captures the loop variable i, NOT its value
+    }()
+}
+// Prints: probably "3, 3, 3" — every goroutine sees i after the loop ended.
+```
+
+The closure binds to the variable, not its value. By the time the goroutines actually run, the loop has finished and `i` is 3.
+
+Three fixes (use any):
+
+```go
+// 1. Pass as argument — captures by value.
+for i := 0; i < 3; i++ {
+    go func(n int) {
+        fmt.Println(n)
+    }(i)
+}
+
+// 2. Local copy inside the loop body.
+for i := 0; i < 3; i++ {
+    i := i              // shadow — new var each iteration
+    go func() { fmt.Println(i) }()
+}
+
+// 3. Go 1.22+ — `for i := range n` gives each iteration its own scope.
+for i := range 3 {
+    go func() { fmt.Println(i) }()
+}
+```
+
+Go 1.22 changed the scoping rules for `for` loops to fix this trap by default. But not every codebase is on 1.22+, and not every loop is a `for/range`. Habit of passing as argument never bites you.
+
+### Data races — the second trap
+
+```go
+counter := 0
+var wg sync.WaitGroup
+
+for i := 0; i < 100; i++ {
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        counter++              // RACE — two goroutines reading + writing counter
+    }()
+}
+wg.Wait()
+fmt.Println(counter)           // probably less than 100, varies between runs
+```
+
+`counter++` is **not atomic** — it's "load, add, store." Two goroutines interleave and lose updates. The race detector (`go run -race main.go`) flags this immediately.
+
+Fixes — pick what fits:
+
+```go
+// 1. Mutex
+var mu sync.Mutex
+mu.Lock(); counter++; mu.Unlock()
+
+// 2. Atomic ops
+import "sync/atomic"
+atomic.AddInt32(&counter, 1)
+
+// 3. A channel collecting results (preferred when the structure allows it)
+```
+
+The Go culture maxim: **"Don't communicate by sharing memory; share memory by communicating."** When the work shape allows, structure it with channels and avoid the shared mutable state entirely.
+
+### When to reach for a goroutine
+
+| Scenario | Goroutine? |
+|---|---|
+| Doing the same operation over a slice (CPU-bound) | maybe — measure first |
+| I/O concurrency: 10 HTTP calls in parallel | YES — huge win |
+| A background timer / cleaner / periodic job | YES |
+| Web server handling concurrent requests | already done — `net/http` spawns one goroutine per request |
+| Cleaning up state on app shutdown | YES — concurrent with shutdown |
+| Doing a single piece of fast pure CPU work | NO — overhead doesn't pay back |
+
+For I/O-bound work goroutines are nearly free. For pure CPU you usually want exactly `runtime.NumCPU()` of them — more is wasted scheduling.
+
+### Common pattern — fan-out, gather results
+
+```go
+func fetchAll(urls []string) []string {
+    results := make([]string, len(urls))
+    var wg sync.WaitGroup
+
+    for i, url := range urls {
+        wg.Add(1)
+        go func(i int, url string) {
+            defer wg.Done()
+            results[i] = fetch(url)    // each writes to its own slot — no race
+        }(i, url)
+    }
+    wg.Wait()
+    return results
+}
+```
+
+Each goroutine writes to a different index of `results` — no race because the addresses don't overlap. WaitGroup blocks until every goroutine done. Returning the slice gives the caller all the data in order.
+
+This is THE pattern for "parallelise N HTTP calls." Replace fetch with whatever you need.
+
+### Context — cancellation across goroutines
+
+Real programs need to *cancel* in-flight work — the user navigated away, a deadline passed, the parent function returned. The pattern uses `context.Context`:
+
+```go
+import "context"
+
+func search(ctx context.Context, query string) error {
+    for _, source := range sources {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()          // caller cancelled or timed out
+        default:
+            // do one source
+        }
+    }
+    return nil
+}
+
+// Caller:
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+search(ctx, "go")
+```
+
+We cover `select` and channels in the next lesson — that's where this clicks. The setup: any function that does I/O takes a `context.Context` as its first argument. Checking `ctx.Done()` lets you bail early when the caller has lost interest. This is standard across all Go HTTP / DB / RPC code.
+
+### The race detector — your friend
+
+```
+go run -race main.go
+go test -race ./...
+```
+
+Compiles with extra instrumentation that detects unsynchronised access at runtime. **Always run your tests with -race in CI.** Production binaries skip it because of the overhead — but tests catch races during development.
+
+<ExampleProject
+  src="goroutine-race"
+  title="Goroutine race — see the data race happen"
+  description="Spawn 100 goroutines that all increment a counter. Toggle between unsafe, mutex, atomic, and channel implementations — and watch the final count either equal 100 or land somewhere random between 60 and 100."
+/>
+
+### What you can now build
+
+Any "fan out N tasks in parallel and wait" problem is straightforward Go code now. Next: **channels** — the typed pipes Go gives you to send data between goroutines without locks. With channels added, you'll have written the Go production-server pattern: a worker pool of goroutines coordinating through channels under context cancellation. That's the bit Go is named for.

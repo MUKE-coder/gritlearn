@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "phases": [
     {
       "id": "phase-01",
@@ -146,9 +146,9 @@
         { "slug": "phase-05/interfaces", "title": "Interfaces", "available": true },
         { "slug": "phase-05/slices-maps", "title": "Slices and maps", "available": true },
         { "slug": "phase-05/error-handling-go", "title": "Error handling the Go way", "available": true },
-        { "slug": "phase-05/pointers", "title": "Pointers", "available": false },
-        { "slug": "phase-05/packages", "title": "Packages and project structure", "available": false },
-        { "slug": "phase-05/goroutines", "title": "Goroutines", "available": false },
+        { "slug": "phase-05/pointers", "title": "Pointers", "available": true },
+        { "slug": "phase-05/packages", "title": "Packages and project structure", "available": true },
+        { "slug": "phase-05/goroutines", "title": "Goroutines", "available": true },
         { "slug": "phase-05/channels", "title": "Channels", "available": false },
         { "slug": "phase-05/rest-api-nethttp", "title": "Building a REST API with net/http", "available": false },
         { "slug": "phase-05/gin-fiber", "title": "Using a framework (Gin/Fiber)", "available": false },

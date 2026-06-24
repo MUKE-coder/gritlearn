@@ -1,0 +1,275 @@
+## Pointers
+
+You've already used pointers in three lessons — `&User{}` to take an address, `*User` as a function parameter, pointer receivers on methods. This lesson is the explicit version: what `*` and `&` actually mean, when to reach for a pointer, and what `*` does in a type declaration vs an expression.
+
+After this you can read any Go signature and predict whether the function will mutate the caller's data.
+
+<Analogy>
+A regular variable is **a box that holds a value**. A pointer is **a box that holds the address of another box.** Two boxes, one indirection.
+
+```
+Without pointer:
+  ┌─────────┐
+  │ x: 42   │   one box, holds the number directly
+  └─────────┘
+
+With pointer:
+  ┌─────────┐         ┌─────────┐
+  │ p: ─────┼────────▶│ x: 42   │
+  └─────────┘         └─────────┘
+  pointer box         value box
+  (holds address)     (holds the actual data)
+```
+
+Two operations make this concrete:
+
+- **`&x` — address-of.** "Make a pointer that points at x's box."
+- **`*p` — dereference.** "Open up the box p points at and look inside."
+
+A pointer is a *handle* to something the caller owns. Passing the pointer doesn't copy the underlying data — both sides hold a handle to the same box. Modify through any handle, every handle sees it.
+
+Three Go-specific things to internalise:
+
+1. **You don't manage memory.** Go has a garbage collector. `new(T)` and `&T{}` allocate; the GC frees when nothing references the value anymore. Compare with C, where `*` is a minefield — in Go it's just "give me a handle."
+
+2. **There's no pointer arithmetic.** `p + 1` doesn't compile. You can't walk a pointer through an array. This is deliberate — Go traded that power for memory safety.
+
+3. **`nil` is a real value.** A `*User` can be nil. Dereferencing a nil pointer panics. The compiler does NOT warn — you have to nil-check at the boundaries: function returns, struct fields, map lookups that might miss.
+
+The reason pointers matter is **identity and mutation**. If two things share a pointer, they share an identity — change something through one, the other reflects it. If you want shared identity, use a pointer. If you don't, pass values and let Go copy.
+</Analogy>
+
+### The two operators
+
+```go
+x := 42         // x is an int
+
+p := &x         // p is a *int — pointer to int. & = "address of x"
+fmt.Println(*p) // 42 — * = "follow the pointer, read the value"
+
+*p = 100        // write through the pointer
+fmt.Println(x)  // 100 — x changed because we wrote to its address
+```
+
+Notice the duality:
+
+- **In a TYPE position, `*` makes "pointer to":** `*int`, `*User`.
+- **In an EXPRESSION, `*` means "dereference":** `*p`, `*ptr.Field`.
+
+Same symbol, two roles. You read the role from context.
+
+### Pointers in function signatures
+
+You've seen this:
+
+```go
+func renameValue(u User) {
+    u.Name = "Beth"          // mutates a copy — caller doesn't see it
+}
+
+func renamePointer(u *User) {
+    u.Name = "Beth"          // mutates through the pointer — caller sees it
+}
+
+u := User{Name: "Ava"}
+renameValue(&u)              // BAD — wrong type, won't compile
+renameValue(u)               // OK — pass a value, function gets a copy
+renamePointer(&u)            // OK — pass the address, function mutates the original
+fmt.Println(u.Name)          // "Beth"
+```
+
+**Three things to read off any Go signature:**
+
+- `func f(u User)` — caller's User can't change.
+- `func f(u *User)` — caller's User CAN change.
+- `func f() *User` — returns a pointer; caller can hold it and the value lives as long as anyone references it.
+
+This is the difference Go makes you state explicitly. JS hides it (objects are always references); C lets you screw it up; Go forces you to declare it.
+
+### `&T{}` — the new-and-init shorthand
+
+```go
+// long way:
+var u User
+u.Name = "Ava"
+p := &u
+
+// short way — the idiom:
+p := &User{Name: "Ava"}    // allocates a User, takes its address, all in one
+```
+
+This is the single most-used pointer pattern in Go. Constructors return `*Type`:
+
+```go
+func NewLogger(prefix string) *Logger {
+    return &Logger{prefix: prefix, out: os.Stdout}
+}
+
+log := NewLogger("[app]")
+log.Info("hello")          // log is a *Logger
+```
+
+You almost never see the `new(T)` keyword in real code — `&T{}` is preferred because it lets you initialise fields at the same time.
+
+### Pointers and `nil`
+
+A pointer that doesn't point at anything is `nil`:
+
+```go
+var p *User      // zero value of *User is nil
+fmt.Println(p)   // <nil>
+p.Name           // PANIC: runtime error: invalid memory address or nil pointer dereference
+```
+
+Treat any pointer that crossed a function boundary or came from a map as potentially nil:
+
+```go
+u, ok := users[id]
+if !ok {
+    return ErrNotFound
+}
+return u.Name              // safe — we know u is in the map (assuming the map stores values, not pointers)
+
+// If the map stores pointers (map[string]*User), even the "found" value can be nil
+// if you put nils in it. The two-value form only tells you the key existed.
+```
+
+The compiler does not nil-check for you. Your job is to check at boundaries.
+
+### When to use a pointer
+
+Decision rules:
+
+| Scenario | Pointer or value? |
+|---|---|
+| The function should mutate the argument | pointer |
+| The struct is big (over ~64 bytes — measure if unsure) | pointer |
+| The struct holds a mutex, file handle, sync.Once, or anything non-copyable | pointer ALWAYS |
+| You want nil to mean "absent" | pointer |
+| Small immutable types (int, string, time.Time, image.Point) | value |
+| You don't mutate AND copies are cheap | value (safer — no aliasing surprises) |
+
+When in genuine doubt, pointer. The cost of unnecessary indirection is tiny; the cost of an accidental copy that swallows a mutation is hours of debugging.
+
+### Pointers to struct fields — automatic dereferencing
+
+When you have a pointer to a struct, field access just works:
+
+```go
+p := &User{Name: "Ava"}
+fmt.Println(p.Name)        // "Ava" — Go writes (*p).Name for you
+p.Name = "Beth"            // same — (*p).Name = "Beth"
+```
+
+You'll rarely write `(*p).Name` explicitly. The shortened form is universal.
+
+### Pointers to primitives
+
+You can take the address of any addressable value, not just structs:
+
+```go
+n := 42
+pn := &n                 // *int
+
+s := "hello"
+ps := &s                 // *string
+
+ages := map[string]int{"Ava": 30}
+// pa := &ages["Ava"]    // ERROR: cannot take address of map value
+```
+
+Two restrictions worth knowing:
+
+- **You can't take the address of a map value.** Maps can reallocate internally; addresses inside them would dangle. Workaround: copy out the value, mutate, write back.
+- **You can't take the address of a function literal result** without first storing it in a variable.
+
+### `new(T)` — rarely used
+
+```go
+p := new(int)            // *int pointing at a freshly allocated zero int
+*p = 42
+```
+
+Equivalent to:
+
+```go
+var x int
+p := &x
+```
+
+Or for structs:
+
+```go
+p := new(User)           // same as p := &User{}
+```
+
+The `&T{…}` form is more idiomatic because it lets you fill fields. Reach for `new` only when the type is something you can't easily zero-init with a struct literal — most code never needs it.
+
+### Pointers and method receivers — the connection
+
+Recall from the methods lesson:
+
+```go
+func (c *Counter) Increment() {  // pointer receiver
+    c.N++
+}
+
+c := Counter{N: 5}
+c.Increment()                    // works — Go auto-takes the address
+```
+
+When you call a pointer-receiver method on a value, Go silently does `(&c).Increment()` if `c` is addressable. The same auto-dereference happens the other way: a value-receiver method called via a pointer works without writing `(*p).Method()`.
+
+The exception: **values stored in maps or interfaces are not addressable.** This compiles:
+
+```go
+c := Counter{N: 5}
+c.Increment()                    // OK
+```
+
+This does NOT:
+
+```go
+m := map[string]Counter{"x": {N: 5}}
+m["x"].Increment()               // ERROR: cannot take address of map value
+```
+
+You have to pull the value out:
+
+```go
+c := m["x"]
+c.Increment()
+m["x"] = c
+```
+
+Or store pointers in the map: `map[string]*Counter`.
+
+### `*` in struct fields — pointer fields
+
+```go
+type Article struct {
+    Title   string
+    Author  *User              // pointer field — can be nil
+    Edits   []*Edit            // slice of pointers
+}
+
+a := Article{Title: "Hello"}
+fmt.Println(a.Author)          // <nil>
+fmt.Println(a.Author.Name)     // PANIC
+
+if a.Author != nil {
+    fmt.Println(a.Author.Name) // safe
+}
+```
+
+Pointer fields encode "this might be absent." Common for optional relationships in DB models, parent pointers in trees, linked-list nodes.
+
+<ExampleProject
+  src="pointer-vs-value"
+  title="Pointer vs value — see the mutation persist"
+  description="Pass a struct two ways — by value and by pointer — and watch the caller's data change or stay put. Same function, same input, completely different outcome. The mental model becomes obvious in one click."
+/>
+
+### What you can now do
+
+You can read any Go signature and predict what the function will and won't touch. Combined with structs, methods, interfaces, slices, and errors, you have the whole imperative core of the language. Next up: **packages** — how Go programs are structured into reusable units. After packages: goroutines + channels, Go's concurrency story.

@@ -1,0 +1,233 @@
+<!--
+  Pointer vs value side-by-side. Reader runs the same scenario twice
+  — once with a value receiver/argument, once with a pointer — and
+  watches the caller's data either change or stay put. Visual boxes
+  show the address-space picture so the indirection is concrete.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pointer vs value — see the mutation persist</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1100px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.74rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .ptr     { color: #f472b6; }
+
+      .runner {
+        margin-top: 0.7rem;
+      }
+      .runner button {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        padding: 0.45rem 0.8rem; border: 1px solid #15803d;
+        background: #15803d; color: #fff; border-radius: 6px; cursor: pointer;
+      }
+      .runner button:hover { background: #166534; }
+      .runner button.reset { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+
+      .scene {
+        margin-top: 0.6rem;
+        display: grid; grid-template-columns: 1fr auto 1fr; gap: 0.8rem;
+        align-items: center;
+      }
+      .box {
+        background: #fff; border: 2px solid #d4d4d8; border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+        font-family: ui-monospace, monospace; font-size: 0.75rem;
+      }
+      .box .label { font-size: 0.65rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+      .box .name { font-weight: 600; color: #18181b; }
+      .box.ptr { border-color: #ec4899; }
+      .box.copy { border-color: #f59e0b; border-style: dashed; }
+      .arrow {
+        font-family: ui-monospace, monospace; font-size: 1.3rem;
+        color: #71717a; text-align: center;
+      }
+      .arrow.ptr { color: #ec4899; }
+      .arrow.copy { color: #f59e0b; }
+
+      .verdict {
+        margin-top: 0.7rem;
+        padding: 0.7rem 0.85rem; border-radius: 8px;
+        font-size: 0.85rem; font-weight: 500;
+      }
+      .verdict.ok    { background: #dcfce7; color: #166534; border-left: 3px solid #16a34a; }
+      .verdict.bad   { background: #fef2f2; color: #7f1d1d; border-left: 3px solid #dc2626; }
+
+      .step {
+        margin-top: 0.5rem; font-family: ui-monospace, monospace; font-size: 0.74rem;
+        color: #52525b;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pointer vs value — same function, very different result</h1>
+    <p class="intro">A function called <code>rename(u, "Beth")</code>. On the left, the parameter is a value. On the right, a pointer. Hit Run on each side and compare what the caller sees afterwards.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>1. Value receiver</h2>
+        <pre class="code"><span class="keyword">func</span> rename(u User, name <span class="keyword">string</span>) {
+    u.Name = name   <span class="comment">// mutates the COPY</span>
+}
+
+u := User{Name: <span class="string">"Ava"</span>}
+rename(u, <span class="string">"Beth"</span>)
+fmt.Println(u.Name)</pre>
+
+        <div class="runner">
+          <button data-side="val" data-action="run">Run rename(u, "Beth")</button>
+          <button data-side="val" data-action="reset" class="reset">↺ reset</button>
+        </div>
+        <div class="scene" id="scene-val"></div>
+        <div class="step" id="step-val"></div>
+        <div class="verdict" id="verdict-val"></div>
+      </div>
+
+      <div class="col">
+        <h2>2. Pointer receiver</h2>
+        <pre class="code"><span class="keyword">func</span> rename(u <span class="ptr">*</span>User, name <span class="keyword">string</span>) {
+    u.Name = name   <span class="comment">// mutates through the pointer</span>
+}
+
+u := User{Name: <span class="string">"Ava"</span>}
+rename(<span class="ptr">&</span>u, <span class="string">"Beth"</span>)
+fmt.Println(u.Name)</pre>
+
+        <div class="runner">
+          <button data-side="ptr" data-action="run">Run rename(&u, "Beth")</button>
+          <button data-side="ptr" data-action="reset" class="reset">↺ reset</button>
+        </div>
+        <div class="scene" id="scene-ptr"></div>
+        <div class="step" id="step-ptr"></div>
+        <div class="verdict" id="verdict-ptr"></div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        val: { callerName: "Ava", calleeName: null, ran: false },
+        ptr: { callerName: "Ava", calleeName: null, ran: false },
+      };
+
+      document.querySelectorAll("button[data-side]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const side = b.dataset.side;
+          if (b.dataset.action === "reset") {
+            state[side] = { callerName: "Ava", calleeName: null, ran: false };
+          } else {
+            run(side);
+          }
+          render();
+        });
+      });
+
+      function run(side) {
+        const s = state[side];
+        if (side === "val") {
+          // copy semantics: callee gets independent copy, caller untouched
+          s.calleeName = "Ava";  // copy at call time
+          // simulate the function body: u.Name = "Beth" on the COPY
+          s.calleeName = "Beth";
+          // caller stays
+          s.ran = true;
+        } else {
+          // pointer semantics: callee writes to the SAME box
+          s.calleeName = "&u";   // pointer points at caller
+          s.callerName = "Beth"; // mutation visible to caller
+          s.ran = true;
+        }
+      }
+
+      function render() {
+        for (const side of ["val", "ptr"]) {
+          const s = state[side];
+          const scene = document.getElementById("scene-" + side);
+          const step = document.getElementById("step-" + side);
+          const verdict = document.getElementById("verdict-" + side);
+
+          if (!s.ran) {
+            scene.innerHTML = `
+              <div class="box">
+                <div class="label">caller's u</div>
+                <div class="name">${s.callerName}</div>
+              </div>
+              <div class="arrow">⏵</div>
+              <div class="box" style="opacity:0.4;">
+                <div class="label">callee's u (not called yet)</div>
+                <div class="name">·</div>
+              </div>
+            `;
+            step.textContent = "Click Run to call rename(...).";
+            verdict.className = "verdict";
+            verdict.textContent = "";
+            continue;
+          }
+
+          if (side === "val") {
+            scene.innerHTML = `
+              <div class="box">
+                <div class="label">caller's u (Ava — unchanged)</div>
+                <div class="name">Name: ${s.callerName}</div>
+              </div>
+              <div class="arrow copy">⤳ copied ⤳</div>
+              <div class="box copy">
+                <div class="label">callee's u (independent copy)</div>
+                <div class="name">Name: ${s.calleeName}</div>
+              </div>
+            `;
+            step.innerHTML = `
+              1. Call: <code>rename(u, "Beth")</code> — Go copies <code>u</code> into the callee.<br>
+              2. Inside: <code>u.Name = "Beth"</code> writes to the <em>copy</em>.<br>
+              3. Function returns. The copy is discarded. Caller's <code>u</code> never changed.
+            `;
+            verdict.className = "verdict bad";
+            verdict.textContent = `✗ Caller prints "Ava" — the mutation was lost. Value receivers can't mutate the caller's data.`;
+          } else {
+            scene.innerHTML = `
+              <div class="box ptr">
+                <div class="label">caller's u (mutated)</div>
+                <div class="name">Name: ${s.callerName}</div>
+              </div>
+              <div class="arrow ptr">⏴ &amp; ⏴</div>
+              <div class="box ptr">
+                <div class="label">callee's u (*User pointing at caller's box)</div>
+                <div class="name">→ caller's u</div>
+              </div>
+            `;
+            step.innerHTML = `
+              1. Call: <code>rename(&u, "Beth")</code> — Go passes the <em>address</em> of <code>u</code>.<br>
+              2. Inside: <code>u.Name = "Beth"</code> follows the pointer — writes to the caller's box.<br>
+              3. Function returns. The caller's <code>u</code> now holds the new name.
+            `;
+            verdict.className = "verdict ok";
+            verdict.textContent = `✓ Caller prints "Beth" — the mutation persisted. The pointer let the callee touch the original.`;
+          }
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>

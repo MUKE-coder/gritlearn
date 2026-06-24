@@ -1,0 +1,270 @@
+<!--
+  Goroutine race. 100 goroutines all incrementing a shared counter.
+  Reader picks one of: unsafe (++), mutex, atomic, channel. The sim
+  randomises interleaving for the unsafe case and shows the lost
+  updates; the safe versions reliably reach 100. The race detector
+  output for the unsafe case is faked but accurate to Go's real
+  WARNING: DATA RACE format.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Goroutine race — see the data race happen</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .picker { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+      .picker button {
+        padding: 0.5rem 0.85rem; border-radius: 6px;
+        border: 1px solid #d4d4d8; background: #fff; cursor: pointer;
+        font-size: 0.8rem; font-family: ui-monospace, monospace;
+      }
+      .picker button.active.unsafe { background: #dc2626; color: #fff; border-color: #dc2626; }
+      .picker button.active.mutex { background: #15803d; color: #fff; border-color: #15803d; }
+      .picker button.active.atomic { background: #2563eb; color: #fff; border-color: #2563eb; }
+      .picker button.active.channel { background: #ec4899; color: #fff; border-color: #ec4899; }
+
+      .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.74rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .lit     { color: #f472b6; }
+
+      .runner { margin-top: 0.7rem; display: flex; gap: 0.4rem; }
+      .runner button {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        padding: 0.45rem 0.8rem; border-radius: 6px; cursor: pointer;
+        border: 1px solid #15803d; background: #15803d; color: #fff;
+      }
+      .runner button.again {
+        background: #fff; color: #15803d;
+      }
+
+      .counter {
+        margin-top: 0.7rem; padding: 0.85rem 1rem; border-radius: 8px;
+        background: #18181b; color: #ededee;
+        font-family: ui-monospace, monospace;
+      }
+      .counter .big {
+        font-size: 2rem; font-weight: 700; line-height: 1;
+        color: #f1f5f9;
+      }
+      .counter .label {
+        font-size: 0.7rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.3rem;
+      }
+      .counter.unsafe .big { color: #f87171; }
+      .counter.safe .big { color: #4ade80; }
+
+      .race {
+        margin-top: 0.7rem;
+        padding: 0.7rem 0.85rem;
+        background: #1f1f23; color: #fca5a5;
+        border-radius: 8px;
+        font-family: ui-monospace, monospace; font-size: 0.7rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        max-height: 14rem; overflow-y: auto;
+      }
+
+      .takeaway {
+        margin-top: 0.7rem; padding: 0.7rem 0.85rem; border-radius: 6px;
+        font-size: 0.78rem;
+      }
+      .takeaway.bad   { background: #fef2f2; color: #7f1d1d; border-left: 3px solid #dc2626; }
+      .takeaway.ok    { background: #dcfce7; color: #166534; border-left: 3px solid #16a34a; }
+    </style>
+  </head>
+  <body>
+    <h1>Goroutine race — 100 workers, one counter, four implementations</h1>
+    <p class="intro">Spawn 100 goroutines that each do <code>counter++</code> once. Switch between the four common implementations and run them — only one is buggy, but it's the one beginners reach for first.</p>
+
+    <div class="picker" id="picker">
+      <button data-kind="unsafe">1. Unsafe (counter++)</button>
+      <button data-kind="mutex">2. sync.Mutex</button>
+      <button data-kind="atomic">3. atomic.AddInt32</button>
+      <button data-kind="channel">4. Channel + collector</button>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Implementation</h2>
+        <pre class="code" id="code"></pre>
+        <div class="runner">
+          <button id="run">▶ go run -race main.go</button>
+          <button id="again" class="again">↺ run again</button>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Result</h2>
+        <div class="counter" id="counter">
+          <div class="label">final counter (want 100)</div>
+          <div class="big">·</div>
+        </div>
+        <div id="race"></div>
+        <div id="takeaway"></div>
+      </div>
+    </div>
+
+    <script>
+      const SAMPLES = {
+        unsafe: `<span class="keyword">var</span> counter <span class="keyword">int</span>
+<span class="keyword">var</span> wg sync.WaitGroup
+
+<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; <span class="number">100</span>; i++ {
+    wg.Add(<span class="number">1</span>)
+    <span class="keyword">go</span> <span class="keyword">func</span>() {
+        <span class="keyword">defer</span> wg.Done()
+        counter++   <span class="comment">// RACE — read, add, write</span>
+    }()
+}
+wg.Wait()
+fmt.Println(counter)`,
+        mutex: `<span class="keyword">var</span> counter <span class="keyword">int</span>
+<span class="keyword">var</span> mu sync.Mutex
+<span class="keyword">var</span> wg sync.WaitGroup
+
+<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; <span class="number">100</span>; i++ {
+    wg.Add(<span class="number">1</span>)
+    <span class="keyword">go</span> <span class="keyword">func</span>() {
+        <span class="keyword">defer</span> wg.Done()
+        mu.Lock()
+        counter++
+        mu.Unlock()
+    }()
+}
+wg.Wait()
+fmt.Println(counter)`,
+        atomic: `<span class="keyword">var</span> counter <span class="keyword">int32</span>
+<span class="keyword">var</span> wg sync.WaitGroup
+
+<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; <span class="number">100</span>; i++ {
+    wg.Add(<span class="number">1</span>)
+    <span class="keyword">go</span> <span class="keyword">func</span>() {
+        <span class="keyword">defer</span> wg.Done()
+        atomic.AddInt32(&counter, <span class="number">1</span>)
+    }()
+}
+wg.Wait()
+fmt.Println(counter)`,
+        channel: `ticks := make(chan <span class="keyword">int</span>, <span class="number">100</span>)
+<span class="keyword">var</span> wg sync.WaitGroup
+
+<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; <span class="number">100</span>; i++ {
+    wg.Add(<span class="number">1</span>)
+    <span class="keyword">go</span> <span class="keyword">func</span>() {
+        <span class="keyword">defer</span> wg.Done()
+        ticks &lt;- <span class="number">1</span>
+    }()
+}
+<span class="keyword">go</span> <span class="keyword">func</span>() { wg.Wait(); close(ticks) }()
+
+counter := <span class="number">0</span>
+<span class="keyword">for</span> n := <span class="keyword">range</span> ticks { counter += n }
+fmt.Println(counter)`,
+      };
+
+      const TAKEAWAYS = {
+        unsafe: { kind: "bad",  text: "✗ Race detector immediately catches this. Even without -race, the final count varies between runs — increments are lost when two goroutines read-modify-write the same int at the same time." },
+        mutex:  { kind: "ok",   text: "✓ Reliable but heavy. Lock + Unlock serialises every increment. Fine for low-frequency state; profile if it's on a hot path." },
+        atomic: { kind: "ok",   text: "✓ The right tool for a counter. atomic.AddInt32 is a single CPU instruction — no lock, no contention, no race." },
+        channel:{ kind: "ok",   text: "✓ Works, but heavyweight for this problem. Channels shine when you have richer data to pass; for a plain counter, atomic wins on simplicity AND speed." },
+      };
+
+      let kind = "unsafe";
+
+      document.querySelectorAll(".picker button").forEach((b) => {
+        b.addEventListener("click", () => {
+          kind = b.dataset.kind;
+          render();
+        });
+      });
+
+      document.getElementById("run").addEventListener("click", run);
+      document.getElementById("again").addEventListener("click", run);
+
+      function render() {
+        document.querySelectorAll(".picker button").forEach((b) => {
+          b.classList.remove("active", "unsafe", "mutex", "atomic", "channel");
+          if (b.dataset.kind === kind) b.classList.add("active", kind);
+        });
+        document.getElementById("code").innerHTML = SAMPLES[kind];
+        const counter = document.getElementById("counter");
+        counter.classList.remove("unsafe", "safe");
+        counter.querySelector(".big").textContent = "·";
+        counter.querySelector(".label").textContent = "final counter (want 100)";
+        document.getElementById("race").innerHTML = "";
+        document.getElementById("takeaway").innerHTML = "";
+      }
+
+      function run() {
+        let value;
+        if (kind === "unsafe") {
+          // simulate non-determinism: 100 increments with some interleavings
+          // dropping ~5-25% of updates randomly
+          const dropped = Math.floor(Math.random() * 21) + 5; // 5..25
+          value = 100 - dropped;
+        } else {
+          value = 100;
+        }
+
+        const counter = document.getElementById("counter");
+        counter.classList.remove("unsafe", "safe");
+        counter.classList.add(kind === "unsafe" ? "unsafe" : "safe");
+        counter.querySelector(".big").textContent = value;
+        counter.querySelector(".label").textContent =
+          kind === "unsafe"
+            ? `final counter — random between runs (lost ${100 - value} updates)`
+            : `final counter — 100, every run`;
+
+        const raceEl = document.getElementById("race");
+        if (kind === "unsafe") {
+          raceEl.innerHTML = `<div class="race">==================
+WARNING: DATA RACE
+Read at 0x00c0000180a0 by goroutine 42:
+  main.main.func1()
+      /tmp/main.go:14 +0x44
+
+Previous write at 0x00c0000180a0 by goroutine 17:
+  main.main.func1()
+      /tmp/main.go:14 +0x55
+
+Goroutine 42 (running) created at:
+  main.main()
+      /tmp/main.go:13 +0xb5
+==================
+Found 1 data race(s)
+exit status 66</div>`;
+        } else {
+          raceEl.innerHTML = `<div class="race" style="color: #4ade80;">100
+exit status 0</div>`;
+        }
+
+        const t = TAKEAWAYS[kind];
+        document.getElementById("takeaway").innerHTML =
+          `<div class="takeaway ${t.kind}">${t.text}</div>`;
+      }
+
+      render();
+    </script>
+  </body>
+</html>

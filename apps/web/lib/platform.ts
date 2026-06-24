@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.16";
+export const FALLBACK_VERSION = "0.4.17";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-24T14:00:00Z",
+  releasedAt: "2026-06-24T17:00:00Z",
   releaseNotes:
-    "JEditor v0.4.16 — Phase 5 (Go) Batch 3: three more lessons closing the language core. 'Interfaces' covers structural typing, the four interfaces every Go program uses (error / Stringer / Reader / Writer), the typed-nil gotcha, and how value vs pointer receivers affect interface satisfaction — with a live picker that flips method sets and shows the exact compile error Go would print. 'Slices and maps' goes under the hood of slice headers (ptr/len/cap), the shared-backing-array trap, append growth, and map iteration order — interactive diagram shows the backing array reallocating when cap is exceeded. 'Error handling the Go way' covers wrapping with %w, errors.Is / errors.As, sentinel vs typed errors, and exactly when a %v anywhere in the chain breaks all your matchers.",
+    "JEditor v0.4.17 — Phase 5 (Go) Batch 4: three more lessons. 'Pointers' makes the implicit value-vs-reference dance explicit (& and * in expression vs type position, &T{} as the new-and-init shorthand, nil checks at boundaries, the unaddressable-map-value rule). 'Packages and project structure' covers import paths, the case-based visibility rule, the three standard project layouts (tiny / cmd+internal / cmd+internal+pkg), and how internal/ is compiler-enforced — with a clickable explorer for all three shapes. 'Goroutines' opens Go's concurrency story: `go f()`, sync.WaitGroup, the closure-capture trap, the data race that bites everyone — interactive race simulator runs 100 workers under four implementations (unsafe / mutex / atomic / channel) and shows the lost updates in the unsafe case.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

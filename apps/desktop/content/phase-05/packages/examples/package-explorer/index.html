@@ -1,0 +1,294 @@
+<!--
+  Package explorer. Three project layouts (tiny / small / larger).
+  Click any directory to see its package clause + what is importable
+  from a sibling repo. internal/ is enforced as locked by the
+  compiler; pkg/ is publishable; cmd/ is binary entry points.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Package explorer — what each layout chooses</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .tabs button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem; font-family: ui-monospace, monospace;
+      }
+      .tabs button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .tree {
+        font-family: ui-monospace, monospace; font-size: 0.8rem;
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.7rem 0.85rem;
+      }
+      .tree .row { padding: 0.15rem 0.35rem; border-radius: 4px; cursor: pointer; }
+      .tree .row:hover { background: #f4f4f5; }
+      .tree .row.active { background: #15803d; color: #fff; }
+      .tree .row .badge {
+        margin-left: 0.5rem; font-size: 0.65rem; padding: 0.1rem 0.4rem;
+        border-radius: 99px; vertical-align: middle;
+        font-family: ui-sans-serif;
+      }
+      .tree .row .badge.bin   { background: #2563eb; color: #fff; }
+      .tree .row.active .badge.bin { background: #fff; color: #2563eb; }
+      .tree .row .badge.lock  { background: #dc2626; color: #fff; }
+      .tree .row.active .badge.lock { background: #fff; color: #dc2626; }
+      .tree .row .badge.pub   { background: #16a34a; color: #fff; }
+      .tree .row.active .badge.pub { background: #fff; color: #16a34a; }
+      .tree .row .badge.mod   { background: #f59e0b; color: #fff; }
+      .tree .row.active .badge.mod { background: #fff; color: #f59e0b; }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.74rem;
+        line-height: 1.55; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+
+      .note {
+        margin-top: 0.6rem; padding: 0.6rem 0.8rem; border-radius: 6px;
+        font-size: 0.78rem;
+      }
+      .note.ok    { background: #dcfce7; color: #166534; border-left: 3px solid #16a34a; }
+      .note.bad   { background: #fef2f2; color: #7f1d1d; border-left: 3px solid #dc2626; }
+      .note.info  { background: #eff6ff; color: #1e3a8a; border-left: 3px solid #2563eb; }
+
+      h3 { margin: 0 0 0.4rem; font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Package explorer — what each project layout chooses</h1>
+    <p class="intro">Click a directory in any of the three shapes to see its package clause, what it contains, and whether code in a sibling repository could import it. The <code>internal/</code> rule is enforced by the compiler — not just a convention.</p>
+
+    <div class="tabs" id="tabs"></div>
+    <div class="grid">
+      <div class="col">
+        <h2>Project tree</h2>
+        <div class="tree" id="tree"></div>
+      </div>
+      <div class="col">
+        <h2>Selected directory</h2>
+        <div id="detail"></div>
+      </div>
+    </div>
+
+    <script>
+      const LAYOUTS = [
+        {
+          id: "tiny",
+          label: "1. Tiny",
+          desc: "Single binary, everything in one package. Fine for scripts and CLI tools.",
+          tree: [
+            { name: "go.mod", path: "go.mod", kind: "file", badge: "mod" },
+            { name: "main.go", path: "main.go", kind: "file", pkg: "main", badge: "bin" },
+            { name: "helpers.go", path: "helpers.go", kind: "file", pkg: "main" },
+          ],
+          notes: {
+            "go.mod": {
+              pkg: null,
+              src: `<span class="keyword">module</span> github.com/you/tinytool\n\n<span class="keyword">go</span> 1.24`,
+              note: { kind: "info", text: "Module path. Every import inside this project starts with github.com/you/tinytool/…" },
+            },
+            "main.go": {
+              pkg: "main",
+              src: `<span class="keyword">package</span> main\n\n<span class="keyword">import</span> <span class="string">"fmt"</span>\n\n<span class="keyword">func</span> main() {\n    fmt.Println(greet(<span class="string">"world"</span>))\n}`,
+              note: { kind: "info", text: "`package main` + a `main()` function makes this the binary entry point. `go run .` builds and runs." },
+            },
+            "helpers.go": {
+              pkg: "main",
+              src: `<span class="keyword">package</span> main\n\n<span class="keyword">func</span> greet(name <span class="keyword">string</span>) <span class="keyword">string</span> {\n    <span class="keyword">return</span> <span class="string">"hello, "</span> + name\n}`,
+              note: { kind: "info", text: "Same package as main.go — they share unexported helpers like `greet()` for free. The file split is just for readability." },
+            },
+          },
+        },
+        {
+          id: "small",
+          label: "2. cmd + internal",
+          desc: "One binary, a couple of internal packages. The default shape for any small Go service.",
+          tree: [
+            { name: "go.mod", path: "go.mod", kind: "file", badge: "mod" },
+            { name: "cmd/", path: "cmd", kind: "dir" },
+            { name: "  server/", path: "cmd/server", kind: "dir" },
+            { name: "    main.go", path: "cmd/server/main.go", kind: "file", pkg: "main", badge: "bin" },
+            { name: "internal/", path: "internal", kind: "dir", badge: "lock" },
+            { name: "  billing/", path: "internal/billing", kind: "dir", pkg: "billing" },
+            { name: "  db/", path: "internal/db", kind: "dir", pkg: "db" },
+          ],
+          notes: {
+            "go.mod": {
+              pkg: null,
+              src: `<span class="keyword">module</span> github.com/you/myapp\n\n<span class="keyword">go</span> 1.24\n\n<span class="keyword">require</span> (\n    github.com/lib/pq v1.10.9\n)`,
+              note: { kind: "info", text: "Module path = github.com/you/myapp. Subpackages live at github.com/you/myapp/cmd/server, github.com/you/myapp/internal/billing, etc." },
+            },
+            "cmd": {
+              pkg: null,
+              src: `<span class="comment">// cmd/ holds entry points. Each subdir is one binary.\n// One subdir per binary: cmd/server, cmd/migrate, cmd/seed, …</span>`,
+              note: { kind: "info", text: "Convention. Tools like goreleaser and Dockerfile templates assume cmd/<name>/main.go." },
+            },
+            "cmd/server": {
+              pkg: null,
+              src: `<span class="comment">// 'go build ./cmd/server' produces a binary called 'server'.\n// The directory name is the binary name.</span>`,
+              note: { kind: "info", text: "`go run ./cmd/server` builds and runs in one step." },
+            },
+            "cmd/server/main.go": {
+              pkg: "main",
+              src: `<span class="keyword">package</span> main\n\n<span class="keyword">import</span> (\n    <span class="string">"log"</span>\n\n    <span class="string">"github.com/you/myapp/internal/billing"</span>\n    <span class="string">"github.com/you/myapp/internal/db"</span>\n)\n\n<span class="keyword">func</span> main() {\n    log.Println(<span class="string">"starting…"</span>)\n    inv := billing.New(<span class="number">100</span>)\n    _ = db.Save(inv)\n}`,
+              note: { kind: "info", text: "main.go imports its own module's internal/ packages by their full import path." },
+            },
+            "internal": {
+              pkg: null,
+              src: `<span class="comment">// internal/ is enforced by the Go compiler:\n// nothing OUTSIDE this module can import internal/*.\n//\n// Code in this repo: fine.\n// Code in github.com/someone-else/project: FORBIDDEN.</span>`,
+              note: { kind: "bad", text: "Compiler-enforced privacy. A sibling repo trying `import \"github.com/you/myapp/internal/billing\"` fails with: use of internal package not allowed." },
+            },
+            "internal/billing": {
+              pkg: "billing",
+              src: `<span class="comment">// internal/billing/invoice.go</span>\n<span class="keyword">package</span> billing\n\n<span class="keyword">type</span> Invoice <span class="keyword">struct</span> { ID <span class="keyword">string</span>; Amount <span class="keyword">int</span> }\n\n<span class="keyword">func</span> New(amount <span class="keyword">int</span>) *Invoice { … }`,
+              note: { kind: "bad", text: "Locked by internal/ — only github.com/you/myapp/* can import this package." },
+            },
+            "internal/db": {
+              pkg: "db",
+              src: `<span class="comment">// internal/db/db.go</span>\n<span class="keyword">package</span> db\n\n<span class="keyword">func</span> Save(any) <span class="keyword">error</span> { … }`,
+              note: { kind: "bad", text: "Same — sibling repos can't reach this. Private DB plumbing." },
+            },
+          },
+        },
+        {
+          id: "larger",
+          label: "3. cmd + internal + pkg",
+          desc: "Multiple binaries + private helpers + a public SDK others can import. Library/platform shape.",
+          tree: [
+            { name: "go.mod", path: "go.mod", kind: "file", badge: "mod" },
+            { name: "cmd/", path: "cmd", kind: "dir" },
+            { name: "  server/main.go", path: "cmd/server/main.go", kind: "file", pkg: "main", badge: "bin" },
+            { name: "  migrate/main.go", path: "cmd/migrate/main.go", kind: "file", pkg: "main", badge: "bin" },
+            { name: "internal/", path: "internal", kind: "dir", badge: "lock" },
+            { name: "  billing/", path: "internal/billing", kind: "dir", pkg: "billing" },
+            { name: "  db/", path: "internal/db", kind: "dir", pkg: "db" },
+            { name: "pkg/", path: "pkg", kind: "dir", badge: "pub" },
+            { name: "  sdk/", path: "pkg/sdk", kind: "dir", pkg: "sdk" },
+          ],
+          notes: {
+            "go.mod": {
+              pkg: null,
+              src: `<span class="keyword">module</span> github.com/you/myplatform\n\n<span class="keyword">go</span> 1.24`,
+              note: { kind: "info", text: "Same as before. The module path stays stable; the layout under it grows." },
+            },
+            "cmd": {
+              pkg: null,
+              src: `<span class="comment">// Two binaries in this project — cmd/server and cmd/migrate.\n// Both are independent executables.</span>`,
+              note: { kind: "info", text: "go build ./cmd/server → 'server' binary. go build ./cmd/migrate → 'migrate' binary." },
+            },
+            "cmd/server/main.go": {
+              pkg: "main",
+              src: `<span class="keyword">package</span> main\n\n<span class="keyword">import</span> <span class="string">"github.com/you/myplatform/internal/billing"</span>\n\n<span class="keyword">func</span> main() { … }`,
+              note: { kind: "info", text: "Server binary. Imports private helpers from internal/." },
+            },
+            "cmd/migrate/main.go": {
+              pkg: "main",
+              src: `<span class="keyword">package</span> main\n\n<span class="keyword">import</span> <span class="string">"github.com/you/myplatform/internal/db"</span>\n\n<span class="keyword">func</span> main() { … }`,
+              note: { kind: "info", text: "A second binary. Different entry point, same module — they share internal/ code." },
+            },
+            "internal": {
+              pkg: null,
+              src: `<span class="comment">// Compiler-locked. Only github.com/you/myplatform/* can import.</span>`,
+              note: { kind: "bad", text: "Private. A package outside this module can't import internal/*." },
+            },
+            "internal/billing": {
+              pkg: "billing",
+              src: `<span class="keyword">package</span> billing\n\n<span class="comment">// internal — only this module sees it.</span>`,
+              note: { kind: "bad", text: "Locked. Other projects can't import this." },
+            },
+            "internal/db": {
+              pkg: "db",
+              src: `<span class="keyword">package</span> db`,
+              note: { kind: "bad", text: "Locked." },
+            },
+            "pkg": {
+              pkg: null,
+              src: `<span class="comment">// pkg/ is a CONVENTION (not a compiler rule) saying:\n// "this code is part of our public surface — go ahead, import it."\n//\n// Use it only if you genuinely intend others to import.\n// Most projects skip pkg/ entirely.</span>`,
+              note: { kind: "ok", text: "Convention-level signal. Anyone with `import \"github.com/you/myplatform/pkg/sdk\"` can use it." },
+            },
+            "pkg/sdk": {
+              pkg: "sdk",
+              src: `<span class="keyword">package</span> sdk\n\n<span class="comment">// Public client used by downstream services.</span>\n<span class="keyword">type</span> Client <span class="keyword">struct</span> { … }`,
+              note: { kind: "ok", text: "Public. Importable from any other Go project. Treat its API as a versioned contract — breaking changes = SemVer major bump." },
+            },
+          },
+        },
+      ];
+
+      let activeLayout = 0;
+      let activePath = null;
+
+      const tabs = document.getElementById("tabs");
+      LAYOUTS.forEach((l, i) => {
+        const b = document.createElement("button");
+        b.textContent = l.label;
+        b.addEventListener("click", () => { activeLayout = i; activePath = null; render(); });
+        tabs.appendChild(b);
+      });
+
+      function render() {
+        // tabs
+        tabs.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", i === activeLayout));
+
+        const layout = LAYOUTS[activeLayout];
+        const treeEl = document.getElementById("tree");
+        const detailEl = document.getElementById("detail");
+
+        if (!activePath) activePath = layout.tree.find((n) => n.kind === "file")?.path ?? layout.tree[0].path;
+
+        treeEl.innerHTML = layout.tree.map((n) => {
+          const badge = n.badge === "bin"  ? '<span class="badge bin">binary</span>'
+                      : n.badge === "lock" ? '<span class="badge lock">internal</span>'
+                      : n.badge === "pub"  ? '<span class="badge pub">public</span>'
+                      : n.badge === "mod"  ? '<span class="badge mod">module</span>'
+                      : "";
+          const active = n.path === activePath ? "active" : "";
+          return `<div class="row ${active}" data-path="${n.path}">${n.name}${badge}</div>`;
+        }).join("");
+
+        treeEl.querySelectorAll(".row").forEach((r) => {
+          r.addEventListener("click", () => {
+            activePath = r.dataset.path;
+            render();
+          });
+        });
+
+        const info = layout.notes[activePath];
+        if (!info) {
+          detailEl.innerHTML = `<p style="color:#71717a;">Click a directory or file on the left.</p>`;
+          return;
+        }
+
+        const pkgHeader = info.pkg ? `<div style="font-family: ui-monospace, monospace; font-size: 0.75rem; color: #2563eb; margin-bottom: 0.4rem;"><strong>package</strong> ${info.pkg}</div>` : "";
+        const note = info.note ? `<div class="note ${info.note.kind}">${info.note.text}</div>` : "";
+        detailEl.innerHTML = `
+          <h3 style="font-family: ui-monospace, monospace; font-size: 0.85rem;">${activePath}</h3>
+          ${pkgHeader}
+          <pre class="code">${info.src}</pre>
+          ${note}
+        `;
+      }
+
+      render();
+    </script>
+  </body>
+</html>

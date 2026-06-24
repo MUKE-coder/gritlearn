@@ -1,0 +1,276 @@
+## Packages and project structure
+
+Every Go program is a tree of **packages**. A package is one directory of `.go` files that share a namespace. Importing is by directory path, not by file. Visibility is by case — uppercase exported, lowercase package-private. There are no `class`es, no namespaces beyond packages, no `import { x } from "./file"` — just packages and the standard `import "path/to/package"`.
+
+This lesson covers how packages compose into a real project, the import rules, the layout conventions (`cmd/`, `internal/`, `pkg/`), and the small set of decisions you'll make on every Go project you start.
+
+<Analogy>
+A Go package is **a directory that publishes one set of names.** All `.go` files in `internal/billing/` say `package billing` at the top, and together they form one logical unit. From outside, you can only see what they Export — names starting with an uppercase letter.
+
+```
+billing/                  ← directory = one package
+├── invoice.go            ← all three files say `package billing`
+├── refund.go             ← they share state, helpers, types
+└── tax.go                ← they're indistinguishable from outside
+```
+
+Three follow-on effects worth internalising up front:
+
+1. **Importing is by import path, not by file path.** `import "myapp/billing"` brings in the whole directory's exports. You can't reach into a file. The unit of organisation is the directory.
+
+2. **There's no `import { x } from`.** You can't pick which names to import — you bring in the package and reach `pkg.Name`. The exception is `_` (anonymous import for side effects) and `.` (dump everything into your namespace — almost always wrong).
+
+3. **The directory NAME and the package NAME usually match.** `internal/billing/` is `package billing`. They can differ (`v2/` could be `package billing`), but for sanity they almost always agree.
+
+The mental shift coming from Node.js: forget file-level imports. Forget `default exports`. Packages are bigger and stickier — once you import one, you have all its exports. This pushes you to keep packages small and cohesive.
+</Analogy>
+
+### Anatomy of a package
+
+```go
+// File: billing/invoice.go
+package billing                          // package clause must match the directory name
+
+import (
+    "fmt"                                // stdlib
+    "time"
+
+    "github.com/you/myapp/db"            // module path + subpackage
+)
+
+// EXPORTED: starts with uppercase.
+type Invoice struct {
+    ID     string
+    Amount int
+    DueAt  time.Time
+}
+
+// EXPORTED — callers in other packages can use this.
+func New(amount int) *Invoice {
+    return &Invoice{ID: generateID(), Amount: amount, DueAt: time.Now().Add(30 * 24 * time.Hour)}
+}
+
+// package-private — lowercase. Only billing/*.go can call this.
+func generateID() string {
+    return fmt.Sprintf("inv-%d", time.Now().UnixNano())
+}
+```
+
+Three things to read off:
+
+- **`package billing`** at the top — must match across every file in the directory.
+- **Imports go in a block** at the top. The compiler reorders alphabetically for you (gofmt).
+- **Case = visibility.** `Invoice` is exported (visible from `import "myapp/billing"`); `generateID` is not. No `public`/`private` keywords needed.
+
+### Importing — three forms
+
+```go
+import "fmt"                             // 1. stdlib
+
+import "github.com/you/myapp/billing"    // 2. third-party (or your own module's subpackage)
+
+import (                                 // 3. block — preferred when you have more than one
+    "fmt"
+    "strings"
+
+    "github.com/lib/pq"
+)
+```
+
+Inside a file you reach the package's exports as `billing.New(…)`, `fmt.Println(…)`, `pq.Error{…}`. Reaching a name with the bare identifier means it's defined in your own package or it's a builtin (`len`, `make`, `append`, `nil`).
+
+### Import aliases
+
+```go
+import (
+    "encoding/json"
+
+    sj "github.com/segmentio/json"   // alias — call it sj instead of "json"
+)
+
+sj.Marshal(…)
+json.Marshal(…)
+```
+
+Use sparingly — only when two packages share a name (`encoding/json` vs `segmentio/json`) or the import-path's final segment is awkward.
+
+Two special aliases:
+
+- **`_` (underscore)** — import for side effects only. `import _ "github.com/lib/pq"` registers the Postgres driver with `database/sql` without bringing any names into scope.
+- **`.` (dot)** — dump every export into the current namespace. **Almost always a mistake.** Reach for it only in test files where readability is improved (it's vanishingly rare even there).
+
+### Visibility rules — uppercase exported
+
+```go
+type User struct {            // exported type
+    Name    string             // exported field
+    age     int                // package-private field (lowercase)
+}
+
+func (u *User) Hello() string {  // exported method
+    return greet(u.Name)
+}
+
+func greet(name string) string {  // package-private function (lowercase)
+    return "Hello, " + name
+}
+```
+
+A field or method on an exported type can still be private (lowercase). Callers in other packages see `User` and `Hello`, but can't touch `age` or call `greet`. This is how you publish a type while keeping its internals.
+
+### Module path — `go.mod`
+
+Every project has a `go.mod` at the root declaring its module path:
+
+```go
+// go.mod
+module github.com/you/myapp
+
+go 1.24
+
+require (
+    github.com/gin-gonic/gin v1.10.0
+    github.com/lib/pq        v1.10.9
+)
+```
+
+The `module` line is your project's identity. Inside the project, every subpackage's import path is `<module>/<subdir>`:
+
+```
+go.mod              module github.com/you/myapp
+
+internal/billing/   import "github.com/you/myapp/internal/billing"
+internal/db/        import "github.com/you/myapp/internal/db"
+cmd/server/         import "github.com/you/myapp/cmd/server"   // (rarely imported — it's main)
+```
+
+You don't write relative imports (`../billing`). Always the full module path. This makes refactoring cheap — move a directory and only the `import` lines change.
+
+### Standard project layouts
+
+Three common shapes, growing in size:
+
+**Tiny — single package:**
+
+```
+myapp/
+├── go.mod
+├── main.go                    # package main
+└── helpers.go                 # package main
+```
+
+Fine for scripts and tiny tools. `go run .` builds and runs.
+
+**Small — cmd + internal split:**
+
+```
+myapp/
+├── go.mod
+├── cmd/
+│   └── server/
+│       └── main.go            # package main — entry point
+└── internal/
+    ├── billing/                # package billing
+    └── db/                     # package db
+```
+
+`cmd/<name>/` holds the entry point per binary. `internal/` holds the library code. Importing `internal/` from outside this module is forbidden by the compiler — Go-level enforcement of "this is private to my project."
+
+**Larger — internal + pkg:**
+
+```
+myapp/
+├── cmd/
+│   ├── server/main.go          # the main binary
+│   └── migrate/main.go         # a separate utility binary
+├── internal/                   # private code — only this module can import
+│   ├── billing/
+│   └── db/
+└── pkg/                        # public code — designed to be importable
+    └── sdk/
+```
+
+`pkg/` is for code you intend OTHERS to import. Most projects never use `pkg/` — only library/SDK projects do. **Default to `internal/` and add `pkg/` only when you publish something.**
+
+### `package main` — the entry point
+
+A package called `main` with a `main()` function is the executable:
+
+```go
+// cmd/server/main.go
+package main
+
+import (
+    "log"
+
+    "github.com/you/myapp/internal/billing"
+)
+
+func main() {
+    log.Println("starting…")
+    inv := billing.New(100)
+    log.Println(inv.ID)
+}
+```
+
+`go build ./cmd/server` produces a binary named `server` (the directory name). `go run ./cmd/server` builds + runs in one step. You can have multiple `cmd/<name>/` directories — one binary per directory.
+
+### `init` functions
+
+A package can declare any number of `init()` functions, in any file:
+
+```go
+package db
+
+import "log"
+
+func init() {
+    log.Println("db package initialised")
+}
+```
+
+They run **once**, before `main()`, in the order packages are imported. Most code never needs them — they're for registering drivers, validating env vars, or setting up package-level state. Two notes:
+
+- **You can't call `init` manually**, only the runtime can.
+- **`init` runs even if you never use any exported name** from the package — the moment something imports it (even with `_`), the init runs. This is why `_` imports work for things like `database/sql` drivers.
+
+### Circular imports — forbidden
+
+```
+billing → db
+db → billing            ❌ circular
+```
+
+Go simply refuses to compile this. The fix is structural:
+
+- Move shared types to a third package neither imports back into.
+- Invert one direction by introducing an interface — `billing` defines a `DBClient` interface, `db` implements it, `db` doesn't import `billing`.
+
+The compiler error is loud and immediate (`import cycle not allowed`). You learn quickly to draw your dependency graph as a DAG.
+
+### Naming conventions
+
+- **Package names are lowercase, short, no underscores.** `http`, `billing`, `userauth`. Never `BillingPackage` or `billing_helpers`.
+- **Avoid `util`, `common`, `helpers`** — they collect random unrelated stuff. Name packages after what they do, not how they help.
+- **Don't repeat the package name in exported identifiers.** Inside `billing` you write `func New()`, not `func NewInvoice()` — callers say `billing.New()`. Inside `http` you write `Handler`, not `HTTPHandler`. Stutter is a smell.
+- **Test files end in `_test.go`** — they're invisible to imports but seen by `go test`.
+
+### Dependencies — `go get` and `go.sum`
+
+```
+go get github.com/gin-gonic/gin    # add a dep, update go.mod + go.sum
+go get -u                          # upgrade everything to latest minor/patch
+go mod tidy                        # remove unused, add missing
+```
+
+`go.sum` is the lockfile — hashes of every dep + transitive dep. Commit both `go.mod` and `go.sum`. Don't hand-edit either.
+
+<ExampleProject
+  src="package-explorer"
+  title="Package explorer — what each layout chooses"
+  description="Click through three project shapes (tiny, cmd+internal, internal+pkg). The tree highlights what would be importable from a sibling repo and what's locked inside the module. The visibility rules click in pictures."
+/>
+
+### What you can now build
+
+You can structure any Go program — from a 50-line script to a multi-binary service — knowing exactly where each piece goes. Next: **goroutines** — Go's lightweight concurrent execution. After channels, you'll have the full concurrency story (the bit Go is most famous for).
