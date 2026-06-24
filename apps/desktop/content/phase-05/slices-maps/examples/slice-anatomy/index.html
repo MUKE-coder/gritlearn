@@ -1,0 +1,280 @@
+<!--
+  Slice anatomy. Live diagram showing slice header (ptr, len, cap)
+  and the backing array. Reader runs operations (make / append /
+  slice / copy) and watches the header change, the backing storage
+  grow, and aliases either share or split.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Slice anatomy — len, cap, backing arrays</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1100px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .op {
+        display: block; width: 100%; text-align: left;
+        background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
+        padding: 0.55rem 0.7rem; font-family: ui-monospace, monospace;
+        font-size: 0.74rem; cursor: pointer; margin-bottom: 0.45rem;
+      }
+      .op:hover { background: #f4f4f5; }
+      .op.reset { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+
+      .header {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+        padding: 0.55rem 0.7rem; margin: 0.4rem 0;
+      }
+      .header .name { color: #2563eb; font-weight: 600; }
+      .header .field { color: #71717a; }
+
+      .backing {
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        background: #0a0a0d; color: #ededee;
+        border-radius: 6px; padding: 0.85rem 1rem;
+        overflow-x: auto;
+      }
+      .cells { display: flex; gap: 0.35rem; flex-wrap: nowrap; margin-top: 0.4rem; }
+      .cell {
+        min-width: 2.1rem; height: 2.1rem;
+        display: flex; align-items: center; justify-content: center;
+        background: #18181b; border: 1px solid #3f3f46; border-radius: 4px;
+        color: #ededee; position: relative;
+      }
+      .cell.s1 { box-shadow: 0 0 0 2px #16a34a; }
+      .cell.s2 { box-shadow: 0 0 0 2px #ec4899; }
+      .cell.s1.s2 { box-shadow: 0 0 0 2px #16a34a, 0 0 0 4px #ec4899; }
+      .cell .idx {
+        position: absolute; top: -0.95rem; left: 0; right: 0;
+        text-align: center; font-size: 0.62rem; color: #71717a;
+      }
+      .cell.dead { color: #52525b; background: #27272a; }
+
+      .legend { display: flex; gap: 1rem; margin-top: 0.6rem; font-size: 0.72rem; color: #ededee; }
+      .legend .dot { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 50%; margin-right: 0.25rem; vertical-align: middle; }
+      .legend .dot.s1 { background: #16a34a; }
+      .legend .dot.s2 { background: #ec4899; }
+
+      .log {
+        margin-top: 0.7rem;
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        white-space: pre-wrap;
+        padding: 0.65rem 0.85rem;
+        background: #fff;
+        border-left: 3px solid #2563eb; border-radius: 0 6px 6px 0;
+        max-height: 11rem; overflow-y: auto;
+      }
+      .log .grow { color: #dc2626; font-weight: 600; }
+      .log .share { color: #f59e0b; }
+    </style>
+  </head>
+  <body>
+    <h1>Slice anatomy — what actually happens in memory</h1>
+    <p class="intro">Two slices, one backing array. Run an operation and watch the header (ptr, len, cap) change, the backing array grow or stay, and the aliases either share storage or split. The shared-backing trap is right there in the colours.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Run an operation</h2>
+        <button class="op reset" data-op="reset">↺ reset (s := []int{1,2,3,4,5})</button>
+        <button class="op" data-op="append-1">s = append(s, 6) — within cap</button>
+        <button class="op" data-op="append-many">s = append(s, 6, 7, 8) — forces grow</button>
+        <button class="op" data-op="reslice">t := s[1:3] — alias the backing</button>
+        <button class="op" data-op="mutate-t0">t[0] = 99 — watch s flip too</button>
+        <button class="op" data-op="copy">t := make([]int,2); copy(t, s[1:3]) — independent</button>
+        <button class="op" data-op="make-cap">s := make([]int, 0, 8) — empty len, big cap</button>
+        <button class="op" data-op="append-precap">s = append(s, 1,2,3,4) — no realloc, cap room left</button>
+
+        <h2 style="margin-top: 1rem;">Trace</h2>
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="col">
+        <h2>Slice headers</h2>
+        <div id="headers"></div>
+
+        <h2 style="margin-top: 1rem;">Backing array</h2>
+        <div class="backing">
+          <div id="backing"></div>
+          <div class="legend">
+            <span><span class="dot s1"></span>slice s</span>
+            <span><span class="dot s2"></span>slice t</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // model:
+      //   backing: array of numbers (dead cells shown but not visible)
+      //   slices: { s: {start, len, cap}, t: null | {start, len, cap} }
+      //   when append exceeds cap → new backing with doubled cap, s rebased to start 0
+      //   t may go orphan if s's backing changes (still points at old backing)
+      let model;
+
+      function reset() {
+        model = {
+          backings: [{ id: 0, cells: [1, 2, 3, 4, 5, _, _, _].slice(0, 5) }],
+          s: { backingId: 0, start: 0, len: 5, cap: 5 },
+          t: null,
+          log: [],
+        };
+        model.log.push('s := []int{1, 2, 3, 4, 5}');
+        model.log.push('   header: {ptr→B0, len:5, cap:5}');
+      }
+      const _ = null;
+
+      const ops = {
+        reset,
+        "append-1": () => {
+          appendTo(["s"], [6]);
+        },
+        "append-many": () => {
+          appendTo(["s"], [6, 7, 8]);
+        },
+        "reslice": () => {
+          if (!model.s) return;
+          const start = model.s.start + 1;
+          const len = 2;
+          model.t = {
+            backingId: model.s.backingId,
+            start,
+            len,
+            cap: model.s.cap - 1,
+          };
+          model.log.push('t := s[1:3]');
+          model.log.push('   <span class="share">aliasing — shares s\'s backing array</span>');
+          model.log.push('   header: {ptr→B' + model.t.backingId + '+' + start + ', len:2, cap:' + model.t.cap + '}');
+        },
+        "mutate-t0": () => {
+          if (!model.t) return;
+          const back = model.backings.find((b) => b.id === model.t.backingId);
+          back.cells[model.t.start] = 99;
+          model.log.push('t[0] = 99');
+          if (model.s && model.s.backingId === model.t.backingId) {
+            const sIdx = model.t.start - model.s.start;
+            if (sIdx >= 0 && sIdx < model.s.len) {
+              model.log.push('   <span class="share">s[' + sIdx + '] is now 99 too — shared backing</span>');
+            }
+          }
+        },
+        "copy": () => {
+          if (!model.s) return;
+          const src = model.s;
+          const back = model.backings.find((b) => b.id === src.backingId);
+          // new backing for t
+          const newId = nextBackingId();
+          const newCells = back.cells.slice(src.start + 1, src.start + 3);
+          model.backings.push({ id: newId, cells: newCells });
+          model.t = { backingId: newId, start: 0, len: 2, cap: 2 };
+          model.log.push('t := make([]int, 2)');
+          model.log.push('copy(t, s[1:3])');
+          model.log.push('   t has its own backing B' + newId + ' — mutations no longer leak');
+        },
+        "make-cap": () => {
+          const id = nextBackingId();
+          model.backings.push({ id, cells: Array(8).fill(0) });
+          model.s = { backingId: id, start: 0, len: 0, cap: 8 };
+          model.t = null;
+          model.log.push('s := make([]int, 0, 8)');
+          model.log.push('   header: {ptr→B' + id + ', len:0, cap:8} — preallocated');
+        },
+        "append-precap": () => {
+          appendTo(["s"], [1, 2, 3, 4]);
+        },
+      };
+
+      function nextBackingId() {
+        return Math.max(...model.backings.map((b) => b.id)) + 1;
+      }
+
+      function appendTo(which, values) {
+        const s = model[which[0]];
+        if (!s) return;
+        const back = model.backings.find((b) => b.id === s.backingId);
+        const newLen = s.len + values.length;
+        if (newLen <= s.cap) {
+          for (let i = 0; i < values.length; i++) {
+            back.cells[s.start + s.len + i] = values[i];
+          }
+          s.len = newLen;
+          model.log.push('s = append(s, ' + values.join(', ') + ')');
+          model.log.push('   within cap — new len:' + s.len + ', cap unchanged');
+        } else {
+          const newCap = Math.max(s.cap * 2, newLen);
+          const newCells = Array(newCap).fill(0);
+          for (let i = 0; i < s.len; i++) {
+            newCells[i] = back.cells[s.start + i];
+          }
+          for (let i = 0; i < values.length; i++) {
+            newCells[s.len + i] = values[i];
+          }
+          const newId = nextBackingId();
+          model.backings.push({ id: newId, cells: newCells });
+          model.log.push('s = append(s, ' + values.join(', ') + ')');
+          model.log.push('   <span class="grow">cap exceeded — alloc new B' + newId + ' (cap ' + newCap + '), copy + write</span>');
+          if (model.t && model.t.backingId === s.backingId) {
+            model.log.push('   <span class="share">t still points at the OLD backing — orphaned alias</span>');
+          }
+          s.backingId = newId;
+          s.start = 0;
+          s.len = newLen;
+          s.cap = newCap;
+        }
+      }
+
+      function render() {
+        const headers = document.getElementById("headers");
+        const backing = document.getElementById("backing");
+        const log = document.getElementById("log");
+
+        const sliceHeader = (name, sl) => {
+          if (!sl) return `<div class="header"><span class="name">${name}</span>: <span class="field">nil</span></div>`;
+          return `<div class="header"><span class="name">${name}</span> = <span class="field">{ ptr → B${sl.backingId}+${sl.start},  len: ${sl.len},  cap: ${sl.cap} }</span></div>`;
+        };
+        headers.innerHTML = sliceHeader("s", model.s) + sliceHeader("t", model.t);
+
+        backing.innerHTML = model.backings.map((b) => {
+          const cells = b.cells.map((c, i) => {
+            const inS = model.s && model.s.backingId === b.id && i >= model.s.start && i < model.s.start + model.s.len;
+            const inT = model.t && model.t.backingId === b.id && i >= model.t.start && i < model.t.start + model.t.len;
+            const dead = c === null || c === undefined;
+            const cls = [
+              "cell",
+              inS ? "s1" : "",
+              inT ? "s2" : "",
+              dead ? "dead" : "",
+            ].filter(Boolean).join(" ");
+            return `<div class="${cls}"><div class="idx">${i}</div>${dead ? "·" : c}</div>`;
+          }).join("");
+          return `<div style="margin-bottom:1rem;"><div style="font-size:0.72rem; color:#a1a1aa; margin-bottom:1rem;">backing array B${b.id} (cap ${b.cells.length})</div><div class="cells">${cells}</div></div>`;
+        }).join("");
+
+        log.innerHTML = model.log.map((l) => `→ ${l}`).join("\n");
+        log.scrollTop = log.scrollHeight;
+      }
+
+      document.querySelectorAll(".op").forEach((b) => {
+        b.addEventListener("click", () => {
+          ops[b.dataset.op]();
+          render();
+        });
+      });
+
+      reset();
+      render();
+    </script>
+  </body>
+</html>

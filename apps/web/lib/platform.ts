@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.15";
+export const FALLBACK_VERSION = "0.4.16";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-24T10:00:00Z",
+  releasedAt: "2026-06-24T14:00:00Z",
   releaseNotes:
-    "JEditor v0.4.15 — Phase 5 (Go) Batch 2: three more lessons. 'Functions and multiple return values' frames Go's two-drawer error story (val + err) with an interactive 5-call walkthrough that lets you pick each call's outcome and watch the propagation light up the matching return. 'Structs' covers declaring + four ways to construct + embedding + struct tags (json/db/validate) + comparison and map keys — with a five-tab anatomy view of the same User struct. 'Methods and receivers' nails the value-vs-pointer receiver decision with a side-by-side picker that simulates mutation, recomputes the method set, and shows interface satisfaction live.",
+    "JEditor v0.4.16 — Phase 5 (Go) Batch 3: three more lessons closing the language core. 'Interfaces' covers structural typing, the four interfaces every Go program uses (error / Stringer / Reader / Writer), the typed-nil gotcha, and how value vs pointer receivers affect interface satisfaction — with a live picker that flips method sets and shows the exact compile error Go would print. 'Slices and maps' goes under the hood of slice headers (ptr/len/cap), the shared-backing-array trap, append growth, and map iteration order — interactive diagram shows the backing array reallocating when cap is exceeded. 'Error handling the Go way' covers wrapping with %w, errors.Is / errors.As, sentinel vs typed errors, and exactly when a %v anywhere in the chain breaks all your matchers.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

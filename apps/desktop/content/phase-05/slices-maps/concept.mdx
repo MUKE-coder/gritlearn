@@ -1,0 +1,269 @@
+## Slices and maps
+
+Two collections cover 95% of what you'll reach for in Go: **slices** (the dynamic-array equivalent of `[]T` / `Array<T>`) and **maps** (the hash-table equivalent of `{}` / `dict` / `HashMap<K,V>`). Both look familiar from JS or Python — until you hit the subtle parts.
+
+This lesson covers what they actually are under the hood, the operations you'll do daily, and the two traps that will bite you in your first real Go project: the shared-backing-array slice trap, and map iteration order.
+
+<Analogy>
+**A slice is a window onto an array.** Three numbers stapled to a pointer:
+
+```
+slice = (ptr, len, cap)
+        │     │    └── how much room before we need a new array
+        │     └────── how many elements you can see
+        └──────────── where the backing storage starts
+```
+
+When you `append` to a slice and there's room (`len < cap`), Go writes into the same backing array and bumps `len`. When the backing array is full, Go allocates a bigger one, copies, and returns a slice pointing at the new array. This is why `append` returns a slice and you have to reassign:
+
+```go
+s = append(s, x)   // RHS may point at a brand new array
+```
+
+The follow-on effect that catches everyone: two slices can share the same backing array. Modify through one, the other sees it. Slice a slice and you've created an alias, not a copy. This is fast — but it surprises you exactly once per career.
+
+**A map is a hash table.** `map[K]V` where K is comparable (anything that supports `==`: primitives, structs of primitives, pointers, arrays — but NOT slices or other maps). Three things to internalise:
+
+1. **Maps are reference types.** Pass a map to a function, the recipient can mutate the same map. No copying.
+
+2. **A nil map can be read but not written.** `var m map[string]int` is nil — `m["x"]` returns the zero value (0), but `m["x"] = 1` panics. You must `m := make(map[string]int)` or `m := map[string]int{}` before writing.
+
+3. **Iteration order is randomised.** Go deliberately scrambles map iteration to stop you depending on order. Want sorted output? Collect keys into a slice, sort, then iterate.
+
+Slices and maps are the two values you'll hand around between functions all day. Understanding what they ARE (windows, references) — not just what they DO — is the difference between "Go feels weird" and "Go feels clean."
+</Analogy>
+
+### Slices — declaration
+
+Four ways to make one:
+
+```go
+// 1. Literal — most common.
+nums := []int{1, 2, 3}
+
+// 2. Empty slice — len 0, cap 0. Ready to append.
+var nums []int                // nums is nil, but append works fine
+nums := []int{}               // explicitly empty
+
+// 3. make — pre-allocate length AND capacity.
+nums := make([]int, 5)        // len 5, cap 5, every element is 0
+nums := make([]int, 0, 100)   // len 0, cap 100 — for "I know I'll append ~100"
+
+// 4. From an existing array or slice.
+arr := [5]int{1, 2, 3, 4, 5}
+nums := arr[1:4]              // [2, 3, 4] — shares arr's backing storage
+```
+
+Form 3 (`make` with both length and cap) is the secret to performance — if you know you'll `append` 100 items, preallocating saves dozens of reallocations as the slice grows.
+
+### Slices — daily operations
+
+```go
+nums := []int{1, 2, 3, 4, 5}
+
+len(nums)          // 5
+cap(nums)          // 5 (depends on backing array)
+
+nums[0]            // 1 (zero-indexed)
+nums[len(nums)-1]  // 5 — last element
+
+nums[1:3]          // [2, 3] — start inclusive, end exclusive
+nums[:2]           // [1, 2]
+nums[2:]           // [3, 4, 5]
+
+nums = append(nums, 6)             // [1, 2, 3, 4, 5, 6]
+nums = append(nums, 7, 8, 9)       // variadic
+nums = append(nums, more...)       // spread another slice
+```
+
+The `nums = append(nums, x)` pattern is essential. `append` doesn't mutate in place when it has to reallocate; it returns a new slice header. **Always reassign.**
+
+### The slice trap — shared backing arrays
+
+This is the bug that costs everyone a couple of hours:
+
+```go
+big := []int{1, 2, 3, 4, 5}
+small := big[1:3]            // [2, 3] — shares big's backing
+small[0] = 99
+fmt.Println(big)             // [1, 99, 3, 4, 5] — surprise!
+```
+
+Slicing creates a new header pointing at the same storage. Modifying through one alias modifies the underlying memory, which the other alias also sees. To get an independent copy:
+
+```go
+small := make([]int, 2)
+copy(small, big[1:3])        // small now owns its own storage
+```
+
+A subtler variant:
+
+```go
+func sneaky(s []int) {
+    s[0] = 99                // mutates the caller's slice elements
+    s = append(s, 100)       // may or may not be visible to the caller
+}
+```
+
+The element mutation IS visible (shared backing). The `append` is only visible to the caller if you return the new slice header — otherwise the local `s` variable was reassigned, the caller's wasn't.
+
+### Iterating with `range`
+
+```go
+for i, v := range nums {
+    fmt.Println(i, v)
+}
+
+for _, v := range nums {       // discard the index
+    fmt.Println(v)
+}
+
+for i := range nums {          // discard the value — index only
+    nums[i] *= 2
+}
+```
+
+`v` is a **copy** of each element (recall the lesson on structs — same rule applies to slices of any type). To mutate the slice element, index in.
+
+### Removing an element
+
+There's no `slice.remove(i)` — you build the deletion manually:
+
+```go
+nums := []int{1, 2, 3, 4, 5}
+i := 2  // remove index 2
+
+nums = append(nums[:i], nums[i+1:]...)   // [1, 2, 4, 5]
+```
+
+Or order-doesn't-matter, which is O(1) instead of O(n):
+
+```go
+nums[i] = nums[len(nums)-1]   // overwrite with last
+nums = nums[:len(nums)-1]     // drop last
+```
+
+### Maps — declaration
+
+```go
+// 1. Literal — empty-ish.
+ages := map[string]int{
+    "Ava":  30,
+    "Beth": 25,
+}
+
+// 2. make — preferred for empty maps.
+ages := make(map[string]int)
+
+// 3. With initial capacity hint (Go 1.11+).
+ages := make(map[string]int, 100)
+
+// 4. ZERO VALUE — nil. Reads OK, writes PANIC.
+var ages map[string]int       // nil
+ages["x"] = 1                  // boom: assignment to entry in nil map
+```
+
+Always `make` (or use a literal) before writing.
+
+### Maps — daily operations
+
+```go
+ages := map[string]int{"Ava": 30}
+
+ages["Beth"] = 25              // insert / update
+v := ages["Ava"]               // read — 30
+v := ages["Carol"]             // read missing key — 0 (zero value of V)
+
+v, ok := ages["Carol"]         // safe read — ok is false if missing
+if !ok { fmt.Println("not found") }
+
+delete(ages, "Ava")            // remove key — safe even if absent
+
+len(ages)                       // number of entries
+```
+
+**The two-value read** (`v, ok := m[k]`) is the only way to distinguish "key absent" from "key present, value is the zero value." Use it for any map where zero is a meaningful value.
+
+### Iteration order is randomised
+
+```go
+for k, v := range ages {
+    fmt.Println(k, v)
+}
+```
+
+Each run produces a different order. **Don't depend on it.** For deterministic iteration:
+
+```go
+keys := make([]string, 0, len(ages))
+for k := range ages {
+    keys = append(keys, k)
+}
+sort.Strings(keys)
+for _, k := range keys {
+    fmt.Println(k, ages[k])
+}
+```
+
+This is a five-line ceremony you'll write often. Go culture has accepted it as the price for letting the runtime randomise.
+
+### Common patterns
+
+**Counting occurrences:**
+```go
+counts := map[string]int{}
+for _, word := range words {
+    counts[word]++    // missing key reads 0, then becomes 1
+}
+```
+
+**Deduplicating:**
+```go
+seen := map[string]bool{}
+unique := []string{}
+for _, s := range items {
+    if !seen[s] {
+        seen[s] = true
+        unique = append(unique, s)
+    }
+}
+```
+
+**Set of values:**
+```go
+admins := map[string]struct{}{"u-1": {}, "u-2": {}}
+if _, ok := admins["u-1"]; ok { … }
+```
+
+`struct{}` is the empty struct — takes zero bytes. The standard "make a map look like a set" idiom.
+
+### Slices vs arrays — what's the difference?
+
+```go
+var arr [5]int       // ARRAY — fixed length, length is part of the type
+var sli []int        // SLICE — variable length, growable
+```
+
+Arrays exist but you rarely write them. Their length is baked into the type — `[3]int` and `[4]int` are different types. Pass-by-value (copies everything). Almost all real Go code uses slices — arrays show up in low-level perf-sensitive code, in map keys, and as the backing for slices under the hood.
+
+### Comparing slices and maps
+
+You can't `==` slices or maps to each other (only to `nil`). Go's solution:
+
+```go
+if reflect.DeepEqual(a, b) { … }   // works for slices and maps
+if slices.Equal(a, b) { … }         // stdlib, Go 1.21+, faster than reflect
+if maps.Equal(m1, m2) { … }         // stdlib, Go 1.21+
+```
+
+The `slices` and `maps` packages also ship `slices.Contains`, `slices.Sort`, `maps.Keys`, etc. — well worth a skim.
+
+<ExampleProject
+  src="slice-anatomy"
+  title="Slice anatomy — len, cap, backing arrays"
+  description="A live diagram of a slice header (ptr, len, cap). Pick an operation — append, slice, copy — and watch whether Go reallocates or shares the backing array. The shared-backing-array trap becomes obvious in pictures."
+/>
+
+### What you can now build
+
+Slices and maps + structs + funcs is enough to write almost any Go data-processing logic. Next: **error handling the Go way** — building on the multi-return foundation you saw earlier, but with the full propagation + `errors.Is` / `errors.As` toolkit you'll use every day.

@@ -21,6 +21,19 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.16",
+    releasedAt: "2026-06-24",
+    headline: "Phase 5 (Go) Batch 3 — interfaces, slices+maps, errors",
+    highlights: [
+      { kind: "feature", body: "'Interfaces' — structural typing (no `implements`), the four stdlib interfaces every Go program uses (error / Stringer / Reader / Writer), type assertions + type switches, the typed-nil gotcha, and how value vs pointer receivers affect interface satisfaction." },
+      { kind: "feature", body: "Interface-satisfaction explorer — toggle methods on/off on a SendGrid and a FakeSender; the satisfaction matrix updates live and prints the exact `T does not implement I (method M has pointer receiver)` error Go would surface." },
+      { kind: "feature", body: "'Slices and maps' — slice headers (ptr/len/cap), the shared-backing-array trap with concrete examples, append growth, removing elements, plus map declaration, the two-value read, randomised iteration order, and the standard sort-keys idiom." },
+      { kind: "feature", body: "Slice-anatomy diagram — live header + backing-array visualiser. Run append within cap, append that forces a realloc, slice + alias, copy for independence — watch the colours show which slice owns which cells and when an alias goes orphan." },
+      { kind: "feature", body: "'Error handling the Go way' — the three options at every err site (handle / propagate / match), %w vs %v, sentinel errors vs custom typed errors vs wrapping, errors.Is + errors.As, the log-AND-return anti-pattern, defer + named returns for blanket annotation, panic vs error decision tree." },
+      { kind: "feature", body: "Error-wrapping playground — build a 3-layer chain from the inside out, pick %w or %v at each layer, then run errors.Is + errors.As against the final error. The chain-breaking effect of a single %v is immediate." },
+    ],
+  },
+  {
     version: "0.4.15",
     releasedAt: "2026-06-24",
     headline: "Phase 5 (Go) Batch 2 — functions, structs, methods",

@@ -1,0 +1,241 @@
+<!--
+  Error wrapping playground. Reader builds an error chain bottom-up,
+  picks %w vs %v at each layer, then runs errors.Is and errors.As
+  against the final error. The chain-broken effect of %v is the
+  point — and it becomes immediate when the matcher fails.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Error wrapping playground — chain, match, extract</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1100px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .layer {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.65rem 0.8rem; margin-bottom: 0.6rem;
+      }
+      .layer .name { font-family: ui-monospace, monospace; font-size: 0.78rem; margin-bottom: 0.45rem; font-weight: 600; }
+      .opts { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+      .opt {
+        font-family: ui-monospace, monospace; font-size: 0.72rem;
+        padding: 0.32rem 0.55rem; border: 1px solid #d4d4d8; border-radius: 5px;
+        background: #fff; cursor: pointer;
+      }
+      .opt.active { background: #15803d; color: #fff; border-color: #15803d; }
+      .opt.active.wrap { background: #2563eb; border-color: #2563eb; }
+      .opt.active.bare { background: #b45309; border-color: #b45309; }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.73rem;
+        line-height: 1.55; margin: 0.4rem 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .wrap    { color: #60a5fa; }
+      .bare    { color: #fb923c; }
+
+      .chain {
+        margin: 0.4rem 0; padding: 0.5rem 0.65rem;
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.73rem;
+        white-space: pre-wrap;
+      }
+      .chain .link { color: #60a5fa; }
+      .chain .broken { color: #ef4444; font-weight: 600; }
+
+      .test {
+        margin: 0.45rem 0; padding: 0.55rem 0.7rem;
+        font-family: ui-monospace, monospace; font-size: 0.72rem;
+        border-radius: 6px;
+        border-left: 3px solid #d4d4d8;
+      }
+      .test.ok    { background: #dcfce7; color: #166534; border-left-color: #16a34a; }
+      .test.bad   { background: #fef2f2; color: #7f1d1d; border-left-color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>Error wrapping playground — chain, match, extract</h1>
+    <p class="intro">Build an error chain bottom-up: pick a base error, then how each layer wraps it. Then run <code>errors.Is</code> and <code>errors.As</code> — and see what happens when one layer uses <code>%v</code> instead of <code>%w</code>.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Build the chain</h2>
+
+        <div class="layer">
+          <div class="name">Base error (innermost)</div>
+          <div class="opts">
+            <button class="opt active" data-layer="base" data-val="ErrNotFound">ErrNotFound (sentinel)</button>
+            <button class="opt" data-layer="base" data-val="ValidationError">*ValidationError (typed)</button>
+            <button class="opt" data-layer="base" data-val="raw">errors.New("connection refused")</button>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="name">Layer 1 — db package</div>
+          <div class="opts">
+            <button class="opt active wrap" data-layer="l1" data-val="w">%w (wrap)</button>
+            <button class="opt bare" data-layer="l1" data-val="v">%v (lose chain)</button>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="name">Layer 2 — service</div>
+          <div class="opts">
+            <button class="opt active wrap" data-layer="l2" data-val="w">%w (wrap)</button>
+            <button class="opt bare" data-layer="l2" data-val="v">%v (lose chain)</button>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="name">Layer 3 — http handler</div>
+          <div class="opts">
+            <button class="opt active wrap" data-layer="l3" data-val="w">%w (wrap)</button>
+            <button class="opt bare" data-layer="l3" data-val="v">%v (lose chain)</button>
+          </div>
+        </div>
+
+        <h2 style="margin-top: 1rem;">Compiled code</h2>
+        <pre class="code" id="code"></pre>
+      </div>
+
+      <div class="col">
+        <h2>Final error chain</h2>
+        <div class="chain" id="chain"></div>
+
+        <h2 style="margin-top: 1rem;">err.Error() prints</h2>
+        <pre class="code" id="msg"></pre>
+
+        <h2 style="margin-top: 1rem;">Run the matchers</h2>
+        <div id="tests"></div>
+      </div>
+    </div>
+
+    <script>
+      const state = { base: "ErrNotFound", l1: "w", l2: "w", l3: "w" };
+
+      document.querySelectorAll(".opt").forEach((b) => {
+        b.addEventListener("click", () => {
+          state[b.dataset.layer] = b.dataset.val;
+          document.querySelectorAll(`.opt[data-layer="${b.dataset.layer}"]`).forEach((o) => {
+            o.classList.remove("active");
+            o.classList.toggle("active", o.dataset.val === b.dataset.val);
+          });
+          render();
+        });
+      });
+
+      const BASE = {
+        ErrNotFound: {
+          go: '<span class="keyword">var</span> ErrNotFound = errors.New(<span class="string">"not found"</span>)',
+          msg: "not found",
+          isMatch: { ErrNotFound: true, ErrForbidden: false },
+          asMatch: { ValidationError: false },
+        },
+        ValidationError: {
+          go: '<span class="keyword">type</span> ValidationError <span class="keyword">struct</span> { Field, Message <span class="keyword">string</span> }\n' +
+              '<span class="comment">// returned as: &ValidationError{Field: "email", Message: "invalid"}</span>',
+          msg: "email: invalid",
+          isMatch: { ErrNotFound: false, ErrForbidden: false },
+          asMatch: { ValidationError: true },
+        },
+        raw: {
+          go: 'errors.New(<span class="string">"connection refused"</span>)',
+          msg: "connection refused",
+          isMatch: { ErrNotFound: false, ErrForbidden: false },
+          asMatch: { ValidationError: false },
+        },
+      };
+
+      function render() {
+        const code = document.getElementById("code");
+        const chain = document.getElementById("chain");
+        const msg = document.getElementById("msg");
+        const tests = document.getElementById("tests");
+
+        const base = BASE[state.base];
+
+        const layerCode = (label, verb, prefix) => {
+          const cls = verb === "w" ? "wrap" : "bare";
+          return `<span class="comment">// ${label}</span>\nerr = fmt.Errorf(<span class="string">"${prefix}: %${verb}"</span>, err)`;
+        };
+
+        code.innerHTML = `${base.go}\n` +
+          (state.base === "ValidationError"
+            ? `err := &ValidationError{Field: <span class="string">"email"</span>, Message: <span class="string">"invalid"</span>}`
+            : `err := ${state.base === "raw" ? 'errors.New(<span class="string">"connection refused"</span>)' : 'ErrNotFound'}`) +
+          `\n\n` +
+          layerCode("layer 1 (db)",      state.l1, "db.Query") + `\n\n` +
+          layerCode("layer 2 (service)", state.l2, "loadOrder o-42") + `\n\n` +
+          layerCode("layer 3 (handler)", state.l3, "handler /orders/42");
+
+        // build the chain message (always concatenates strings) + chain-broken flag
+        const broken = state.l1 === "v" || state.l2 === "v" || state.l3 === "v";
+        const msgText = `handler /orders/42: loadOrder o-42: db.Query: ${base.msg}`;
+        msg.textContent = msgText;
+
+        // chain visualisation
+        const layers = [
+          { label: "handler", verb: state.l3 },
+          { label: "service", verb: state.l2 },
+          { label: "db",      verb: state.l1 },
+          { label: "base",    verb: null },
+        ];
+        const lines = layers.map((l, i) => {
+          if (l.verb === null) {
+            return `└─ ${l.label}: <span class="link">${state.base}</span>`;
+          }
+          const arrow = l.verb === "w" ? '<span class="link">↓ wraps (%w)</span>' : '<span class="broken">↓ stringifies (%v) — CHAIN BROKEN HERE</span>';
+          return `${"   ".repeat(i)}${l.label}:\n${"   ".repeat(i)}  ${arrow}`;
+        });
+        chain.innerHTML = lines.join("\n");
+
+        // first %v in the chain truncates errors.Is/As below it
+        // we want to know if the base error survives to the top of the chain
+        const baseSurvives = !broken; // any %v breaks the path
+        const tList = [];
+
+        for (const sentinel of ["ErrNotFound", "ErrForbidden"]) {
+          const expected = baseSurvives && base.isMatch[sentinel];
+          const cls = expected ? "ok" : "bad";
+          const txt = expected
+            ? `errors.Is(err, ${sentinel})  →  <strong>true</strong>`
+            : `errors.Is(err, ${sentinel})  →  <strong>false</strong>` + (
+                base.isMatch[sentinel] && !baseSurvives
+                  ? `   <span style="color:#dc2626;">— chain was broken by a %v, the sentinel is unreachable</span>`
+                  : ""
+              );
+          tList.push(`<div class="test ${cls}">${txt}</div>`);
+        }
+
+        // errors.As targets
+        const asExpected = baseSurvives && base.asMatch.ValidationError;
+        const asCls = asExpected ? "ok" : "bad";
+        let asText = `<span class="keyword">var</span> verr *ValidationError; errors.As(err, &verr)  →  <strong>${asExpected ? 'true (verr.Field = "email")' : 'false'}</strong>`;
+        if (base.asMatch.ValidationError && !baseSurvives) {
+          asText += `   <span style="color:#dc2626;">— chain broken by a %v, the typed error is unreachable</span>`;
+        }
+        tList.push(`<div class="test ${asCls}">${asText}</div>`);
+
+        tests.innerHTML = tList.join("");
+      }
+
+      render();
+    </script>
+  </body>
+</html>

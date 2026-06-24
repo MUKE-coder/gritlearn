@@ -1,0 +1,246 @@
+<!--
+  Interface satisfaction explorer. Two concrete types (SendGrid,
+  FakeSender). Reader toggles which methods exist on each. The grid
+  on the right re-renders to show which interfaces are satisfied by
+  value vs by pointer. Compile errors light up with the exact stdlib
+  error message Go would print.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interface satisfaction — explore method sets live</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1100px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .type {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.7rem 0.85rem; margin-bottom: 0.7rem;
+      }
+      .type .name { font-family: ui-monospace, monospace; font-size: 0.85rem; margin-bottom: 0.5rem; font-weight: 600; }
+      .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+      .toggle {
+        font-family: ui-monospace, monospace; font-size: 0.72rem;
+        padding: 0.32rem 0.5rem; border: 1px solid #d4d4d8; border-radius: 5px;
+        background: #fff; cursor: pointer; text-align: left;
+      }
+      .toggle.on { background: #15803d; color: #fff; border-color: #15803d; }
+      .toggle.on.ptr { background: #2563eb; border-color: #2563eb; }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.74rem;
+        line-height: 1.55; margin: 0.5rem 0 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+      .recv    { color: #f472b6; }
+      .err     { color: #fca5a5; }
+
+      table.iface { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 0.72rem; }
+      table.iface th, table.iface td {
+        border-bottom: 1px solid #e4e4e7; padding: 0.4rem 0.45rem; text-align: left; vertical-align: top;
+      }
+      table.iface th { font-size: 0.65rem; text-transform: uppercase; color: #71717a; letter-spacing: 0.08em; font-weight: 600; }
+      .yes { color: #15803d; font-weight: 600; }
+      .no  { color: #dc2626; font-weight: 600; }
+
+      .diag {
+        margin-top: 0.55rem; font-family: ui-monospace, monospace; font-size: 0.7rem;
+        background: #fef2f2; color: #7f1d1d; border-left: 3px solid #dc2626;
+        padding: 0.45rem 0.65rem; border-radius: 0 5px 5px 0;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Interface satisfaction — explore method sets live</h1>
+    <p class="intro">Toggle methods on each concrete type. Watch the satisfaction matrix and the compile errors update — and see the value-receiver vs pointer-receiver trap with your own eyes.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Concrete types</h2>
+
+        <div class="type" data-type="SendGrid">
+          <div class="name">type SendGrid struct { apiKey string }</div>
+          <div class="toggles">
+            <button class="toggle" data-method="Send" data-recv="ptr">Send (pointer)</button>
+            <button class="toggle" data-method="Send" data-recv="val">Send (value)</button>
+            <button class="toggle" data-method="Close" data-recv="ptr">Close (pointer)</button>
+            <button class="toggle" data-method="Close" data-recv="val">Close (value)</button>
+          </div>
+        </div>
+
+        <div class="type" data-type="FakeSender">
+          <div class="name">type FakeSender struct { Outbox []string }</div>
+          <div class="toggles">
+            <button class="toggle" data-method="Send" data-recv="ptr">Send (pointer)</button>
+            <button class="toggle" data-method="Send" data-recv="val">Send (value)</button>
+            <button class="toggle" data-method="Close" data-recv="ptr">Close (pointer)</button>
+            <button class="toggle" data-method="Close" data-recv="val">Close (value)</button>
+          </div>
+        </div>
+
+        <h2 style="margin-top: 1rem;">Interfaces</h2>
+        <pre class="code"><span class="keyword">type</span> Sender <span class="keyword">interface</span> {
+    Send(to, subject, body <span class="keyword">string</span>) <span class="keyword">error</span>
+}
+
+<span class="keyword">type</span> Closer <span class="keyword">interface</span> {
+    Close() <span class="keyword">error</span>
+}
+
+<span class="keyword">type</span> SendCloser <span class="keyword">interface</span> {
+    Sender
+    Closer
+}</pre>
+      </div>
+
+      <div class="col">
+        <h2>Satisfaction matrix</h2>
+        <div id="matrix"></div>
+
+        <h2 style="margin-top: 1rem;">Compile errors (if any)</h2>
+        <div id="diags"></div>
+      </div>
+    </div>
+
+    <script>
+      const TYPES = ["SendGrid", "FakeSender"];
+      const METHODS = ["Send", "Close"];
+
+      // state[type][method] = "ptr" | "val" | null
+      const state = {
+        SendGrid:   { Send: "ptr", Close: null },
+        FakeSender: { Send: "val", Close: "val" },
+      };
+
+      document.querySelectorAll(".type").forEach((t) => {
+        const type = t.dataset.type;
+        t.querySelectorAll(".toggle").forEach((b) => {
+          const method = b.dataset.method;
+          const recv = b.dataset.recv;
+          syncBtn();
+          b.addEventListener("click", () => {
+            // toggling the active receiver clears it; otherwise sets it
+            const cur = state[type][method];
+            if (cur === recv) state[type][method] = null;
+            else state[type][method] = recv;
+            syncRow();
+            render();
+          });
+          function syncBtn() {
+            b.classList.toggle("on", state[type][method] === recv);
+            b.classList.toggle("ptr", recv === "ptr" && state[type][method] === recv);
+          }
+          function syncRow() {
+            t.querySelectorAll(".toggle").forEach((other) => {
+              const otherMethod = other.dataset.method;
+              const otherRecv = other.dataset.recv;
+              other.classList.toggle("on", state[type][otherMethod] === otherRecv);
+              other.classList.toggle("ptr", otherRecv === "ptr" && state[type][otherMethod] === otherRecv);
+            });
+          }
+        });
+      });
+
+      function methodSet(type, asPointer) {
+        // value method set = methods declared (val) only
+        // pointer method set = methods declared (val) OR (ptr)
+        const out = {};
+        for (const m of METHODS) {
+          const recv = state[type][m];
+          if (!recv) out[m] = false;
+          else if (recv === "val") out[m] = true;
+          else out[m] = asPointer; // ptr method only callable via pointer
+        }
+        return out;
+      }
+
+      function satisfies(set, required) {
+        return required.every((m) => set[m]);
+      }
+
+      function render() {
+        const matrix = document.getElementById("matrix");
+        const diags = document.getElementById("diags");
+
+        const rows = [];
+        for (const type of TYPES) {
+          for (const variant of ["value", "pointer"]) {
+            const set = methodSet(type, variant === "pointer");
+            const senderOK    = satisfies(set, ["Send"]);
+            const closerOK    = satisfies(set, ["Close"]);
+            const sendCloserOK = senderOK && closerOK;
+            const sym = (b) => b ? '<span class="yes">satisfies</span>' : '<span class="no">no</span>';
+            const label = variant === "pointer" ? `*${type}` : type;
+            rows.push(`<tr>
+              <td>${label}</td>
+              <td>${sym(senderOK)}</td>
+              <td>${sym(closerOK)}</td>
+              <td>${sym(sendCloserOK)}</td>
+            </tr>`);
+          }
+        }
+        matrix.innerHTML = `
+          <table class="iface">
+            <thead><tr><th>Receiver</th><th>Sender</th><th>Closer</th><th>SendCloser</th></tr></thead>
+            <tbody>${rows.join("")}</tbody>
+          </table>
+        `;
+
+        // diagnostics — failing value assignments highlighted
+        const errs = [];
+        for (const type of TYPES) {
+          const valSet = methodSet(type, false);
+          const ptrSet = methodSet(type, true);
+
+          // try var _ Sender = T{}
+          if (!satisfies(valSet, ["Send"]) && satisfies(ptrSet, ["Send"])) {
+            errs.push(
+`./main.go:N:N: cannot use ${type}{} (value of type ${type}) as Sender value in variable declaration: ${type} does not implement Sender (method Send has pointer receiver)`
+            );
+          }
+          // try var _ Closer = T{}
+          if (!satisfies(valSet, ["Close"]) && satisfies(ptrSet, ["Close"])) {
+            errs.push(
+`./main.go:N:N: cannot use ${type}{} (value of type ${type}) as Closer value in variable declaration: ${type} does not implement Closer (method Close has pointer receiver)`
+            );
+          }
+          // missing method entirely
+          if (state[type].Send === null) {
+            errs.push(
+`./main.go:N:N: cannot use ${type}{} (or &${type}{}) as Sender value: ${type} does not implement Sender (missing method Send)`
+            );
+          }
+          if (state[type].Close === null) {
+            errs.push(
+`./main.go:N:N: cannot use ${type}{} (or &${type}{}) as Closer value: ${type} does not implement Closer (missing method Close)`
+            );
+          }
+        }
+
+        if (errs.length === 0) {
+          diags.innerHTML = '<div style="padding:0.55rem 0.7rem; background:#dcfce7; color:#166534; border-left:3px solid #16a34a; border-radius:0 5px 5px 0; font-family:ui-monospace,monospace; font-size:0.72rem;">No compile errors. Every assignment compiles cleanly.</div>';
+        } else {
+          diags.innerHTML = errs.map((e) => `<div class="diag">${e}</div>`).join("");
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>

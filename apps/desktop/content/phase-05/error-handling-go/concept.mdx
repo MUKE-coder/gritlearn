@@ -1,0 +1,268 @@
+## Error handling the Go way
+
+You've seen `if err != nil { return err }` a dozen times by now. This lesson is about everything *around* that line: what an error actually is, when to wrap it, when to *match* against it, and the three patterns (sentinels, custom types, wrapping) that cover 99% of real Go error handling.
+
+Once you internalise this, the explicit `err`-checking that looked verbose at first becomes one of the things you miss when you go back to languages with exceptions.
+
+<Analogy>
+Most languages treat errors as **a sideways escape hatch.** You write happy-path code; if something fails an exception is thrown *out of band*, climbing the stack until something catches it. The control flow is invisible at the call site.
+
+Go treats errors as **regular return values with one shared interface.** Every error you'll ever handle satisfies one trivial interface:
+
+```go
+type error interface {
+    Error() string
+}
+```
+
+That's it. Anything with an `Error() string` method is an `error`. `nil` means success; anything else means failure. There's no exception type hierarchy, no `try` block, no `catch`. The control flow is right there in the code — you can read it linearly.
+
+Three follow-on effects worth internalising:
+
+1. **Errors carry context as you propagate.** When an error bubbles up four layers, each layer can wrap it: `fmt.Errorf("loadOrder %s: %w", id, err)`. By the time it's logged, the message is a breadcrumb trail: `"handler: loadOrder o-42: db query: connection refused"`. No stack trace needed.
+
+2. **You can match errors by VALUE or by TYPE.** Sometimes you need to know "was this the 'not found' error?" — `errors.Is(err, sql.ErrNoRows)`. Sometimes you need the structured fields of the error — `var pe *pq.Error; errors.As(err, &pe)`. The toolkit is small and consistent.
+
+3. **Panics are for programmer bugs, NOT for normal errors.** A nil pointer dereference panics; an HTTP request failing returns an error. In application code you rarely write `panic`. Library code might recover() it on the way out; application code lets it crash.
+
+The hard part isn't writing `if err != nil`. It's deciding for each error: do I handle, wrap-and-propagate, or check this against a known cause? This lesson is the decision tree.
+</Analogy>
+
+### The error type is one tiny interface
+
+```go
+type error interface {
+    Error() string
+}
+```
+
+Any value with an `Error() string` method satisfies it. The stdlib gives you the two most common constructors:
+
+```go
+// Plain text — most common.
+err := errors.New("file not found")
+
+// Formatted — when you need to interpolate.
+err := fmt.Errorf("user %s has no posts (count = %d)", id, count)
+```
+
+### Three things you do with an error
+
+When a function returns `(T, error)` you have exactly three options:
+
+```go
+val, err := f()
+
+// 1. HANDLE — recover, fall back, log.
+if err != nil {
+    return defaultVal
+}
+
+// 2. PROPAGATE — pass it up, often with added context.
+if err != nil {
+    return Order{}, fmt.Errorf("loadOrder %s: %w", id, err)
+}
+
+// 3. MATCH — branch on what kind of error.
+if errors.Is(err, sql.ErrNoRows) {
+    return Order{}, nil    // empty is fine here
+}
+if err != nil {
+    return Order{}, err
+}
+```
+
+You'll pick (2) by default. (1) is a deliberate recovery — log + fall back. (3) is when the error's *identity* matters: "is this 'not found'?" "is this a constraint violation?"
+
+### Wrapping with `%w`
+
+The wrapping verb in `fmt.Errorf` is `%w`. It produces an error that **still contains the original** — `errors.Is` and `errors.As` can dig through:
+
+```go
+err := fmt.Errorf("loadOrder %s: %w", id, dbErr)
+
+// Later …
+errors.Is(err, sql.ErrNoRows)     // true if dbErr was sql.ErrNoRows
+```
+
+Compare with `%v`, which just stringifies and loses the chain:
+
+```go
+err := fmt.Errorf("loadOrder %s: %v", id, dbErr)
+errors.Is(err, sql.ErrNoRows)     // false — chain broken
+```
+
+**Always use `%w` when propagating.** `%v` is for log lines.
+
+### Three error patterns
+
+**1. Sentinel errors — values you compare against.**
+
+When a *condition* matters but no structured data:
+
+```go
+var ErrNotFound = errors.New("not found")
+var ErrForbidden = errors.New("forbidden")
+
+func loadUser(id string) (*User, error) {
+    if id == "" {
+        return nil, ErrNotFound
+    }
+    // …
+}
+
+// Caller:
+u, err := loadUser(id)
+if errors.Is(err, ErrNotFound) {
+    http.Error(w, "user not found", 404)
+    return
+}
+```
+
+Sentinel errors are package-level `var`s starting with `Err`. Stdlib examples: `io.EOF`, `sql.ErrNoRows`, `os.ErrNotExist`.
+
+**2. Custom error types — structured data with the failure.**
+
+When the *details* of the failure matter:
+
+```go
+type ValidationError struct {
+    Field   string
+    Message string
+}
+
+func (e *ValidationError) Error() string {
+    return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
+// Returning one:
+return nil, &ValidationError{Field: "email", Message: "invalid format"}
+
+// Caller — pull out the structured fields:
+var verr *ValidationError
+if errors.As(err, &verr) {
+    http.Error(w, verr.Field+": "+verr.Message, 422)
+}
+```
+
+`errors.As` walks the chain looking for an error of the target type. Useful for "I need to read fields off whatever kind of error this is."
+
+**3. Wrapping — context as the error bubbles up.**
+
+```go
+func loadOrder(id string) (Order, error) {
+    raw, err := db.Get("orders", id)
+    if err != nil {
+        return Order{}, fmt.Errorf("loadOrder %s: %w", id, err)
+    }
+    order, err := parseOrder(raw)
+    if err != nil {
+        return Order{}, fmt.Errorf("loadOrder %s parse: %w", id, err)
+    }
+    return order, nil
+}
+```
+
+When the handler logs the final error, it reads:
+
+```
+handler: loadOrder o-42 parse: invalid JSON at byte 4
+```
+
+Each layer added one breadcrumb. No stack trace, but a precise narrative of where the error came from. This is the Go style — informative messages instead of stack dumps.
+
+### `errors.Is` vs `errors.As`
+
+A simple mental model:
+
+```go
+errors.Is(err, ErrNotFound)        // "is this error (or any wrapped) equal to ErrNotFound?"
+errors.As(err, &targetVariable)    // "is there a *ValidationError in the chain? if so put it in target"
+```
+
+- **Use `errors.Is` for sentinels.** You're comparing identity.
+- **Use `errors.As` for typed errors.** You're extracting fields.
+
+Don't `err == ErrNotFound` directly anymore — if anyone wraps the error, the equality check breaks. `errors.Is` walks the chain.
+
+### Don't log AND return — pick one
+
+The cardinal sin of Go error handling:
+
+```go
+// WRONG — same error logged at every level on the way up.
+func loadOrder(id string) (Order, error) {
+    raw, err := db.Get("orders", id)
+    if err != nil {
+        log.Printf("db error: %v", err)        // ← noise
+        return Order{}, err                    //   propagated AND logged
+    }
+}
+```
+
+Pick exactly one boundary that owns logging — usually the HTTP handler or main(). Everything inside propagates with context; the boundary logs once. Otherwise your prod logs have the same error six times, once at each function it passed through.
+
+### `defer` + named returns — annotate every error
+
+A power move for adding context without 5 wrap calls:
+
+```go
+func loadOrder(id string) (o Order, err error) {
+    defer func() {
+        if err != nil {
+            err = fmt.Errorf("loadOrder %s: %w", id, err)
+        }
+    }()
+
+    raw, err := db.Get("orders", id)
+    if err != nil { return Order{}, err }
+
+    order, err := parseOrder(raw)
+    if err != nil { return Order{}, err }
+
+    return order, nil
+}
+```
+
+One annotation at the top wraps every error path. The trade-off: it's less explicit at the return site. Use it for short funcs with several return points; avoid in long ones where readers might miss the defer.
+
+### Panic — what it's for
+
+```go
+func mustParse(s string) int {
+    n, err := strconv.Atoi(s)
+    if err != nil {
+        panic(fmt.Sprintf("mustParse %q: %v", s, err))
+    }
+    return n
+}
+```
+
+Panic is the "I literally cannot continue" valve. The runtime unwinds the stack and crashes the program (unless someone `recover()`s). Use panic for:
+
+- **Programmer errors** — invariants you control: nil pointer in a path that should never be nil, an unhandled enum case.
+- **Init-time setup failures** — config malformed, can't connect to DB at startup. Crash the process.
+
+Never use panic for normal flow control. HTTP requests should not panic on bad input — they should return 400 and a wrapped error.
+
+### Recovering from a panic (in libraries only)
+
+```go
+defer func() {
+    if r := recover(); r != nil {
+        err = fmt.Errorf("recovered from panic: %v", r)
+    }
+}()
+```
+
+Libraries occasionally `recover()` at their public boundary to stop a panic from killing the caller's program. Application code generally doesn't — your top-level HTTP middleware might `recover()` to return a 500 instead of crashing the server, but that's it.
+
+<ExampleProject
+  src="error-wrapping"
+  title="Error wrapping playground — chain, match, extract"
+  description="Build an error chain from the inside out. Pick a base error (sentinel or typed), wrap it through three layers with %w or %v, then run errors.Is and errors.As against it. The chain-broken effect of %v becomes immediate."
+/>
+
+### What you can now build
+
+You can now write a Go function correctly under failure: return early, wrap with context, and let one boundary log the final message. Next: **pointers** — the explicit version of the value-vs-reference dance you've been doing implicitly with `*T` receivers and `&User{}`. Short lesson, but tightens up what `*` and `&` actually mean.

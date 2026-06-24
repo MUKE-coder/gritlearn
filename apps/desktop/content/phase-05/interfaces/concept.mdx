@@ -1,0 +1,231 @@
+## Interfaces
+
+Interfaces are Go's superpower. They're how you write code that works with **anything that has the right shape** — without inheritance, without `implements`, without ceremony. Once interfaces click, the rest of Go becomes simple: the standard library, every framework, every test you'll ever write uses them the same way.
+
+This is the final load-bearing primitive in Go's type system. After this lesson you can read any Go codebase and understand its structure.
+
+<Analogy>
+A Java interface is a **contract you sign upfront**: `class Dog implements Animal { … }`. You declare the relationship at the class definition. The compiler checks it.
+
+A Go interface is **a shape that any matching value silently fits**. There is no `implements` keyword. If a type happens to have the methods the interface requires, it satisfies that interface — automatically, no ceremony. Sometimes the author of the type didn't even know the interface existed.
+
+```go
+type Greeter interface {
+    Greet() string
+}
+
+type Dog struct{}
+func (d Dog) Greet() string { return "woof" }
+
+// No "Dog implements Greeter" anywhere. Dog just happens to have
+// Greet() string, so it IS a Greeter wherever one is needed.
+var g Greeter = Dog{}
+fmt.Println(g.Greet())   // woof
+```
+
+This is **structural typing** — Go cares about shape, not name. (TypeScript fans: same idea as TS interfaces; nothing like Java's nominal `implements`.) Three follow-on effects:
+
+1. **Interfaces can be added retroactively.** Someone publishes a `Logger` interface in package A; your existing `MyLogger` in package B suddenly satisfies it because it has the methods. No code change needed.
+
+2. **Small interfaces dominate.** Go culture says "the bigger the interface, the weaker the abstraction." The most-used stdlib interfaces have ONE method: `io.Reader`, `io.Writer`, `fmt.Stringer`, `error`. They compose into bigger contracts when needed.
+
+3. **The interface lives where it's USED, not where it's IMPLEMENTED.** If your function needs "something I can call Write on," define a one-method `Writer` interface right there. Don't ask the caller to import a fat shared type.
+
+The way you internalise this: stop reading interfaces as "a class will inherit from this." Read them as "any value that has these methods works here." It's a filter on values, not a parent-class declaration.
+</Analogy>
+
+### Declaring an interface
+
+```go
+type Stringer interface {
+    String() string
+}
+```
+
+That's it. An interface is a **set of method signatures**. Any type that has all of them — regardless of where, when, or by whom it was defined — satisfies the interface.
+
+### Satisfying an interface
+
+```go
+type User struct {
+    Name string
+    Age  int
+}
+
+func (u User) String() string {
+    return fmt.Sprintf("%s (%d)", u.Name, u.Age)
+}
+
+// User now satisfies Stringer. Also satisfies fmt.Stringer from the
+// stdlib — same shape, different name, same effect.
+var s Stringer = User{Name: "Ava", Age: 30}
+fmt.Println(s.String())   // Ava (30)
+fmt.Println(User{Name: "Ava", Age: 30})  // Ava (30) — fmt detects fmt.Stringer
+```
+
+No `implements` keyword. The compiler checks at the assignment site (`var s Stringer = User{…}`) — if `User` is missing a method, it's a compile error there with a clear message: `User does not implement Stringer (missing String method)`.
+
+### The empty interface — `any`
+
+An interface with zero methods is satisfied by EVERY type — there's nothing to check. Go 1.18 added `any` as a shorter spelling:
+
+```go
+var x any = 42
+x = "hello"
+x = []int{1, 2, 3}
+x = User{}
+```
+
+`any` is Go's `Object`. You'll see it on functions that genuinely take "anything" — `fmt.Println(args ...any)`, `json.Marshal(v any)`, generic data structures. But every time you write `any` you're punting type information to runtime — use it sparingly, prefer a specific interface or generic when one fits.
+
+### Type assertions — getting the concrete type back
+
+Once a value is wrapped in an interface, the concrete type is hidden. To unwrap:
+
+```go
+var x any = User{Name: "Ava"}
+
+u := x.(User)            // type assertion — panics if x isn't a User
+fmt.Println(u.Name)      // "Ava"
+
+u, ok := x.(User)        // safe form — ok is false if assertion fails
+if !ok {
+    fmt.Println("not a User")
+}
+```
+
+**Always use the two-value form** unless you're certain the assertion can't fail. The compiler doesn't help here — single-value assertions panic at runtime.
+
+### Type switches — branching on what's inside
+
+When you have a `any` and want to branch on multiple types:
+
+```go
+func describe(x any) string {
+    switch v := x.(type) {
+    case int:
+        return fmt.Sprintf("int %d", v)
+    case string:
+        return fmt.Sprintf("string %q", v)
+    case User:
+        return fmt.Sprintf("user %s", v.Name)
+    default:
+        return "unknown"
+    }
+}
+```
+
+`switch v := x.(type)` is the type-switch syntax. `v` takes on the matched concrete type inside each case — typed, no further assertion needed.
+
+### The 4 interfaces every Go program uses
+
+| Interface | Method | Where you meet it |
+|---|---|---|
+| `error` | `Error() string` | Every function that can fail returns one |
+| `fmt.Stringer` | `String() string` | Anything you `fmt.Println` — Go calls `String()` if it exists |
+| `io.Reader` | `Read(p []byte) (int, error)` | Files, HTTP request bodies, gzipped streams, strings |
+| `io.Writer` | `Write(p []byte) (int, error)` | Files, HTTP response writers, network connections, buffers |
+
+The deep insight: every byte-stream in Go reduces to `io.Reader` / `io.Writer`. A file IS a Reader. The HTTP body IS a Reader. The network connection IS a Reader. You can `io.Copy(dst, src)` between any two of them and it just works — the type system itself defines the seam.
+
+### Defining your own — the pattern
+
+Define an interface **at the call site** for what you depend on. Not at the implementation:
+
+```go
+// In your billing package:
+type EmailSender interface {
+    Send(to, subject, body string) error
+}
+
+func SendInvoice(s EmailSender, userID string) error {
+    return s.Send("u@x", "Invoice", "$42")
+}
+
+// In your sendgrid package:
+type SendGridClient struct{ apiKey string }
+func (c *SendGridClient) Send(to, subject, body string) error { … }
+```
+
+Now `SendInvoice` works with any sender — SendGrid in production, a fake in tests, a logger that just prints in dev. The billing package doesn't depend on SendGrid; SendGrid doesn't know billing exists. They meet at the interface.
+
+This is **dependency inversion** by structural typing. No DI containers, no decorators, no annotations. Just an interface defined where it's needed.
+
+### Value vs pointer receivers and interface satisfaction
+
+This is the trap that hits everyone in their first month:
+
+```go
+type Counter struct{ N int }
+
+func (c *Counter) Increment() {   // pointer receiver
+    c.N++
+}
+
+type Incrementer interface {
+    Increment()
+}
+
+var i Incrementer = Counter{}    // ERROR: Counter does not satisfy Incrementer
+                                  // (Increment requires pointer receiver)
+var i Incrementer = &Counter{}   // OK — *Counter is in the method set
+```
+
+Rule: **if any method on your type uses a pointer receiver, only `*Type` satisfies interfaces — never the value form.** Pass pointers when you store something in an interface variable.
+
+### nil interfaces vs typed nils — the gotcha
+
+Two ways an interface variable can look "empty":
+
+```go
+var err error          // err is the nil interface — fmt prints <nil>
+fmt.Println(err == nil) // true
+
+func bad() error {
+    var e *MyError      // *MyError is nil
+    return e            // returns a non-nil INTERFACE wrapping a nil POINTER
+}
+err = bad()
+fmt.Println(err == nil) // FALSE — surprising!
+```
+
+The interface holds two slots: (type, value). Comparing an interface to `nil` only matches if **both** slots are nil. A typed nil leaks through and makes `err != nil` even though the underlying value is a nil pointer. This is the source of countless production bugs.
+
+The fix: return a bare `nil`, never a typed-nil pointer:
+
+```go
+func good() error {
+    var e *MyError
+    if e == nil {
+        return nil    // bare nil — the interface is truly empty
+    }
+    return e
+}
+```
+
+### Composing interfaces
+
+Small interfaces compose into bigger ones:
+
+```go
+type Reader interface { Read(p []byte) (int, error) }
+type Closer interface { Close() error }
+
+type ReadCloser interface {
+    Reader
+    Closer
+}
+// HTTP response bodies, gzip readers, decoders all satisfy this.
+```
+
+Embedded interfaces add their method set to the new one. This is how `io.ReadCloser`, `io.WriteCloser`, `io.ReadWriteCloser` are built — composition all the way down.
+
+<ExampleProject
+  src="interface-satisfaction"
+  title="Interface satisfaction — explore method sets live"
+  description="Toggle methods on/off on a SendGrid and a FakeSender, then watch which interfaces each one satisfies. See exactly what gets the dreaded 'does not implement' compile error and why."
+/>
+
+### What you can now build
+
+Combined with structs and methods, interfaces let you write any Go service. The HTTP layer takes a `Handler` interface, the DB layer takes a `Querier`, the test takes a fake — every seam is an interface. Next: **slices and maps**, the two collection types you'll reach for a hundred times a day. After that, error handling done the Go way.

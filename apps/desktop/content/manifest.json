@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "phases": [
     {
       "id": "phase-01",
@@ -143,9 +143,9 @@
         { "slug": "phase-05/functions", "title": "Functions and multiple return values", "available": true },
         { "slug": "phase-05/structs", "title": "Structs", "available": true },
         { "slug": "phase-05/methods-receivers", "title": "Methods and receivers", "available": true },
-        { "slug": "phase-05/interfaces", "title": "Interfaces", "available": false },
-        { "slug": "phase-05/slices-maps", "title": "Slices and maps", "available": false },
-        { "slug": "phase-05/error-handling-go", "title": "Error handling the Go way", "available": false },
+        { "slug": "phase-05/interfaces", "title": "Interfaces", "available": true },
+        { "slug": "phase-05/slices-maps", "title": "Slices and maps", "available": true },
+        { "slug": "phase-05/error-handling-go", "title": "Error handling the Go way", "available": true },
         { "slug": "phase-05/pointers", "title": "Pointers", "available": false },
         { "slug": "phase-05/packages", "title": "Packages and project structure", "available": false },
         { "slug": "phase-05/goroutines", "title": "Goroutines", "available": false },
