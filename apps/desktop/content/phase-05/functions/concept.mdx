@@ -1,0 +1,224 @@
+## Functions and multiple return values
+
+Functions in Go look familiar — `func name(args) returnType { body }` — but they carry one feature that shapes the entire language: **multiple return values**. Every Go function you read for the next twenty lessons will use this. Internalise it now and the rest of Go reads cleanly.
+
+<Analogy>
+Most languages give functions **one drawer to put the answer in.** Call it, the answer comes back, you take it out. If something went wrong, you find out via an exception thrown sideways — a separate channel from the answer drawer.
+
+Go gives functions **two drawers, side by side.** The answer goes in the first; an error (or any second thing — a count, a status, an OK-flag) goes in the second. Every call site opens both drawers at once:
+
+```
+val, err := f()
+       ^   ^
+       │   └── second drawer: usually the error (or "ok")
+       └────── first drawer: the answer
+```
+
+Three follow-on effects:
+
+1. **Errors stop being thrown.** They are *returned*. You can't ignore them by forgetting to wrap in try/catch — the compiler complains about unused values. Every error must be either handled or explicitly discarded (`_ = f()`). Production codebases grow up never accidentally swallowing an exception.
+
+2. **Status and value coexist.** `n, err := db.Exec("UPDATE …")` returns the rows-affected count AND the error in the same call. Maps return a value AND an "ok" flag in the same lookup. Type assertions return the result AND whether the assertion held. The two-drawer pattern is everywhere.
+
+3. **Named returns let you document at the signature line.** `func parseURL(s string) (host string, port int, err error)` is self-describing — readers know what each drawer holds without reading the body.
+
+The two-drawer mental model is what makes `if err != nil { return err }` feel native instead of repetitive. It's not a wart — it's the language's whole error-handling story made syntactic.
+</Analogy>
+
+### Anatomy of a Go function
+
+```go
+//  ┌─ keyword
+//  │     ┌─ name              ┌─ return types
+//  │     │                    │
+//  ▼     ▼                    ▼
+    func add(a int, b int) (int, error) {
+//           ▲       ▲
+//           │       └─ second parameter — repeat the type
+//           └─ first parameter
+        if a < 0 || b < 0 {
+            return 0, fmt.Errorf("negative numbers not supported: %d, %d", a, b)
+        }
+        return a + b, nil
+    }
+```
+
+Three details:
+
+- **Types come AFTER the name.** Unlike Java or TypeScript, the type follows the identifier. `func add(a int, b int)`, not `func add(int a, int b)`.
+
+- **Identical types collapse.** `func add(a int, b int)` can be shortened to `func add(a, b int)` — Go infers that both share the type `int`.
+
+- **Multiple returns wrap in parens.** `func f() int` works for one return; `func f() (int, error)` needs the parens when there's more than one.
+
+### Calling and assigning
+
+```go
+sum, err := add(2, 3)
+if err != nil {
+    return err           // propagate
+}
+fmt.Println(sum)         // 5
+```
+
+`:=` declares + assigns in one step (you saw this in the variables lesson). The `if err != nil { return err }` pattern is **the** Go idiom — you'll write it dozens of times per file. Embrace it.
+
+### Ignoring values with `_`
+
+If you don't need one of the returns:
+
+```go
+sum, _ := add(2, 3)              // discard the error (be careful — usually wrong)
+_, err := add(2, 3)              // discard the sum (you only care if it errored)
+```
+
+`_` is the **blank identifier**. It lets you receive a value without using it. The compiler stops complaining about "declared and not used" because `_` isn't a real declaration.
+
+**Resist using `_` for errors.** The whole point of two drawers is that errors aren't ignored. If you genuinely don't care about the error, comment why.
+
+### Named return values
+
+You can name the return values in the signature, which (a) documents what each one is and (b) lets you use `return` with no arguments:
+
+```go
+func splitHostPort(addr string) (host string, port int, err error) {
+    // host, port, err are already declared as local variables — initialised to ""/0/nil.
+    parts := strings.Split(addr, ":")
+    if len(parts) != 2 {
+        err = fmt.Errorf("expected host:port, got %q", addr)
+        return    // returns the current values of host, port, err
+    }
+    host = parts[0]
+    port, err = strconv.Atoi(parts[1])
+    return    // implicit — same as `return host, port, err`
+}
+```
+
+Two warnings:
+
+- **Don't overdo it.** Named returns shine on functions with 2-3 returns and short bodies. For long bodies, naked `return` becomes a footgun — readers can't tell what's being returned without scrolling up.
+
+- **Naked `return` is bait for shadowing bugs.** If you redeclare `err` inside the body with `:=` you'll return the outer one. Just write the return value explicitly when in doubt.
+
+### Variadic functions
+
+A function can accept any number of trailing args of the same type:
+
+```go
+func sum(nums ...int) int {
+    total := 0
+    for _, n := range nums {
+        total += n
+    }
+    return total
+}
+
+sum(1, 2, 3)           // 6
+sum(1, 2, 3, 4, 5)     // 15
+sum()                  // 0 — nums is an empty []int
+```
+
+Inside the function, `nums` is a slice. To pass an existing slice as variadic args, use the `...` spread at the call site:
+
+```go
+nums := []int{1, 2, 3}
+sum(nums...)           // 6
+```
+
+The classic variadic in stdlib is `fmt.Printf(format, args...)`. You'll write your own when you have a helper that takes "any number of these."
+
+### Functions as values
+
+Functions in Go are **first-class** — you can store them in variables, pass them as arguments, return them from other functions:
+
+```go
+// Store in a variable.
+add := func(a, b int) int { return a + b }
+fmt.Println(add(2, 3))   // 5
+
+// Pass as argument.
+func mapInts(nums []int, fn func(int) int) []int {
+    out := make([]int, len(nums))
+    for i, n := range nums {
+        out[i] = fn(n)
+    }
+    return out
+}
+
+doubled := mapInts([]int{1, 2, 3}, func(n int) int { return n * 2 })
+// [2, 4, 6]
+```
+
+Anonymous functions (the `func(…) …` literals) work as closures over the enclosing scope, the same way JS arrow functions do. Useful but less ubiquitous than you'd expect — Go developers tend to prefer named functions for readability.
+
+### `defer` — guaranteed cleanup
+
+Three keywords every Go function uses: `func`, `return`, and `defer`. The third defers a call until the surrounding function returns, no matter how:
+
+```go
+func readFile(path string) error {
+    f, err := os.Open(path)
+    if err != nil {
+        return err
+    }
+    defer f.Close()       // runs when readFile returns, even on panic
+
+    // … do stuff with f …
+    return nil
+}
+```
+
+Three rules:
+
+1. **`defer` runs in LIFO order** if you defer multiple things. The last `defer` registered runs first.
+2. **Arguments are evaluated at defer time, but the call happens at return time.** `defer fmt.Println(x)` captures the current value of `x` immediately.
+3. **Defer is for cleanup**: closing files, unlocking mutexes, ending DB transactions, rolling back, logging completion. Don't defer business logic — readers expect cleanup.
+
+The pattern in HTTP handlers:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    tx, err := db.Begin()
+    if err != nil { http.Error(w, err.Error(), 500); return }
+    defer tx.Rollback()    // rolls back unless we explicitly commit
+
+    // … do work …
+
+    if err := tx.Commit(); err != nil {
+        http.Error(w, err.Error(), 500)
+        return
+    }
+}
+```
+
+Rollback is a no-op after a successful commit, so this is safe. The function leaves either with a committed transaction or a rolled-back one. You never have to remember to clean up.
+
+### Errors as values — the propagation idiom
+
+```go
+func loadUser(id string) (*User, error) {
+    raw, err := db.Get("users", id)
+    if err != nil {
+        return nil, fmt.Errorf("loadUser %s: %w", id, err)
+    }
+    user, err := parseUser(raw)
+    if err != nil {
+        return nil, fmt.Errorf("loadUser %s: %w", id, err)
+    }
+    return user, nil
+}
+```
+
+`fmt.Errorf` with `%w` wraps an error, adding context to it. The receiver can unwrap with `errors.Is` and `errors.As` — full coverage in the Errors lesson.
+
+The pattern repeats: call something, check err, propagate with context. After a few days the rhythm becomes invisible and the explicit error chain becomes a feature — you can read back through a stack trace and see exactly which function added each piece of context.
+
+<ExampleProject
+  src="multi-return-trace"
+  title="Multi-return walkthrough — every call site, every drawer"
+  description="Step through a real Go function with five chained calls. Each call's two return values (value + error) light up; you choose which path to take (happy / parse failed / DB failed / OK but empty) and the function's behaviour follows."
+/>
+
+### What you can now build
+
+After this lesson you can write any pure-function logic the same way you would in JS or Python — only with explicit types and a clean error-propagation discipline. Next up: **structs**, the way Go represents your domain types. Structs + functions + multiple returns are the three load-bearing primitives. Then methods + interfaces, and you have the whole imperative core of the language.

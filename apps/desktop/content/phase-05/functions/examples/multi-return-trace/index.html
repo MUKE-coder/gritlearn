@@ -1,0 +1,250 @@
+<!--
+  Multi-return trace. A 5-call Go function (loadOrder). Reader picks
+  which return shape each call hands back (happy, parse failed, DB
+  failed, OK but empty) and watches the function's flow follow.
+  Teaches the "val, err := …; if err != nil { return err }" rhythm
+  by showing every branch concretely.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Multi-return walkthrough</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 10px; padding: 1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.6; margin: 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .lit     { color: #f87171; }
+
+      .call {
+        margin: 0.4rem 0; padding: 0.5rem 0.7rem;
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+        font-size: 0.78rem;
+      }
+      .call .head { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+      .call .pills { display: flex; gap: 0.35rem; margin-top: 0.4rem; flex-wrap: wrap; }
+      .call .pill {
+        font-family: ui-monospace, monospace; font-size: 0.7rem;
+        padding: 0.22rem 0.55rem; border-radius: 4px;
+        border: 1px solid #d4d4d8; background: #fff; cursor: pointer;
+      }
+      .call .pill.active.ok    { background: #16a34a; color: #fff; border-color: #16a34a; }
+      .call .pill.active.bad   { background: #dc2626; color: #fff; border-color: #dc2626; }
+      .call .pill.active.warn  { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+
+      .verdict {
+        margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 10px;
+        font-size: 0.9rem; font-weight: 600;
+      }
+      .verdict.ok    { background: #dcfce7; color: #166534; }
+      .verdict.fail  { background: #fee2e2; color: #7f1d1d; }
+      .verdict.empty { background: #fef3c7; color: #92400e; }
+
+      .trace {
+        margin-top: 0.6rem; padding: 0.55rem 0.7rem;
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        background: #fff; border-left: 3px solid #d4d4d8; border-radius: 0 6px 6px 0;
+        white-space: pre-wrap;
+      }
+      .trace.bad { border-left-color: #dc2626; background: #fef2f2; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>Multi-return walkthrough — every call site, every drawer</h1>
+    <p class="intro">A real Go function with five chained calls. Pick what each call returns and watch the function's flow follow. The error-propagation rhythm becomes muscle memory.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>loadOrder(id string) (Order, error)</h2>
+        <pre class="code">
+<span class="keyword">func</span> loadOrder(id <span class="keyword">string</span>) (Order, <span class="keyword">error</span>) {
+<span id="line-1">    raw, err := db.Get(<span class="string">"orders"</span>, id)
+    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+        <span class="keyword">return</span> Order{}, fmt.Errorf(<span class="string">"db get: %w"</span>, err)
+    }</span>
+<span id="line-2">    order, err := parseOrder(raw)
+    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+        <span class="keyword">return</span> Order{}, fmt.Errorf(<span class="string">"parse: %w"</span>, err)
+    }</span>
+<span id="line-3">    items, err := loadItems(order.ID)
+    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+        <span class="keyword">return</span> Order{}, fmt.Errorf(<span class="string">"items: %w"</span>, err)
+    }
+    order.Items = items</span>
+<span id="line-4">    total, err := computeTotal(items)
+    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+        <span class="keyword">return</span> Order{}, fmt.Errorf(<span class="string">"total: %w"</span>, err)
+    }
+    order.Total = total</span>
+<span id="line-5">    <span class="keyword">return</span> order, <span class="keyword">nil</span></span>
+}</pre>
+      </div>
+
+      <div class="col">
+        <h2>Pick each call's outcome</h2>
+
+        <div class="call" data-step="1">
+          <div class="head">1. <code>db.Get("orders", id)</code></div>
+          <div class="pills">
+            <button class="pill" data-out="ok">OK · raw bytes</button>
+            <button class="pill" data-out="bad">DB error</button>
+          </div>
+        </div>
+
+        <div class="call" data-step="2">
+          <div class="head">2. <code>parseOrder(raw)</code></div>
+          <div class="pills">
+            <button class="pill" data-out="ok">OK · order</button>
+            <button class="pill" data-out="bad">parse error</button>
+          </div>
+        </div>
+
+        <div class="call" data-step="3">
+          <div class="head">3. <code>loadItems(order.ID)</code></div>
+          <div class="pills">
+            <button class="pill" data-out="ok">OK · 3 items</button>
+            <button class="pill" data-out="warn">OK · empty slice</button>
+            <button class="pill" data-out="bad">DB error</button>
+          </div>
+        </div>
+
+        <div class="call" data-step="4">
+          <div class="head">4. <code>computeTotal(items)</code></div>
+          <div class="pills">
+            <button class="pill" data-out="ok">OK · total</button>
+            <button class="pill" data-out="bad">overflow error</button>
+          </div>
+        </div>
+
+        <div id="verdict"></div>
+        <div id="trace"></div>
+      </div>
+    </div>
+
+    <script>
+      const state = { 1: "ok", 2: "ok", 3: "ok", 4: "ok" };
+
+      // hook pills
+      document.querySelectorAll(".call").forEach((c) => {
+        const step = Number(c.dataset.step);
+        c.querySelectorAll(".pill").forEach((p) => {
+          if (p.dataset.out === state[step]) p.classList.add("active", p.dataset.out);
+          p.addEventListener("click", () => {
+            state[step] = p.dataset.out;
+            c.querySelectorAll(".pill").forEach((q) => q.classList.remove("active", "ok", "bad", "warn"));
+            p.classList.add("active", p.dataset.out);
+            render();
+          });
+        });
+      });
+
+      function render() {
+        // reset highlights
+        for (let i = 1; i <= 5; i++) {
+          const el = document.getElementById("line-" + i);
+          if (el) el.style.background = "";
+        }
+
+        const verdict = document.getElementById("verdict");
+        const trace   = document.getElementById("trace");
+
+        const log = [];
+
+        // step 1
+        log.push("→ db.Get(\"orders\", id)");
+        if (state[1] === "bad") {
+          log.push("   err != nil → return Order{}, fmt.Errorf(\"db get: %w\", err)");
+          flash(1);
+          verdict.className = "verdict fail";
+          verdict.textContent = '✗ loadOrder returned: "db get: <pq error>"';
+          trace.className = "trace bad";
+          trace.textContent = log.join("\n");
+          return;
+        }
+        log.push("   raw = []byte{…}, err = nil");
+
+        // step 2
+        log.push("→ parseOrder(raw)");
+        if (state[2] === "bad") {
+          log.push("   err != nil → return Order{}, fmt.Errorf(\"parse: %w\", err)");
+          flash(2);
+          verdict.className = "verdict fail";
+          verdict.textContent = '✗ loadOrder returned: "parse: invalid JSON at byte 4"';
+          trace.className = "trace bad";
+          trace.textContent = log.join("\n");
+          return;
+        }
+        log.push("   order = Order{ID:\"o-42\", …}, err = nil");
+
+        // step 3
+        log.push("→ loadItems(order.ID)");
+        if (state[3] === "bad") {
+          log.push("   err != nil → return Order{}, fmt.Errorf(\"items: %w\", err)");
+          flash(3);
+          verdict.className = "verdict fail";
+          verdict.textContent = '✗ loadOrder returned: "items: timeout after 5s"';
+          trace.className = "trace bad";
+          trace.textContent = log.join("\n");
+          return;
+        }
+        const items = state[3] === "warn" ? "[]Item{}" : "[]Item{a, b, c}";
+        log.push("   items = " + items + ", err = nil");
+
+        // step 4
+        log.push("→ computeTotal(items)");
+        if (state[4] === "bad") {
+          log.push("   err != nil → return Order{}, fmt.Errorf(\"total: %w\", err)");
+          flash(4);
+          verdict.className = "verdict fail";
+          verdict.textContent = '✗ loadOrder returned: "total: int overflow"';
+          trace.className = "trace bad";
+          trace.textContent = log.join("\n");
+          return;
+        }
+        log.push("   total = " + (state[3] === "warn" ? "0" : "47.50") + ", err = nil");
+
+        // happy path
+        log.push("→ return order, nil");
+        flash(5);
+        if (state[3] === "warn") {
+          verdict.className = "verdict empty";
+          verdict.textContent = "✓ loadOrder returned an empty order. The function succeeded — your caller has to decide whether 0 items is an error.";
+        } else {
+          verdict.className = "verdict ok";
+          verdict.textContent = "✓ loadOrder returned: Order{ID:\"o-42\", Items:[a,b,c], Total:47.50}";
+        }
+        trace.className = "trace";
+        trace.textContent = log.join("\n");
+      }
+
+      function flash(line) {
+        const el = document.getElementById("line-" + line);
+        if (!el) return;
+        el.style.background = "rgba(255, 200, 0, 0.2)";
+        el.style.borderRadius = "4px";
+      }
+
+      render();
+    </script>
+  </body>
+</html>

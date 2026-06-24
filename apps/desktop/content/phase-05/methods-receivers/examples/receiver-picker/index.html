@@ -1,0 +1,257 @@
+<!--
+  Receiver picker. Reader chooses value or pointer receiver for two
+  methods on a Wallet (Deposit + Balance). The simulator runs a tiny
+  scenario and shows: (a) whether mutations actually stuck, (b) which
+  method set the value/pointer has, (c) whether interface satisfaction
+  works for the chosen combination.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Receiver picker — value vs pointer</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .col {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1rem 1.1rem;
+        background: #fafafa;
+      }
+      .col h2 {
+        margin: 0 0 0.6rem; font-size: 0.74rem; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #71717a;
+      }
+
+      .picker {
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 8px;
+        padding: 0.6rem 0.7rem; margin-bottom: 0.6rem;
+      }
+      .picker .label { font-family: ui-monospace, monospace; font-size: 0.78rem; margin-bottom: 0.45rem; }
+      .picker .opts { display: flex; gap: 0.4rem; }
+      .picker .opt {
+        flex: 1;
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        padding: 0.4rem 0.55rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        background: #fff; cursor: pointer; text-align: left;
+      }
+      .picker .opt.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      pre.code {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.76rem;
+        line-height: 1.55; margin: 0.5rem 0 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .recv    { color: #f472b6; }
+
+      .trace {
+        margin-top: 0.5rem; padding: 0.55rem 0.75rem;
+        font-family: ui-monospace, monospace; font-size: 0.74rem;
+        background: #fff; border-left: 3px solid #d4d4d8; border-radius: 0 6px 6px 0;
+        white-space: pre-wrap;
+      }
+
+      .verdict {
+        margin-top: 0.8rem; padding: 0.7rem 0.9rem;
+        border-radius: 8px; font-size: 0.85rem; font-weight: 500;
+      }
+      .verdict.ok    { background: #dcfce7; color: #166534; border-left: 3px solid #16a34a; }
+      .verdict.bad   { background: #fef2f2; color: #7f1d1d; border-left: 3px solid #dc2626; }
+      .verdict.warn  { background: #fef3c7; color: #92400e; border-left: 3px solid #f59e0b; }
+
+      .methodSet { font-family: ui-monospace, monospace; font-size: 0.74rem; }
+      .methodSet table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
+      .methodSet th, .methodSet td {
+        border-bottom: 1px solid #e4e4e7; padding: 0.35rem 0.4rem; text-align: left;
+      }
+      .methodSet th { font-size: 0.66rem; text-transform: uppercase; color: #71717a; letter-spacing: 0.08em; font-weight: 600; }
+      .yes { color: #15803d; font-weight: 600; }
+      .no  { color: #dc2626; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Receiver picker — value vs pointer, side by side</h1>
+    <p class="intro">Pick a receiver for each method on the same Wallet struct. The compiled code, the simulated run, and the method set all update live. The rules become muscle memory in about three goes.</p>
+
+    <div class="grid">
+      <div class="col">
+        <h2>Pick your receivers</h2>
+
+        <div class="picker" data-method="deposit">
+          <div class="label">func (w <span class="recv">?</span>) Deposit(amount int)</div>
+          <div class="opts">
+            <button class="opt" data-val="value">(w Wallet) — value</button>
+            <button class="opt" data-val="pointer">(w *Wallet) — pointer</button>
+          </div>
+        </div>
+
+        <div class="picker" data-method="balance">
+          <div class="label">func (w <span class="recv">?</span>) Balance() int</div>
+          <div class="opts">
+            <button class="opt" data-val="value">(w Wallet) — value</button>
+            <button class="opt" data-val="pointer">(w *Wallet) — pointer</button>
+          </div>
+        </div>
+
+        <h2 style="margin-top: 1rem;">Compiled code</h2>
+        <pre class="code" id="code"></pre>
+      </div>
+
+      <div class="col">
+        <h2>Run the scenario</h2>
+        <pre class="code">w := Wallet{N: <span class="number">100</span>}
+w.Deposit(<span class="number">50</span>)
+fmt.Println(w.Balance())</pre>
+
+        <div class="trace" id="trace"></div>
+        <div class="verdict" id="verdict"></div>
+
+        <h2 style="margin-top: 1rem;">Method sets</h2>
+        <div class="methodSet" id="methodSet"></div>
+
+        <h2 style="margin-top: 1rem;">Interface satisfaction</h2>
+        <pre class="code"><span class="keyword">type</span> Account <span class="keyword">interface</span> {
+    Deposit(amount <span class="keyword">int</span>)
+    Balance() <span class="keyword">int</span>
+}
+
+<span class="keyword">var</span> a Account = w   <span class="comment">// value</span>
+<span class="keyword">var</span> b Account = &w  <span class="comment">// pointer</span></pre>
+        <div class="verdict" id="iface"></div>
+      </div>
+    </div>
+
+    <script>
+      const state = { deposit: "value", balance: "value" };
+
+      document.querySelectorAll(".picker").forEach((p) => {
+        const m = p.dataset.method;
+        p.querySelectorAll(".opt").forEach((o) => {
+          if (o.dataset.val === state[m]) o.classList.add("active");
+          o.addEventListener("click", () => {
+            state[m] = o.dataset.val;
+            p.querySelectorAll(".opt").forEach((q) => q.classList.remove("active"));
+            o.classList.add("active");
+            render();
+          });
+        });
+      });
+
+      function recv(kind) {
+        return kind === "pointer"
+          ? `(w <span class="keyword">*</span>Wallet)`
+          : `(w Wallet)`;
+      }
+
+      function render() {
+        const code = document.getElementById("code");
+        const trace = document.getElementById("trace");
+        const verdict = document.getElementById("verdict");
+        const methodSet = document.getElementById("methodSet");
+        const iface = document.getElementById("iface");
+
+        // 1. compiled code
+        code.innerHTML = `<span class="keyword">type</span> Wallet <span class="keyword">struct</span> { N <span class="keyword">int</span> }
+
+<span class="keyword">func</span> ${recv(state.deposit)} Deposit(amount <span class="keyword">int</span>) {
+    w.N += amount
+}
+
+<span class="keyword">func</span> ${recv(state.balance)} Balance() <span class="keyword">int</span> {
+    <span class="keyword">return</span> w.N
+}`;
+
+        // 2. simulated run
+        const depositSticks = state.deposit === "pointer";
+        const finalBalance = depositSticks ? 150 : 100;
+
+        const log = [
+          "→ w := Wallet{N: 100}",
+          "→ w.Deposit(50)",
+        ];
+        if (depositSticks) {
+          log.push("   (w *Wallet) → w.N += 50  →  w.N is now 150");
+        } else {
+          log.push("   (w Wallet) → copy of w gets w.N += 50, original untouched");
+        }
+        log.push("→ fmt.Println(w.Balance())");
+        log.push(`   prints: ${finalBalance}`);
+
+        trace.textContent = log.join("\n");
+
+        if (depositSticks) {
+          verdict.className = "verdict ok";
+          verdict.textContent = "✓ Deposit stuck. Pointer receiver mutated the original.";
+        } else {
+          verdict.className = "verdict bad";
+          verdict.textContent = "✗ Deposit silently lost. Value receiver mutated a copy — the original Wallet still has 100.";
+        }
+
+        // 3. method sets
+        const dV = state.deposit === "value";
+        const dP = state.deposit === "pointer";
+        const bV = state.balance === "value";
+        const bP = state.balance === "pointer";
+
+        // method set of T includes (T) only. method set of *T includes both.
+        const setOfT = {
+          Deposit: dV,
+          Balance: bV,
+        };
+        const setOfPT = {
+          Deposit: dV || dP,
+          Balance: bV || bP,
+        };
+
+        methodSet.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Receiver of caller</th><th>Deposit()</th><th>Balance()</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Wallet (value)</td>
+                <td>${setOfT.Deposit ? '<span class="yes">callable</span>' : '<span class="no">not in set</span>'}</td>
+                <td>${setOfT.Balance ? '<span class="yes">callable</span>' : '<span class="no">not in set</span>'}</td>
+              </tr>
+              <tr>
+                <td>*Wallet (pointer)</td>
+                <td>${setOfPT.Deposit ? '<span class="yes">callable</span>' : '<span class="no">not in set</span>'}</td>
+                <td>${setOfPT.Balance ? '<span class="yes">callable</span>' : '<span class="no">not in set</span>'}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin: 0.4rem 0 0; color: #71717a; font-size: 0.72rem;">
+            Rule: a value's method set has only its (T) methods; a pointer has both (T) and (*T) methods.
+          </p>
+        `;
+
+        // 4. interface satisfaction
+        const tSatisfies = setOfT.Deposit && setOfT.Balance;
+        const ptSatisfies = setOfPT.Deposit && setOfPT.Balance;
+
+        if (tSatisfies && ptSatisfies) {
+          iface.className = "verdict ok";
+          iface.textContent = "✓ Both work. Two value receivers → both Wallet and *Wallet satisfy Account.";
+        } else if (!tSatisfies && ptSatisfies) {
+          iface.className = "verdict warn";
+          iface.textContent = "✗ var a Account = w fails to compile — Wallet doesn't have Deposit in its method set. var b Account = &w works.";
+        } else if (tSatisfies && !ptSatisfies) {
+          iface.className = "verdict bad";
+          iface.textContent = "✗ This shouldn't happen — *T always inherits T's methods. Did you flip something?";
+        } else {
+          iface.className = "verdict bad";
+          iface.textContent = "✗ Neither satisfies Account — at least one method is unreachable on both.";
+        }
+      }
+
+      render();
+    </script>
+  </body>
+</html>

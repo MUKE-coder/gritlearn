@@ -1,5 +1,5 @@
 {
-  "version": 21,
+  "version": 22,
   "phases": [
     {
       "id": "phase-01",
@@ -140,9 +140,9 @@
         { "slug": "phase-05/why-go", "title": "Why Go and where it shines", "available": true },
         { "slug": "phase-05/go-setup", "title": "Go setup, modules, and `go run`", "available": true },
         { "slug": "phase-05/variables-types", "title": "Variables, constants, and types", "available": true },
-        { "slug": "phase-05/functions", "title": "Functions and multiple return values", "available": false },
-        { "slug": "phase-05/structs", "title": "Structs", "available": false },
-        { "slug": "phase-05/methods-receivers", "title": "Methods and receivers", "available": false },
+        { "slug": "phase-05/functions", "title": "Functions and multiple return values", "available": true },
+        { "slug": "phase-05/structs", "title": "Structs", "available": true },
+        { "slug": "phase-05/methods-receivers", "title": "Methods and receivers", "available": true },
         { "slug": "phase-05/interfaces", "title": "Interfaces", "available": false },
         { "slug": "phase-05/slices-maps", "title": "Slices and maps", "available": false },
         { "slug": "phase-05/error-handling-go", "title": "Error handling the Go way", "available": false },

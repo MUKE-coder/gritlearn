@@ -1,0 +1,220 @@
+## Structs
+
+A **struct** is Go's way to group related fields together. Where you'd write a class in Java, an object literal in JavaScript, or a dataclass in Python — in Go you write a struct. It's the *single most-used composite type* in any Go codebase: every HTTP request body, every database row, every domain object you define is a struct.
+
+This lesson covers declaring structs, constructing them four different ways (each useful at different times), embedding, struct tags (the magic Go uses for JSON / DB / validation), and the small set of patterns that come up dozens of times per project.
+
+<Analogy>
+A struct is **a labelled box with compartments.** You decide ahead of time what's in each compartment: a `name` compartment for a string, an `age` compartment for an int, an `email` compartment for a string. You can then make as many boxes of that exact shape as you want. Each box is independent.
+
+Three properties that fall out of the box metaphor:
+
+1. **All fields exist from day one.** Make an empty `User{}` box and the compartments are already there, each holding the zero value of its type. There's no "is the email field defined yet?" question — it's there, set to `""`. No `undefined`.
+
+2. **Boxes are values, not references.** Hand someone a box, you've made a copy. Modifying their copy doesn't change yours. This is the opposite of JavaScript objects (where everyone shares the same reference). If you want shared mutation, use a pointer to the box.
+
+3. **You can name the box shape and reuse it.** Define `type User struct { … }` once, instantiate ten thousand `User{}` values. The shape becomes a type — you can use it in function signatures, slices, maps, anywhere a type is needed.
+
+This last one is why structs are everywhere. In a typical Go HTTP handler you'll see something like:
+```go
+var body CreatePostBody         // struct
+if err := json.NewDecoder(r.Body).Decode(&body); err != nil { … }
+post, err := db.CreatePost(body) // struct in, struct out
+json.NewEncoder(w).Encode(post)  // struct → JSON
+```
+Every boundary in the program — JSON, DB, business logic — passes structs. They're the lingua franca.
+</Analogy>
+
+### Declaring a struct
+
+```go
+type User struct {
+    ID       string
+    Email    string
+    Name     string
+    Age      int
+    IsActive bool
+}
+```
+
+Three details:
+
+- **Capitalised field = exported.** `Email` is visible from other packages; `email` (lowercase) is package-private. We covered this in Variables; it applies just as much to struct fields.
+- **Identical types collapse**, same as function parameters: `type Point struct { X, Y int }` is `X int` and `Y int` together.
+- **The `type` keyword names a struct shape.** Without it, you're declaring an *anonymous* struct — useful occasionally, but reuse needs a named type.
+
+### Four ways to construct
+
+```go
+// 1. Named fields (most common).
+u := User{
+    ID:    "u-1",
+    Email: "ava@example.com",
+    Name:  "Ava",
+}
+// Fields you omit get their zero value. Age = 0, IsActive = false.
+
+// 2. Positional — fragile, only for very small structs.
+p := Point{1, 2}              // X=1, Y=2
+
+// 3. Zero value.
+var u User                    // every field zero — useful for declaring vars before they're populated.
+
+// 4. Pointer to a new struct.
+u := &User{Email: "x@y.com"}  // returns a *User, the most common form for things you'll pass around.
+```
+
+For anything with more than three fields, **always use named fields**. Positional construction breaks horribly when a field is inserted in the middle of the struct — every call site silently shifts.
+
+### Accessing fields
+
+```go
+u := User{Name: "Ava", Age: 30}
+fmt.Println(u.Name)   // Ava
+u.Age = 31            // mutate (only works if you have the value, not a copy)
+```
+
+Field access uses `.`, same as everything you've used. There's no `u["name"]` — fields are looked up by name at compile time, not at runtime.
+
+### Pointers — when modification matters
+
+This is where Go differs from JavaScript. Pass a struct by value, the recipient gets a copy:
+
+```go
+func renameToBeth(u User) {
+    u.Name = "Beth"     // mutates the copy, not the original.
+}
+
+u := User{Name: "Ava"}
+renameToBeth(u)
+fmt.Println(u.Name)     // still "Ava"
+```
+
+Pass a pointer to the struct, mutation actually mutates:
+
+```go
+func renameToBethP(u *User) {
+    u.Name = "Beth"     // Go dereferences for you: (*u).Name = "Beth" is verbose; u.Name works.
+}
+
+u := User{Name: "Ava"}
+renameToBethP(&u)
+fmt.Println(u.Name)     // "Beth"
+```
+
+Rule of thumb:
+
+- **Receiver is a pointer (`*User`)** when you need to mutate, OR when the struct is large (over ~64 bytes — copying gets expensive).
+- **Receiver is a value (`User`)** when the struct is small and you don't mutate. Safer (no aliasing), cleaner.
+
+You'll see this trade-off again in the next lesson on methods — same principle.
+
+### Struct embedding — composition, not inheritance
+
+Go has no inheritance. It has **embedding**, which solves most of what inheritance solves without the footguns.
+
+```go
+type Timestamps struct {
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+
+type Post struct {
+    ID    string
+    Title string
+    Body  string
+    Timestamps           // embedded — Post now HAS-A Timestamps but accesses its fields directly.
+}
+
+p := Post{}
+p.CreatedAt = time.Now()  // promoted from Timestamps — no p.Timestamps.CreatedAt needed.
+fmt.Println(p.UpdatedAt)
+```
+
+The embedded `Timestamps` field is accessible as `p.Timestamps` AND every field on it is promoted to look like a top-level field of `Post`. Three things this is great for:
+
+- **Reusable cross-cutting fields.** Many tables share CreatedAt/UpdatedAt/DeletedAt — embed once, attach to every model.
+- **Building on a stdlib type.** Embed `*http.Server` in your `MyServer` struct to get every HTTP method without delegating each by hand.
+- **Mixin-style composition.** Multiple embeds in one struct — `type API struct { Auth; Cache; Logger }` exposes methods from all three.
+
+If you have collisions (two embeds with a `Name` field), Go won't promote — you access them explicitly: `p.Timestamps.Name`. No silent override.
+
+### Struct tags — the JSON / DB / validation hook
+
+Fields can carry `tags` — string metadata between backticks the standard library and frameworks read at runtime via reflection:
+
+```go
+type User struct {
+    ID    string `json:"id"`
+    Email string `json:"email"      validate:"required,email"`
+    Name  string `json:"name"       validate:"required,min=2"`
+    Hash  string `json:"-"          db:"password_hash"`
+}
+```
+
+What's happening:
+
+- **`json:"id"`** — `encoding/json` reads this when marshalling. The Go field name is `ID` (Go convention), but the JSON wire format uses `"id"` (HTTP convention).
+- **`json:"-"`** — exclude from JSON. The password hash never gets sent to clients.
+- **`validate:"…"`** — third-party validator package reads this.
+- **`db:"password_hash"`** — sqlx / sqlc / GORM map this field to a DB column.
+
+You'll write tags constantly. They're how Go marries strict types with the messy reality of JSON / SQL / form data.
+
+### Struct comparison
+
+Structs are *comparable* if every field is comparable. Two values are equal when every field is equal:
+
+```go
+p1 := Point{X: 1, Y: 2}
+p2 := Point{X: 1, Y: 2}
+p1 == p2     // true
+```
+
+This works for primitive fields, pointers (compare addresses), and other comparable structs. It does NOT work if the struct contains a slice or map (those aren't comparable). The compiler will tell you.
+
+You can use comparable structs as map keys:
+
+```go
+visits := map[Point]int{}
+visits[Point{X: 1, Y: 2}]++
+```
+
+This is occasionally super useful — counting unique coordinates, deduplicating tuples, etc.
+
+### Working with slices of structs
+
+The single most common shape in Go web services: a slice of structs.
+
+```go
+users := []User{
+    {ID: "u-1", Name: "Ava"},
+    {ID: "u-2", Name: "Beth"},
+}
+
+for i, u := range users {
+    fmt.Println(i, u.Name)
+}
+
+// CAREFUL: u is a COPY. Modifying u.Name here doesn't change users[i].Name.
+for _, u := range users {
+    u.Name = "Modified"     // mutates the loop's copy, not the slice element.
+}
+
+// To mutate the slice element, index in:
+for i := range users {
+    users[i].Name = "Modified"
+}
+```
+
+Easy to get wrong. The trap is that `range` over a slice gives you copies of the elements. To mutate the actual element, use the index.
+
+<ExampleProject
+  src="struct-anatomy"
+  title="Anatomy of a struct — five views of a User"
+  description="Toggle through five views of the same User struct: declaration, four ways to construct it, embedded struct expanded, with tags resolved to JSON output, comparison + map-key trick. Each view annotates what's happening."
+/>
+
+### What you can now do
+
+You can model any domain object with a struct, decide value vs pointer semantics deliberately, and reach for embedding when you'd reach for inheritance in other languages. Next lesson: **methods and receivers** — how you attach behaviour to structs. After methods, you've reassembled most of "object-oriented programming" — with Go's particular take on it.

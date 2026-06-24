@@ -1,0 +1,192 @@
+## Methods and receivers
+
+A **method** is a function attached to a type. Same body as a function, same call mechanics — but the caller is written `value.Method(args)` instead of `Method(value, args)`. That tiny syntactic shift is what gives Go its object-flavoured feel without inheritance, classes, or `this`.
+
+Methods come in two flavours: **value receivers** and **pointer receivers**. Picking between them is the single most-asked question in early Go code review. This lesson covers the syntax, the rule, and the why behind the rule.
+
+<Analogy>
+Think of a method as **a function with a built-in first argument that gets a special name.** Where a JS object method has `this`, a Go method has the **receiver** — a parameter that sits in parentheses before the method name:
+
+```go
+func (u User) FullName() string { … }
+//   ^^^^^^^^
+//   receiver — like `this`, but named explicitly
+```
+
+The receiver is just a normal parameter. Two choices for what it is:
+
+1. **Value receiver `(u User)`** — the method gets a *copy* of the User. Modifications to `u` inside the method are invisible to the caller. Cheap for small structs; safer (no aliasing surprises).
+
+2. **Pointer receiver `(u *User)`** — the method gets a *pointer* to the original User. Mutations stick. Required if you want to mutate, recommended if the struct is big enough that copying is wasteful.
+
+The trade-off mirrors what you already know about function parameters from the previous lesson — same physics, just spelled with a receiver. The reason it matters more for methods is **consistency**: once you pick one flavour for a type, you stick with it for all the methods on that type. Otherwise the rules around interfaces and method sets get weird (which we'll see at the end).
+
+The trick to internalising it: stop thinking "method on the type." Think "function whose first argument is a `User`." Everything that's true about regular parameters — copy by default, pointer if you want to mutate — applies word for word.
+</Analogy>
+
+### Anatomy of a method
+
+```go
+type Rectangle struct {
+    Width, Height float64
+}
+
+//      ┌─ receiver: a Rectangle named r
+//      │            ┌─ method name
+//      ▼            ▼
+func (r Rectangle) Area() float64 {
+    return r.Width * r.Height
+}
+
+r := Rectangle{Width: 3, Height: 4}
+fmt.Println(r.Area())   // 12 — called as r.Area(), not Area(r)
+```
+
+Three details:
+
+- **The receiver lives between `func` and the method name.** That's the syntactic marker that says "this is a method, not a free function."
+
+- **Call site uses `value.Method(args)`.** Go finds the right method by looking at the type of `value`.
+
+- **The receiver is in scope inside the body.** `r.Width` here is the receiver's field, the same way `this.width` would be in JS.
+
+### Value receivers — the safe default
+
+A value receiver gets a copy:
+
+```go
+type Counter struct {
+    N int
+}
+
+func (c Counter) Show() {
+    fmt.Println(c.N)
+}
+
+func (c Counter) Increment() {   // value receiver — won't actually mutate
+    c.N++                        // mutates the COPY
+}
+
+c := Counter{N: 5}
+c.Increment()
+c.Show()         // 5 — the original wasn't touched
+```
+
+This is the same value-vs-reference dance you saw with function parameters. The compiler doesn't warn — it does exactly what you wrote. If you wanted persistent mutation, you needed a pointer receiver.
+
+### Pointer receivers — when mutation matters
+
+```go
+func (c *Counter) Increment() {  // pointer receiver — mutates the original
+    c.N++
+}
+
+c := Counter{N: 5}
+c.Increment()
+c.Show()         // 6
+```
+
+Two things to notice:
+
+- **The call site looks identical.** `c.Increment()`, not `(&c).Increment()`. Go silently takes the address for you when you call a pointer-receiver method on an addressable value. You almost never write `&c.Method()` yourself.
+
+- **Inside the method, `c` is `*Counter`.** But you write `c.N`, not `(*c).N` — Go dereferences automatically for field access. (Same rule applied for struct field access in the last lesson.)
+
+### Pick a receiver — the rule
+
+The canonical Go rule, from the official guidelines:
+
+> **Use a pointer receiver when:**
+> 1. The method needs to mutate the receiver.
+> 2. The struct is large (over ~64 bytes — measure if unsure).
+> 3. The type holds a mutex, file handle, or other non-copyable thing.
+> 4. *Consistency* — other methods on the type are pointer receivers.
+>
+> **Use a value receiver when:**
+> 1. The type is small (a few primitives) AND you don't mutate.
+> 2. The type is naturally a value (`time.Time`, `image.Point`, primitive-wrapping types).
+
+When in doubt, **use a pointer receiver**. The cost of an unnecessary pointer is tiny; the cost of an accidental copy that swallows your mutation is a frustrating debug session.
+
+**The cardinal sin: mixing receivers on the same type.** If `User` has a `Save() *User` (pointer receiver) AND a `Greet() User` (value receiver), reasoning about method sets and interface satisfaction becomes a maze. Pick one and stick with it across the type.
+
+### Methods aren't only for structs
+
+Any type *you defined* in this package can have methods — not just structs:
+
+```go
+type Celsius float64
+
+func (c Celsius) Fahrenheit() Celsius {
+    return c*9/5 + 32
+}
+
+t := Celsius(100)
+fmt.Println(t.Fahrenheit())   // 212
+```
+
+You're attaching behaviour to a named type. Three patterns where this shows up:
+
+- **Domain types over primitives.** `type UserID string` with methods like `String()` and `IsValid()`. Better than passing raw strings everywhere.
+- **Stringer for printf debugging.** `func (c Celsius) String() string` — and now `fmt.Println(c)` prints `"100°C"` instead of just `100`.
+- **Sorting custom slices.** `type ByAge []User` with three methods on it (Len, Less, Swap) becomes sortable by `sort.Sort`.
+
+You **cannot** attach methods to types from another package — `func (s string) Reverse() string` won't compile. Define your own type wrapper (`type MyString string`) and put methods there.
+
+### Method sets and interfaces — a sneak peek
+
+A type's **method set** is just "the methods you can call on it." Two rules to memorise — they only get weird when you cross into interfaces (next lesson):
+
+- The method set of `T` (a value) includes all methods declared with `(T)` receivers.
+- The method set of `*T` (a pointer) includes all methods declared with `(T)` *and* `(*T)` receivers.
+
+In other words: a pointer can call everything; a value can only call value-receiver methods. The reason this matters is interfaces — to satisfy an interface that requires a pointer-receiver method, you need a pointer to your type, not a value.
+
+We'll dig into that in the interface lesson. For now, here's the heuristic: **if you're storing your values in an interface variable somewhere, pass pointers in.**
+
+### Constructors — there is no `new`
+
+Go has no constructors. By convention, you write a `New<Type>` package-level function:
+
+```go
+type Logger struct {
+    out    io.Writer
+    prefix string
+}
+
+func NewLogger(out io.Writer, prefix string) *Logger {
+    return &Logger{out: out, prefix: prefix}
+}
+
+func (l *Logger) Log(msg string) {
+    fmt.Fprintln(l.out, l.prefix, msg)
+}
+
+log := NewLogger(os.Stdout, "[app]")
+log.Log("started")   // [app] started
+```
+
+This is the canonical pattern. The package exposes a `NewX(…)` function returning `*X` and a small set of methods. Callers don't manually construct — they always go through `New`. Lets you validate inputs, set defaults, register dependencies.
+
+### Recap — the four shapes you'll see
+
+In any Go file, four method shapes:
+
+```go
+func (r Rectangle)    Area() float64    { … }   // value, no mutation
+func (c *Counter)     Increment()       { … }   // pointer, mutates
+func (l *Logger)      Log(msg string)   { … }   // pointer, large struct or holds resources
+func (id UserID)      String() string   { … }   // value receiver on a defined type
+```
+
+Read enough Go and the choice between value and pointer becomes instinctive within a week or two. Until then: when in doubt, pointer.
+
+<ExampleProject
+  src="receiver-picker"
+  title="Receiver picker — value vs pointer, side by side"
+  description="Pick value or pointer receiver for two methods on a Wallet struct. Watch the mutation either stick or vanish, watch the method set shrink or grow, and see when an interface assignment fails."
+/>
+
+### What you can now build
+
+Combine the last three lessons and you can model any domain in Go: structs for shape, methods for behaviour, functions returning `(value, error)` for the seams between them. Next: **interfaces** — Go's way of saying "anything that quacks like this." That's the last load-bearing primitive before you can build a real Go HTTP service end-to-end.

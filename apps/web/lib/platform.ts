@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.14";
+export const FALLBACK_VERSION = "0.4.15";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-20T10:00:00Z",
+  releasedAt: "2026-06-24T10:00:00Z",
   releaseNotes:
-    "JEditor v0.4.14 — 5 new lessons. Phase 4 (Backend) closes with 'Connecting a separate frontend to Express' (the two-process model + CORS + auth flow + dev-loop debugging) and a full Milestone — a Standalone Express API blueprint synthesising every Phase 4 concept. Phase 5 (Go) opens with 'Why Go and where it shines' (when to reach for it + when not to), 'Go setup, modules, and `go run`' (toolchain + go.mod + project layouts), and 'Variables, constants, and types' (the three declaration forms + zero values + early traps). Each lesson ships with an interactive example.",
+    "JEditor v0.4.15 — Phase 5 (Go) Batch 2: three more lessons. 'Functions and multiple return values' frames Go's two-drawer error story (val + err) with an interactive 5-call walkthrough that lets you pick each call's outcome and watch the propagation light up the matching return. 'Structs' covers declaring + four ways to construct + embedding + struct tags (json/db/validate) + comparison and map keys — with a five-tab anatomy view of the same User struct. 'Methods and receivers' nails the value-vs-pointer receiver decision with a side-by-side picker that simulates mutation, recomputes the method set, and shows interface satisfaction live.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

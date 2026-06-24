@@ -21,6 +21,19 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.15",
+    releasedAt: "2026-06-24",
+    headline: "Phase 5 (Go) Batch 2 — functions, structs, methods",
+    highlights: [
+      { kind: "feature", body: "'Functions and multiple return values' — Go's two-drawer (val + err) model with named returns, variadic args, defer, and the canonical `if err != nil { return err }` rhythm." },
+      { kind: "feature", body: "Interactive 5-call walkthrough — pick each call's outcome (OK / error / empty) and watch the function's error propagation light up the matching return lines and final value." },
+      { kind: "feature", body: "'Structs' — declaring, four ways to construct, embedding (composition not inheritance), struct tags (json / db / validate), comparison and map keys, plus the slice-of-structs `range` mutation trap." },
+      { kind: "feature", body: "Five-tab anatomy view of the same User struct: Declare / Construct / Embed / Tags+JSON / Compare. JSON tag changes show the wire output side by side with the generated DB column SQL." },
+      { kind: "feature", body: "'Methods and receivers' — value vs pointer receiver decision rule, method sets, methods on non-struct defined types, and a sneak peek at how method sets shape interface satisfaction." },
+      { kind: "feature", body: "Receiver picker example — pick value vs pointer for two methods on a Wallet struct, see the mutation either stick or vanish, watch the method set table flip, and see exactly when `var a Account = w` fails to compile." },
+    ],
+  },
+  {
     version: "0.4.14",
     releasedAt: "2026-06-20",
     headline: "Phase 4 finished + Phase 5 (Go) opens",

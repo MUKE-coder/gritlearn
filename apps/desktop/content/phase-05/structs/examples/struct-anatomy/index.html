@@ -1,0 +1,199 @@
+<!--
+  Anatomy of a struct. Five tabs — each shows one facet of the same
+  User struct: declaration, construction (4 ways), embedding, tags +
+  JSON output, comparison + map-key trick.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Struct anatomy — five views of a User</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1000px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.2rem; }
+
+      .tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .tabs button {
+        padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid #d4d4d8;
+        background: #fff; cursor: pointer; font-size: 0.82rem; font-family: ui-monospace, monospace;
+      }
+      .tabs button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .view {
+        border: 1px solid #e4e4e7; border-radius: 12px; padding: 1.1rem 1.2rem;
+        background: #fff;
+      }
+      .view h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .view p.lead { color: #52525b; margin: 0 0 0.85rem; }
+
+      pre {
+        background: #0a0a0d; color: #ededee; padding: 0.95rem 1.1rem; border-radius: 8px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.6; margin: 0.5rem 0 0; overflow-x: auto;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+      .tag     { color: #fb7185; }
+
+      .note {
+        margin-top: 0.85rem; padding: 0.6rem 0.85rem;
+        background: #fef3c7; border-left: 3px solid #f59e0b;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.82rem; color: #92400e;
+      }
+      .note.good { background: #f0fdf4; border-left-color: #16a34a; color: #166534; }
+      .note.bad  { background: #fef2f2; border-left-color: #dc2626; color: #7f1d1d; }
+
+      .twoUp { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 0.5rem; }
+      .twoUp h3 { font-size: 0.7rem; text-transform: uppercase; color: #71717a; letter-spacing: 0.08em; margin: 0 0 0.35rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Anatomy of a struct — five views of a User</h1>
+    <p class="intro">Every struct in Go has these five facets. Click through to see each — same User type, five lenses.</p>
+
+    <div class="tabs" id="tabs"></div>
+    <div class="view" id="view"></div>
+
+    <script>
+      const VIEWS = [
+        {
+          id: "decl", label: "1. Declare",
+          h: "Declaring a User",
+          lead: "Capitalised field names are exported (visible from other packages). Lowercase fields are private.",
+          code: `<span class="keyword">type</span> User <span class="keyword">struct</span> {
+    ID       <span class="keyword">string</span>
+    Email    <span class="keyword">string</span>
+    Name     <span class="keyword">string</span>
+    Age      <span class="keyword">int</span>
+    IsActive <span class="keyword">bool</span>
+}`,
+          note: { kind: "good", text: "Five fields, each with its zero value when unspecified. No constructor needed — a User{} is always valid." },
+        },
+        {
+          id: "construct", label: "2. Construct",
+          h: "Four ways to construct a User",
+          lead: "Each pattern has its place. For anything more than 3 fields, ALWAYS use named fields.",
+          code: `<span class="comment">// 1. Named fields — the safe default.</span>
+u := User{
+    ID:    <span class="string">"u-1"</span>,
+    Email: <span class="string">"ava@example.com"</span>,
+    Name:  <span class="string">"Ava"</span>,
+}
+
+<span class="comment">// 2. Positional — only for tiny well-known shapes like Point{1, 2}.</span>
+<span class="comment">// Avoid for User — fragile across schema changes.</span>
+<span class="comment">// u := User{"u-1", "ava@example.com", "Ava", 30, true}</span>
+
+<span class="comment">// 3. Zero value — every field at its default.</span>
+<span class="keyword">var</span> u User
+<span class="comment">// u == User{ID:"", Email:"", Name:"", Age:0, IsActive:false}</span>
+
+<span class="comment">// 4. Pointer — what you'll pass around most often.</span>
+u := &User{Email: <span class="string">"x@y.com"</span>}`,
+          note: { kind: "good", text: "Named fields survive schema changes — adding a new field doesn't break every call site. Positional construction does." },
+        },
+        {
+          id: "embed", label: "3. Embed",
+          h: "Composition via embedding",
+          lead: "Go has no inheritance. Embedding gives you most of what inheritance solves, without the gotchas.",
+          code: `<span class="keyword">type</span> Timestamps <span class="keyword">struct</span> {
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+
+<span class="keyword">type</span> User <span class="keyword">struct</span> {
+    ID    <span class="keyword">string</span>
+    Email <span class="keyword">string</span>
+    Timestamps        <span class="comment">// embedded — fields promote to top level</span>
+}
+
+u := User{}
+u.CreatedAt = time.Now()  <span class="comment">// promoted — no u.Timestamps.CreatedAt needed</span>
+fmt.Println(u.UpdatedAt)
+fmt.Println(u.Timestamps) <span class="comment">// you can still access via the embedded name</span>`,
+          note: { kind: "good", text: "Reusable cross-cutting fields — embed Timestamps once, attach to every domain model." },
+        },
+        {
+          id: "tags", label: "4. Tags + JSON",
+          h: "Struct tags and JSON output",
+          lead: "Backtick-string metadata between fields drives JSON marshalling, DB column mapping, validation. Read at runtime via reflection.",
+          code: `<span class="keyword">type</span> User <span class="keyword">struct</span> {
+    ID       <span class="keyword">string</span> <span class="tag">\`json:"id"\`</span>
+    Email    <span class="keyword">string</span> <span class="tag">\`json:"email"      validate:"required,email"\`</span>
+    Name     <span class="keyword">string</span> <span class="tag">\`json:"name"\`</span>
+    Hash     <span class="keyword">string</span> <span class="tag">\`json:"-"          db:"password_hash"\`</span>
+    IsActive <span class="keyword">bool</span>   <span class="tag">\`json:"is_active"\`</span>
+}
+
+u := User{ID: <span class="string">"u-1"</span>, Email: <span class="string">"ava@example.com"</span>, Name: <span class="string">"Ava"</span>, Hash: <span class="string">"secret"</span>, IsActive: <span class="keyword">true</span>}
+b, _ := json.Marshal(u)
+fmt.Println(<span class="keyword">string</span>(b))`,
+          note: { kind: "good", text: "Output is the JSON below. Note Hash is excluded via `json:\"-\"`. The DB tag maps to a column name — sqlx + GORM both read it." },
+          extra: `<div class="twoUp">
+            <div>
+              <h3>JSON output</h3>
+              <pre>{
+    <span class="string">"id"</span>: <span class="string">"u-1"</span>,
+    <span class="string">"email"</span>: <span class="string">"ava@example.com"</span>,
+    <span class="string">"name"</span>: <span class="string">"Ava"</span>,
+    <span class="string">"is_active"</span>: <span class="keyword">true</span>
+}</pre>
+            </div>
+            <div>
+              <h3>Insert SQL (from db tag)</h3>
+              <pre><span class="keyword">INSERT INTO</span> users
+    (id, email, name, password_hash, is_active)
+<span class="keyword">VALUES</span>
+    (<span class="string">'u-1'</span>, <span class="string">'ava@example.com'</span>, <span class="string">'Ava'</span>, <span class="string">'secret'</span>, <span class="keyword">true</span>);</pre>
+            </div>
+          </div>`,
+        },
+        {
+          id: "compare", label: "5. Compare",
+          h: "Comparison and map-keys",
+          lead: "Structs whose fields are all comparable are themselves comparable. Two values are equal when every field is equal.",
+          code: `<span class="keyword">type</span> Point <span class="keyword">struct</span> { X, Y <span class="keyword">int</span> }
+
+p1 := Point{<span class="number">1</span>, <span class="number">2</span>}
+p2 := Point{<span class="number">1</span>, <span class="number">2</span>}
+fmt.Println(p1 == p2)   <span class="comment">// true — every field equal</span>
+
+<span class="comment">// Bonus: comparable structs can be map keys.</span>
+visits := <span class="keyword">map</span>[Point]<span class="keyword">int</span>{}
+visits[Point{X: <span class="number">1</span>, Y: <span class="number">2</span>}]++
+visits[Point{X: <span class="number">1</span>, Y: <span class="number">2</span>}]++
+fmt.Println(visits)     <span class="comment">// map[{1 2}:2]</span>`,
+          note: { kind: "bad", text: "Doesn't work for structs containing slices or maps — those aren't comparable. The compiler stops you with a clear error." },
+        },
+      ];
+
+      let active = 0;
+      const tabs = document.getElementById("tabs");
+      const view = document.getElementById("view");
+      VIEWS.forEach((v, i) => {
+        const b = document.createElement("button");
+        b.textContent = v.label;
+        b.addEventListener("click", () => { active = i; render(); });
+        tabs.appendChild(b);
+      });
+
+      function render() {
+        tabs.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", i === active));
+        const v = VIEWS[active];
+        view.innerHTML = `
+          <h2>${v.h}</h2>
+          <p class="lead">${v.lead}</p>
+          <pre>${v.code}</pre>
+          ${v.extra ?? ""}
+          ${v.note ? `<div class="note ${v.note.kind}">${v.note.text}</div>` : ""}
+        `;
+      }
+
+      render();
+    </script>
+  </body>
+</html>
