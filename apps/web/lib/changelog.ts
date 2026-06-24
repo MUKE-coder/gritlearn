@@ -21,6 +21,18 @@ const REPO = "MUKE-coder/gritlearn";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.4.14",
+    releasedAt: "2026-06-20",
+    headline: "Phase 4 finished + Phase 5 (Go) opens",
+    highlights: [
+      { kind: "feature", body: "Phase 4 Backend now finishes: 'Connecting a separate frontend to Express' covers the two-process model + CORS + auth flow + dev-loop debugging." },
+      { kind: "feature", body: "Phase 4 Milestone: 'Standalone Express API' — a complete annotated blueprint of a blog API synthesising every Phase 4 concept (auth, validation, Prisma, middleware order, CORS, route table)." },
+      { kind: "feature", body: "Phase 5 Go opens with 'Why Go and where it shines' — a fit matrix for when Go is the right tool and when it isn't." },
+      { kind: "feature", body: "'Go setup, modules, and `go run`' — toolchain install, go.mod / go.sum, and three project layouts (single-file, medium, cmd/internal)." },
+      { kind: "feature", body: "'Variables, constants, and types' — the three declaration forms, all basic types, zero values, and the 'declared and not used' compile error every Go newcomer hits." },
+    ],
+  },
+  {
     version: "0.4.13",
     releasedAt: "2026-06-20",
     headline: "Snip syntax highlighting",

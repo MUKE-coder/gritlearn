@@ -1,0 +1,195 @@
+## Variables, constants, and types
+
+Go is **statically typed** — every variable has a known type the compiler verifies at build time. After three weeks in JavaScript or Python, this feels strict and chatty for a paragraph and then the safety net becomes invisible. This lesson covers the three ways to declare variables, the basic types Go gives you, the *zero value* idea (Go's answer to undefined/null), and constants.
+
+<Analogy>
+JavaScript variables are **labelled cardboard boxes you can put anything in.** You write "fruit" on a box, put an apple in. Later you put a hammer in the same box. JS doesn't blink. At runtime, when something opens the box expecting fruit and finds a hammer, things break.
+
+Go variables are **shelves with specific shapes carved into them.** When you say "this shelf is for ints", the shelf has an int-shaped indent. You can only put ints there. Try to put a string in and the carpenter (the compiler) refuses to install the shelf — your project doesn't build. You catch the mistake at carpenter time, not at the dinner party.
+
+The shelf metaphor extends:
+
+- **Every shape starts with a default fill** — Go's zero value. An int shelf comes with a 0 in it. A string shelf comes with `""`. A bool shelf with `false`. A pointer / slice / map / interface shelf with `nil`. You never have to wonder *"is this variable initialised?"* — it always is, with the zero value of its type.
+
+- **Constants are shelves nailed shut.** You set the contents once. Trying to change it later is a compile error.
+
+- **The type can sometimes be inferred from what you put on the shelf the first time.** Write `name := "Ava"` and the compiler installs a string-shaped shelf for you. You only spell the type out explicitly when (a) the inference would be wrong, (b) you're declaring without an initial value, or (c) you want the code to read more clearly to a future reader.
+
+The shelves-with-shapes mental model survives all the way through generics and interfaces. Hold it.
+</Analogy>
+
+### Three ways to declare a variable
+
+In order from "shortest" to "most explicit":
+
+```go
+// 1. Short declaration — type inferred. Only inside functions.
+name := "Ava"
+count := 42
+isReady := true
+
+// 2. var with initial value — type still inferred.
+var name = "Ava"
+var count = 42
+
+// 3. var with explicit type — required at package scope, used inside functions
+//    when you want a zero-value start or to make the type loud.
+var name string = "Ava"
+var count int
+var isReady bool
+```
+
+You'll use **#1 (`:=`)** for 90% of cases inside functions. Reach for **`var`** at package scope (where `:=` isn't legal), when you need the zero value, or when you're declaring multiple related variables together:
+
+```go
+var (
+    host string = "localhost"
+    port int    = 8080
+    tls  bool
+)
+```
+
+That `var ( … )` form is the Go convention for groups of related declarations. You'll see it often.
+
+### The basic types
+
+Every type you'll touch in the first month falls in one of these buckets:
+
+```go
+// Booleans
+var ready bool
+
+// Strings — UTF-8 by default, immutable.
+var name string
+
+// Numbers — pick a width when it matters; otherwise use int / float64.
+var age   int          // platform width (usually 64-bit)
+var port  int16        // 16-bit signed
+var rgb   uint8        // 0-255
+var price float64      // double-precision float
+var ratio float32      // single-precision (rarely needed)
+
+// Bytes and runes — special-case integers.
+var b byte             // alias for uint8 — used when iterating bytes of a string
+var r rune             // alias for int32 — one Unicode code point
+```
+
+Three rules to internalise:
+
+1. **No implicit conversions.** `var x int = 10; var y int64 = x` is a compile error. You have to write `var y int64 = int64(x)`. Annoying for two days, life-saving thereafter.
+
+2. **Strings are UTF-8 bytes.** Indexing into a string with `s[0]` gives you a `byte`, not a character. If you want characters (runes), iterate with `for _, r := range s`. Bytes and runes are the same thing only for ASCII.
+
+3. **`int` is platform-sized.** On a 64-bit machine, `int` is 64 bits. On a 32-bit embedded device, it's 32. If size matters, use `int32` or `int64`. Most of the time, use `int`.
+
+### Zero values — Go's answer to undefined
+
+Every type has a default value the variable starts at if you don't initialise it:
+
+```go
+var s string    // ""
+var i int       // 0
+var f float64   // 0
+var b bool      // false
+var p *User     // nil
+var s []int     // nil (but iterates as empty)
+var m map[string]int  // nil (can read, panics on write — see Maps lesson)
+```
+
+This kills a whole category of bugs that haunt JS:
+
+```js
+// JS — does this exist?
+if (config.timeout) { /* … */ }     // false for 0, "", null, undefined, missing.
+                                    // four different states, one comparison.
+```
+
+```go
+// Go — there's only one state.
+if config.Timeout == 0 { /* default */ }    // it's 0 either because you set it to 0 or
+                                            // because it was never set. You can't distinguish.
+                                            // Use a *int or a pointer if you need to.
+```
+
+The downside: you can't always tell "set to default" from "wasn't set." For most fields this doesn't matter — defaults *are* the configuration. When it matters (a "Has the user explicitly configured X?" question), use a pointer or a separate `bool isSet` field.
+
+### Constants
+
+```go
+const port = 8080
+const greeting = "hello, world"
+
+const (
+    KB = 1024
+    MB = KB * 1024
+    GB = MB * 1024
+)
+```
+
+Three things:
+
+- **`const` works only with compile-time values.** Literal numbers, strings, true/false, expressions of constants. You can't `const t = time.Now()` because that's a runtime call.
+
+- **Untyped constants flex.** `const port = 8080` is untyped — it can be assigned to any numeric variable: `var p uint16 = port` works. Once you write `const port int = 8080`, it's locked to `int`.
+
+- **Naming convention.** Exported (used outside the package) names start with a capital letter: `const DefaultPort = 8080`. Unexported names start lowercase. We'll go deep on this in the Packages lesson.
+
+### Multiple assignment + swap
+
+A small Go quality-of-life feature you'll like:
+
+```go
+// Multiple assignment.
+a, b := 1, 2
+
+// Swap without a temp variable.
+a, b = b, a
+
+// Useful when a function returns multiple values (very common in Go).
+value, err := someFunction()
+```
+
+Most JS/Python equivalents need destructuring syntax. Go does it as a language primitive.
+
+### What goes wrong: three common new-Go errors
+
+1. **`declared and not used`.** Go refuses to compile if you declare a variable and don't use it.
+   ```go
+   func main() {
+       name := "Ava"  // ✗ name declared and not used
+   }
+   ```
+   Compile error. The fix: use the variable, or assign to `_` if you genuinely don't need it (`_ = name`). The Go team enforces this on purpose — unused variables are usually mistakes.
+
+2. **`cannot use x (type int) as type int64`.** Forgot to cast.
+   ```go
+   var x int = 10
+   var y int64 = x       // ✗
+   var y int64 = int64(x) // ✓
+   ```
+
+3. **Trying to reassign a `:=` variable.** `:=` declares; `=` reassigns. After the first declaration, use `=`.
+   ```go
+   name := "Ava"
+   name := "Beth"  // ✗ no new variables on the left side
+   name = "Beth"   // ✓
+   ```
+   Exception: `:=` is allowed if AT LEAST ONE name on the left is new. Common in error handling:
+   ```go
+   user, err := getUser()    // both new
+   posts, err := getPosts()  // posts is new — allowed even though err exists
+   ```
+
+### `gofmt` will rewrite your code
+
+Go ships with a formatter. Run `gofmt -w main.go` and your file is reformatted to canonical Go style. Most editors run it on save. Embrace this: every Go codebase you'll ever read is formatted identically, because the toolchain made the choice for you.
+
+<ExampleProject
+  src="zero-values"
+  title="Zero values — every type's default"
+  description="Click any type to see its zero value. The interactive table is worth a second look every time you start a new Go file — knowing the zero value of the type you're declaring is half the battle of not writing defensive nil checks."
+/>
+
+### What's next
+
+Next lesson: functions. Multiple return values, named returns, variadic args, closures — the syntax that makes Go's error-handling pattern (`val, err := f()`) feel native. Once you have functions, the rest of the language assembles in a hurry.

@@ -1,0 +1,98 @@
+## Why Go and where it shines
+
+Up to Phase 4 you've built a backend in JavaScript: Express on Node, Prisma over Postgres, TypeScript for types. That stack works. Half the internet runs on it. So why does Phase 5 hand you a different language and tell you to build the same API again?
+
+The honest answer: **most production systems at scale eventually want one of three things — predictable performance, true concurrency, or a single-binary deploy — and the JS/Node stack gives you none of them cleanly.** Go gives you all three. Once you've worked in both, the trade-offs become obvious. This lesson lays out the *why* so the next twenty lessons are about *how*.
+
+<Analogy>
+JavaScript on Node is **a Swiss army knife**: small, light, easy to carry, every blade is "good enough." You can open a wine bottle, tighten a screw, file a nail. You'd hesitate to build a house with it. The convenience is the value.
+
+Go is **a cordless drill**: bigger, heavier, less flexible — it only does one thing, but it does that thing astonishingly well, predictably, every time, with the same battery for years. The deliberate choices in the design (one tool, one job, no fashion) feel restrictive until you've watched a Node service crash at 3am and a Go service handle 10× the load without flinching.
+
+Three deliberate choices Go made that shape everything:
+
+1. **Compile to a single static binary.** No node_modules, no Python virtual env, no JVM, no Docker required to run it. `go build` → a 12MB executable that runs identically on any matching OS. Deploys become "copy this file."
+
+2. **Concurrency in the language, not bolted on.** JS gave you async/await — concurrency for I/O. Go gives you **goroutines** — concurrency for *anything*, with a primitive (`go fn()`) so cheap you spawn thousands of them. The runtime schedules them across all your CPU cores. The mental model is "imagine if every async function actually ran in parallel without a thread pool."
+
+3. **A standard library that means it.** Node's stdlib is intentionally minimal; you `npm install` everything. Go's stdlib ships an HTTP server you'd deploy in production, a JSON parser, crypto, SQL drivers, an HTTP client, test runner — written by the language team. Most Go services have **fewer than 10 dependencies total**. Half have zero.
+
+The trade-off is verbosity. Go forces you to handle every error explicitly, name every type, and write loops where JS would let you `.map()`. Code is longer. The payoff is that the longer code does exactly what it says — surprises in production are rare.
+
+This is why the same companies that started on Node end up rewriting hot services in Go: Uber, Cloudflare, Dropbox, Twitch, SoundCloud, the Kubernetes ecosystem, half of GitHub, half of GitLab, Docker itself. The language wasn't built to be cute. It was built to power infrastructure that runs forever.
+</Analogy>
+
+### The shape of a Go service
+
+Here's what the smallest useful Go HTTP service looks like end to end. Twenty lines. Real production code at this size is unusual but instructive.
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	log.Println("listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+Save as `main.go`, run `go run main.go`. Open `http://localhost:8080/health`. You're done. No `package.json`, no `tsconfig.json`, no install step. Three things to notice:
+
+- **No framework.** `net/http` is the stdlib. Gin and Fiber exist (we'll meet them later) but you do not need them.
+- **No imports manifest.** The `import` block IS the dependency list. The compiler reads it, downloads what's missing, builds.
+- **No async syntax.** That handler looks synchronous because to your code it IS. Each request runs in its own goroutine; the runtime handles the rest.
+
+### Where Go shines
+
+Pattern-match these traits against your project. If three or more line up, Go is probably the right tool:
+
+- **Long-running services.** Backends, daemons, agents, queue workers, message brokers, schedulers. Anything that boots once and serves traffic for days.
+- **Networked infrastructure.** Reverse proxies, load balancers, gateways, DNS servers, container runtimes, RPC frameworks. Go was designed by Google for exactly this surface.
+- **CLI tools that need to be fast.** `kubectl`, `gh`, `terraform`, `hugo`, `caddy` — all written in Go. Single-binary distribution makes "brew install x" trivial.
+- **Concurrent workloads.** Scraping 1000 URLs in parallel. Streaming events from a queue. Fanning a job out across worker goroutines. JS can do this but you'll fight the language.
+- **Performance budget exists but isn't extreme.** Faster than Python or Ruby. Slower than Rust or C++. The sweet spot for "good enough" that doesn't need a PhD to debug.
+
+### Where Go is the wrong tool
+
+Equally honest:
+
+- **Pure data science / ML.** Stay in Python. The ecosystem isn't there in Go.
+- **UI-heavy frontend.** Go has GUI libraries but nobody picks Go for a desktop app over Electron or Tauri.
+- **Quick scripts under 50 lines.** Bash, Python, or a Node one-liner is shorter and just as fast to write. Go's overhead (file + package + import block) is real.
+- **Domain-modelling-heavy code with deep inheritance.** Go has interfaces but no classes, no inheritance. If your problem space is "model a chess game's piece hierarchy", another language might fit better.
+
+### What Go takes away
+
+Three JS comforts Go deliberately doesn't have:
+
+1. **`null` everywhere.** Go has nil pointers but most types have a usable **zero value**: a new `string` is `""`, a new `int` is `0`, a new `[]string` is `nil` but iterates as empty. You stop writing defensive `if (foo)` checks.
+
+2. **Exceptions.** Errors are values you return from functions, not events you throw. Every function call that can fail looks like `val, err := f()`. After three days you'll find yourself wanting this in every other language too.
+
+3. **Magic.** No decorators, no metaclasses, no reflection-by-default, no Babel macros, no JSX, no implicit `this`. What the code says is what runs. This is liberating and disorienting in equal measure for the first week.
+
+### Concretely — what Phase 5 will build
+
+Same idea as Phase 4, different language: by the end of Phase 5 you'll have written a Go REST API with auth, validation, Postgres via GORM, and a CRUD surface for a small domain (we'll do a URL shortener so the schema stays simple while the auth + middleware code stays meaningful).
+
+The lessons walk through the language: variables, functions, structs, methods, interfaces, slices, maps, errors, pointers, packages. Then concurrency: goroutines + channels. Then we ratchet up to real code: `net/http`, framework (Gin), database (GORM), the milestone.
+
+You'll find a lot of what you learnt in Phase 4 transfers verbatim — REST, JSON, middleware order, JWT auth, env config. Only the *syntax* changes. The intuitions are load-bearing.
+
+<ExampleProject
+  src="go-fit-matrix"
+  title="Is Go the right tool? — interactive matrix"
+  description="Pick the traits of your project (long-running, concurrent, single binary, etc.) and the matrix lights up: 'Go fits' / 'Go is OK' / 'pick something else'. Calibrates intuition for the language-selection question every engineer eventually faces."
+/>
+
+### Why this lesson before any syntax
+
+Most "learn Go" courses open with `Hello, World!`. We're starting with *why* on purpose: Go's design only makes sense when you understand what problem it was reaching for. A semicolon is a semicolon. A goroutine is a 1989 Hoare paper made executable. You'll learn syntax in the next lesson and it'll stick faster because you know what it's for.

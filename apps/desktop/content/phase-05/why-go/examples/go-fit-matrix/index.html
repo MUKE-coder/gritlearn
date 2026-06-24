@@ -1,0 +1,142 @@
+<!--
+  Go-fit matrix. Pick traits of your hypothetical project; the verdict
+  flips between "Go fits", "Go is OK", "pick something else" with a
+  short reasoning for each trait. Calibrates the language-selection
+  instinct early.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Is Go the right tool? — fit matrix</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .traits {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem;
+      }
+      .trait {
+        display: flex; align-items: center; gap: 0.6rem;
+        padding: 0.6rem 0.85rem;
+        background: #fafafa; border: 1px solid #d4d4d8; border-radius: 8px;
+        cursor: pointer; user-select: none;
+        font-size: 0.86rem;
+      }
+      .trait input { width: 16px; height: 16px; accent-color: #15803d; }
+      .trait .sub { font-size: 0.72rem; color: #71717a; }
+
+      .verdict {
+        margin-top: 1.5rem; padding: 1rem 1.2rem; border-radius: 12px;
+      }
+      .verdict h2 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+      .verdict.fit  { background: #dcfce7; color: #166534; border: 1px solid #16a34a; }
+      .verdict.ok   { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+      .verdict.bad  { background: #fee2e2; color: #7f1d1d; border: 1px solid #dc2626; }
+
+      .reasons { margin-top: 1rem; }
+      .reasons h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin: 0 0 0.4rem; }
+      .reason {
+        margin: 0.35rem 0; padding: 0.55rem 0.75rem;
+        background: #fff; border-left: 3px solid #d4d4d8; border-radius: 0 6px 6px 0;
+        font-size: 0.82rem;
+      }
+      .reason.plus  { border-left-color: #16a34a; background: #f0fdf4; }
+      .reason.minus { border-left-color: #dc2626; background: #fef2f2; }
+    </style>
+  </head>
+  <body>
+    <h1>Will Go fit your project?</h1>
+    <p class="intro">Check every trait that describes the system you're imagining. The verdict + the reasons recompute as you go.</p>
+
+    <div class="traits" id="traits"></div>
+
+    <div class="verdict" id="verdict"></div>
+
+    <div class="reasons">
+      <h3>Why</h3>
+      <div id="reasons"></div>
+    </div>
+
+    <script>
+      // weight: positive = Go fits better, negative = look elsewhere.
+      const TRAITS = [
+        { id: "long-running",   label: "Long-running service (HTTP / queue / daemon)",
+          plus: 2, plusText: "Go's runtime, GC, and goroutines were tuned for years-long uptimes." },
+        { id: "concurrent",     label: "Concurrent workload — fan out / parallel I/O",
+          plus: 2, plusText: "Goroutines + channels are the cleanest concurrency primitive in any mainstream language." },
+        { id: "single-binary",  label: "Want a single binary to deploy / distribute",
+          plus: 2, plusText: "go build → one ~12MB file. No node_modules, no virtual env, no Docker required." },
+        { id: "cli",            label: "Building a CLI tool people will install",
+          plus: 1, plusText: "Static binaries make `brew install x` trivial. kubectl, gh, terraform, hugo are all Go." },
+        { id: "perf",           label: "Performance matters but doesn't need to be extreme",
+          plus: 1, plusText: "Faster than Python/Ruby/Node. Slower than Rust. Sweet spot for 'good enough'." },
+        { id: "team-mixed",     label: "Team with mixed experience levels",
+          plus: 1, plusText: "Go is small. New devs are productive in a week. Senior devs can't show off too much; code stays readable." },
+        { id: "data-science",   label: "Pure data science / ML pipeline",
+          plus: -3, plusText: "The ecosystem isn't there. Stay in Python." },
+        { id: "ui-heavy",       label: "Heavy frontend / UI work",
+          plus: -2, plusText: "Go has GUI libs but no one picks Go over Electron / Tauri for desktop apps." },
+        { id: "quick-script",   label: "Quick script under 50 lines",
+          plus: -1, plusText: "Go's file + package + import overhead is real. Bash / Python is faster to write." },
+        { id: "deep-oop",       label: "Deep class hierarchies, inheritance, mixins",
+          plus: -2, plusText: "Go has interfaces but no classes, no inheritance. Different mental model — not always wrong, but a poor fit if your design depends on it." },
+        { id: "infrastructure", label: "Networking infrastructure (proxy, gateway, broker)",
+          plus: 3, plusText: "Go was DESIGNED for this. Kubernetes, Docker, Caddy, Traefik, NATS — all Go." },
+        { id: "windows-target", label: "Need to ship on Windows / macOS / Linux from one codebase",
+          plus: 1, plusText: "Cross-compile to any OS/arch with one env var. GOOS=windows GOARCH=amd64 go build." },
+      ];
+
+      const state = Object.fromEntries(TRAITS.map((t) => [t.id, false]));
+
+      const root = document.getElementById("traits");
+      TRAITS.forEach((t) => {
+        const row = document.createElement("label");
+        row.className = "trait";
+        row.innerHTML = `
+          <input type="checkbox" data-id="${t.id}">
+          <div>
+            <div>${t.label}</div>
+          </div>
+        `;
+        row.querySelector("input").addEventListener("change", (e) => {
+          state[t.id] = e.target.checked;
+          render();
+        });
+        root.appendChild(row);
+      });
+
+      function render() {
+        const picked = TRAITS.filter((t) => state[t.id]);
+        const score  = picked.reduce((s, t) => s + t.plus, 0);
+
+        const verdict = document.getElementById("verdict");
+        if (picked.length === 0) {
+          verdict.className = "verdict";
+          verdict.innerHTML = "<h2>Pick some traits above.</h2><p>The verdict + reasons appear as you check boxes.</p>";
+        } else if (score >= 4) {
+          verdict.className = "verdict fit";
+          verdict.innerHTML = `<h2>Go is a strong fit.</h2><p>Score ${score}. The traits you picked line up almost perfectly with Go's strengths.</p>`;
+        } else if (score >= 0) {
+          verdict.className = "verdict ok";
+          verdict.innerHTML = `<h2>Go would work, but it's not obvious.</h2><p>Score ${score}. Mixed signal. Try a small prototype before committing.</p>`;
+        } else {
+          verdict.className = "verdict bad";
+          verdict.innerHTML = `<h2>Probably pick something else.</h2><p>Score ${score}. The friction would outweigh the wins.</p>`;
+        }
+
+        const reasons = document.getElementById("reasons");
+        reasons.innerHTML = picked.length === 0
+          ? `<div class="reason">(empty — pick traits above)</div>`
+          : picked.map((t) => `
+              <div class="reason ${t.plus > 0 ? "plus" : "minus"}">
+                ${t.plus > 0 ? "+" : ""}${t.plus} — <strong>${t.label}</strong>: ${t.plusText}
+              </div>
+            `).join("");
+      }
+
+      render();
+    </script>
+  </body>
+</html>

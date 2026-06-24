@@ -1,5 +1,5 @@
 {
-  "version": 20,
+  "version": 21,
   "phases": [
     {
       "id": "phase-01",
@@ -128,8 +128,8 @@
         { "slug": "phase-04/authorization", "title": "Authorization and protected routes", "available": true },
         { "slug": "phase-04/input-validation", "title": "Input validation and error handling", "available": true },
         { "slug": "phase-04/cors", "title": "CORS explained", "available": true },
-        { "slug": "phase-04/separate-frontend-backend", "title": "Connecting a separate frontend to Express", "available": false },
-        { "slug": "phase-04/milestone-standalone-api", "title": "Milestone: Standalone Express API", "available": false }
+        { "slug": "phase-04/separate-frontend-backend", "title": "Connecting a separate frontend to Express", "available": true },
+        { "slug": "phase-04/milestone-standalone-api", "title": "Milestone: Standalone Express API", "available": true }
       ]
     },
     {
@@ -137,9 +137,9 @@
       "title": "Go (Golang)",
       "subtitle": "Fast, No-Nonsense Backend",
       "concepts": [
-        { "slug": "phase-05/why-go", "title": "Why Go and where it shines", "available": false },
-        { "slug": "phase-05/go-setup", "title": "Go setup, modules, and `go run`", "available": false },
-        { "slug": "phase-05/variables-types", "title": "Variables, constants, and types", "available": false },
+        { "slug": "phase-05/why-go", "title": "Why Go and where it shines", "available": true },
+        { "slug": "phase-05/go-setup", "title": "Go setup, modules, and `go run`", "available": true },
+        { "slug": "phase-05/variables-types", "title": "Variables, constants, and types", "available": true },
         { "slug": "phase-05/functions", "title": "Functions and multiple return values", "available": false },
         { "slug": "phase-05/structs", "title": "Structs", "available": false },
         { "slug": "phase-05/methods-receivers", "title": "Methods and receivers", "available": false },

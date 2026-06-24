@@ -1,0 +1,201 @@
+## Connecting a separate frontend to your Express API
+
+For most of Phase 3 the frontend and backend were the *same* Next.js process — server actions, route handlers, and React components shared one server runtime. That's a comfortable starting point but it's a single deployable unit. Once you split the API into its own Express server (which is what every lesson in this phase has been building toward), you're running **two processes** that talk to each other over HTTP.
+
+This concept ties the loose ends. We'll connect a separate React frontend to the Express API you've been building, walk through the four things that have to line up (URL, ports, CORS, auth tokens), and end up with the workflow you'll use on every project for the rest of your career.
+
+<Analogy>
+A unified Next.js app is **a food truck**: one window, one chef, one menu. The customer orders and the same person hands back the food. Easy to operate, but the truck has to be physically wherever the customer is.
+
+Splitting into a standalone API + a separate frontend is **a restaurant chain with a central kitchen**. The kitchen (your Express API) cooks every meal. Each storefront (a React app on a different domain) takes orders from local customers and forwards them to the kitchen over a dedicated phone line. The storefront doesn't cook — it presents, it collects orders, it relays.
+
+This split changes three things:
+
+1. **Where the food comes from is now a configuration detail.** A storefront has to know the kitchen's phone number. Move the kitchen, change the storefront's contact card. Today you're calling `http://localhost:8080`; tomorrow it's `https://api.yourdomain.com` — same code, different env var.
+
+2. **Doors between strangers need to be marked.** The kitchen, by default, will only take orders from its own storefronts. If a competitor's storefront tries to phone in an order, the kitchen says "we don't know you." That's **CORS** — the browser's protection against arbitrary websites making requests to your API on the user's behalf.
+
+3. **Customers need a wristband for every storefront they visit.** When the kitchen serves multiple frontends, "logged in" means logged in *at this specific frontend*. The wristband (JWT, cookie, whatever you used in the JWT lesson) needs to travel from the frontend to the kitchen on every call.
+
+The split is not free — you went from one deploy target to two, one env file to two, one log stream to two. The payoff is that the kitchen becomes a reusable resource. The same Express API can power a web app, a mobile app, a CLI, an admin dashboard. That's the architecture every serious company runs.
+</Analogy>
+
+### The four contracts the frontend and backend share
+
+When the same process owns both, there's nothing to "agree on" — function calls just work. The moment you split them, four things become contracts that have to line up exactly. Get any one wrong and the whole connection silently fails.
+
+```
+┌──────────────────────┐  HTTP   ┌──────────────────────┐
+│   React frontend     │ ──────▶ │   Express backend    │
+│   localhost:5173     │         │   localhost:8080     │
+└──────────────────────┘         └──────────────────────┘
+        │  fetch("/api/posts")            │
+        │  → resolves to:                 │
+        │  http://localhost:8080/posts    │
+        │                                 │
+        │  ◀──── Access-Control-Allow-Origin: http://localhost:5173
+        │
+        │  Cookie: grit_session=…
+        │  Authorization: Bearer eyJ…
+        │
+        ▼
+```
+
+The four contracts:
+
+1. **Base URL.** The frontend has to know where the API lives. In dev that's `http://localhost:8080`. In prod it's `https://api.yourdomain.com`. Put it in an env var (`VITE_API_URL` for Vite, `NEXT_PUBLIC_API_URL` for Next.js), never hard-code.
+
+2. **Ports.** Dev: frontend on 5173, backend on 8080. They cannot share a port — `EADDRINUSE` if you try. Production: usually both behind the same domain (api on a subdomain or a /api path) so there's only one port to remember.
+
+3. **CORS.** The Express API has to send back `Access-Control-Allow-Origin: <frontend origin>` or the browser silently drops the response. You wired this up in the CORS lesson — now it's load-bearing.
+
+4. **Auth flow.** The login endpoint runs on the backend, returns a token (or sets a cookie). Every subsequent request from the frontend includes that token (or the cookie travels automatically if you set `credentials: "include"`). Without this, the frontend gets a `401` on every protected route.
+
+### The dev workflow — two terminals
+
+Once it's split, your daily loop is:
+
+```bash
+# Terminal A — backend
+$ cd api
+$ pnpm dev
+# → "API listening on http://localhost:8080"
+
+# Terminal B — frontend
+$ cd web
+$ pnpm dev
+# → "Local: http://localhost:5173/"
+```
+
+Both have to be running for the app to work. Forgetting one and seeing fetch errors is a rite of passage every full-stack developer has been through. Most teams paper over this with a `pnpm dev` script in the root that runs both in parallel (via `concurrently` or `turbo`).
+
+### Configuring the frontend
+
+Every fetch in the frontend has to know the backend URL. Hard-coding is a trap — it works in dev, breaks in prod. The fix is one env var + one wrapper:
+
+```js
+// web/.env.local
+VITE_API_URL=http://localhost:8080
+
+// web/src/lib/api.js
+const BASE = import.meta.env.VITE_API_URL;
+
+export async function api(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: "include",     // send cookies (for cookie-based auth)
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message ?? res.statusText);
+  }
+  return res.json();
+}
+```
+
+Every component calls `api("/posts")` or `api("/auth/login", { method: "POST", body: JSON.stringify({...}) })`. When prod ships, you change one env var and every request retargets — no code changes.
+
+### CORS in the standalone API
+
+The CORS lesson covered the mechanics. Here's the standalone-API form:
+
+```js
+// api/src/server.js
+import express from "express";
+import cors from "cors";
+
+const app = express();
+app.use(cors({
+  origin: [
+    "http://localhost:5173",         // dev frontend
+    "https://yourdomain.com",        // prod frontend
+    "https://www.yourdomain.com",    // www variant
+  ],
+  credentials: true,                 // allow cookies
+}));
+app.use(express.json());
+```
+
+Three traps to know about:
+
+1. **The browser does the enforcement, not the server.** A `curl` from the terminal will succeed even with no CORS header — `curl` doesn't care. CORS is for browsers. So your "test the API with curl" workflow won't catch CORS bugs.
+
+2. **Preflight requests.** Any `POST` with a JSON body triggers an `OPTIONS` request before the real one. The browser is asking *"may I send this?"* — your CORS middleware has to answer yes, including the right method and headers. The `cors` middleware handles this automatically; raw `app.use((req,res,next)=>…)` does not.
+
+3. **Credentials + wildcard origin don't mix.** You cannot set `origin: "*"` and `credentials: true` at the same time — the browser rejects it. List explicit origins.
+
+### The login flow end to end
+
+Walk through what happens when a user logs in:
+
+```
+1. User submits the login form on the frontend.
+   ↓
+2. Frontend calls: POST http://localhost:8080/auth/login
+   Body: { email, password }
+   ↓
+3. Backend verifies the password (bcrypt.compare).
+   Backend signs a JWT, returns it in the response body
+   (or sets it in a Set-Cookie header).
+   ↓
+4. Frontend stores the token (localStorage for SPAs, or
+   the cookie just sticks automatically).
+   ↓
+5. Every subsequent request includes the token:
+   Authorization: Bearer eyJ…
+   ↓
+6. Express middleware on protected routes reads the token,
+   verifies it, attaches req.user.
+   ↓
+7. Route handler proceeds with req.user available.
+```
+
+The frontend's API wrapper above already handles step 5 implicitly if you're using cookies (`credentials: "include"` makes the cookie travel). For Bearer-token auth add an Authorization header:
+
+```js
+export async function api(path, options = {}) {
+  const token = localStorage.getItem("access_token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers ?? {}),
+  };
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  // … (error handling)
+  return res.json();
+}
+```
+
+### Debugging when the two halves can't talk
+
+When something breaks, work through this list in order:
+
+1. **Is the backend running?** Hit `http://localhost:8080/health` in a browser. No response → start the backend.
+2. **Is the frontend's URL right?** Open DevTools → Network → inspect the request URL. Wrong port? Fix `VITE_API_URL`.
+3. **CORS error in the console?** Read it carefully — Chrome tells you exactly which header is missing or which origin isn't allowed.
+4. **401 on every request?** Check the request headers in DevTools — is the token there? If yes, log it server-side and verify the secret matches.
+5. **Cookie not being sent?** Verify `credentials: "include"` on the frontend AND `credentials: true` on the backend CORS config. Both required.
+
+Most "the API doesn't work" bugs land at one of those five rungs. After your tenth project, you'll diagnose them in seconds.
+
+<ExampleProject
+  src="two-process-trace"
+  title="Two processes, one request — interactive trace"
+  description="Watch a frontend fetch flow through CORS preflight, auth header, route handler, and JSON response. Toggle each contract (URL, CORS, auth) to see what breaks when it's misconfigured."
+/>
+
+### What we're not covering
+
+Not in this lesson:
+
+- **Reverse proxies.** Production usually puts the API behind nginx or a load balancer. We'll touch that in Phase 9 (Professional Engineering).
+- **WebSockets / SSE.** Real-time channels (chat, notifications, live cursors) follow a different pattern. Separate concept.
+- **Server-side rendering on the frontend.** Once you split, the frontend is usually a pure SPA (Vite, CRA) or a hybrid (Next.js with the API on a separate subdomain). Both shapes work.
+
+### Where this leaves you
+
+After this concept, you can build a complete app as two separate codebases: a React frontend (Phase 1–3) talking to an Express + Prisma + Postgres backend (Phase 4). That's the architecture every modern startup ships. The next lesson — the Phase 4 milestone — is where you put it all together end to end.

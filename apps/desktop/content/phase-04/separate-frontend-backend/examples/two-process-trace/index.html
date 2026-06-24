@@ -1,0 +1,229 @@
+<!--
+  Two-process trace. Watch a single fetch flow through CORS preflight,
+  auth header, route handler, JSON response. Toggle each of the four
+  contracts (URL, port, CORS, auth) to see what breaks when it's
+  misconfigured — the trace renders red on the broken step.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Two-process trace — frontend ↔ Express API</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1080px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 1rem 0; }
+      .ctl {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.6rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 8px;
+        background: #fafafa;
+      }
+      .ctl .label { font-size: 0.84rem; font-weight: 600; }
+      .ctl .hint  { font-size: 0.72rem; color: #71717a; margin-top: 0.15rem; }
+      .ctl button {
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        padding: 0.35rem 0.7rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        background: #fff; cursor: pointer;
+      }
+      .ctl button.ok  { background: #dcfce7; border-color: #16a34a; color: #166534; }
+      .ctl button.bad { background: #fee2e2; border-color: #dc2626; color: #7f1d1d; }
+
+      .lanes {
+        display: grid; grid-template-columns: 1fr 70px 1fr;
+        margin-top: 1.4rem; gap: 0;
+        border: 1px solid #e4e4e7; border-radius: 12px; overflow: hidden;
+        background: #fff;
+      }
+      .lane {
+        padding: 0.9rem 1rem;
+      }
+      .lane.left   { background: #f7faff; border-right: 1px solid #e4e4e7; }
+      .lane.right  { background: #fffbf5; border-left: 1px solid #e4e4e7; }
+      .lane.mid    {
+        background: #18181b; color: #ededee;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase;
+        writing-mode: vertical-rl; text-orientation: mixed;
+      }
+
+      .lane h3 { margin: 0 0 0.4rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; }
+      .lane h3 .badge { font-family: ui-monospace, monospace; padding: 0.1rem 0.4rem; border-radius: 4px; background: #e4e4e7; color: #18181b; margin-left: 0.3rem; }
+
+      .step {
+        margin: 0.55rem 0; padding: 0.55rem 0.7rem;
+        background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+        font-size: 0.78rem; line-height: 1.45;
+      }
+      .step .head {
+        font-size: 0.68rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.25rem;
+      }
+      .step.ok   { border-left: 3px solid #16a34a; background: #f0fdf4; }
+      .step.bad  { border-left: 3px solid #dc2626; background: #fef2f2; color: #7f1d1d; }
+      .step.warn { border-left: 3px solid #f59e0b; background: #fffbeb; color: #92400e; }
+      .step code { font-family: ui-monospace, monospace; font-size: 0.74rem; color: #18181b; background: #f4f4f5; padding: 0 4px; border-radius: 3px; }
+
+      .verdict {
+        margin: 1rem 0 0; padding: 0.85rem 1rem; border-radius: 10px;
+        font-size: 0.92rem; font-weight: 600;
+      }
+      .verdict.ok   { background: #dcfce7; color: #166534; }
+      .verdict.bad  { background: #fee2e2; color: #7f1d1d; }
+    </style>
+  </head>
+  <body>
+    <h1>One fetch, two processes — trace it step by step</h1>
+    <p class="intro">Flip any of the four contracts to broken and watch the trace turn red. Each row shows a real piece of the request lifecycle when a React frontend on <code>:5173</code> calls an Express API on <code>:8080</code>.</p>
+
+    <div class="controls" id="controls">
+      <div class="ctl" data-contract="url">
+        <div>
+          <div class="label">Frontend API URL</div>
+          <div class="hint">Matches the backend's port?</div>
+        </div>
+        <button data-toggle="url">http://localhost:8080</button>
+      </div>
+      <div class="ctl" data-contract="cors">
+        <div>
+          <div class="label">Backend CORS allow-list</div>
+          <div class="hint">Does it allow the frontend's origin?</div>
+        </div>
+        <button data-toggle="cors">http://localhost:5173</button>
+      </div>
+      <div class="ctl" data-contract="auth">
+        <div>
+          <div class="label">Auth token in request</div>
+          <div class="hint">Bearer header attached?</div>
+        </div>
+        <button data-toggle="auth">eyJhbGciOi…</button>
+      </div>
+      <div class="ctl" data-contract="server">
+        <div>
+          <div class="label">Backend running?</div>
+          <div class="hint">Process listening on the port?</div>
+        </div>
+        <button data-toggle="server">running</button>
+      </div>
+    </div>
+
+    <div class="lanes">
+      <div class="lane left">
+        <h3>Frontend <span class="badge">localhost:5173</span></h3>
+        <div id="lane-left"></div>
+      </div>
+      <div class="lane mid">network</div>
+      <div class="lane right">
+        <h3>Backend <span class="badge">localhost:8080</span></h3>
+        <div id="lane-right"></div>
+      </div>
+    </div>
+
+    <div class="verdict" id="verdict"></div>
+
+    <script>
+      const state = {
+        url:    true,   // frontend points at correct port
+        cors:   true,   // backend allows the origin
+        auth:   true,   // request includes Bearer header
+        server: true,   // backend is actually running
+      };
+
+      const buttons = document.querySelectorAll("[data-toggle]");
+      buttons.forEach((b) => {
+        const k = b.dataset.toggle;
+        b.classList.toggle("ok",  state[k]);
+        b.classList.toggle("bad", !state[k]);
+        b.addEventListener("click", () => {
+          state[k] = !state[k];
+          render();
+        });
+      });
+
+      function render() {
+        // Update buttons.
+        buttons.forEach((b) => {
+          const k = b.dataset.toggle;
+          b.classList.toggle("ok",  state[k]);
+          b.classList.toggle("bad", !state[k]);
+          if (k === "url") b.textContent = state.url ? "http://localhost:8080" : "http://localhost:8081";
+          if (k === "cors") b.textContent = state.cors ? "http://localhost:5173" : "https://evil.example";
+          if (k === "auth") b.textContent = state.auth ? "eyJhbGciOi…" : "(none)";
+          if (k === "server") b.textContent = state.server ? "running" : "down";
+        });
+
+        const left  = document.getElementById("lane-left");
+        const right = document.getElementById("lane-right");
+        left.innerHTML  = "";
+        right.innerHTML = "";
+
+        let blocking = null; // first step that fails
+
+        addStep(left, "ok", "1. fetch() called", `<code>fetch("/api/posts")</code>`);
+        addStep(left, "ok", "2. base URL resolved", `<code>${state.url ? "http://localhost:8080/posts" : "http://localhost:8081/posts"}</code>`);
+
+        if (!state.url || !state.server) {
+          addStep(left, "bad", "3. browser can't reach the server", state.server
+            ? "Request hits a port nothing is listening on. <code>ERR_CONNECTION_REFUSED</code>."
+            : "Backend process is down. <code>ERR_CONNECTION_REFUSED</code>.");
+          blocking = blocking ?? "no-server";
+        } else {
+          addStep(left, "ok", "3. TCP connect to backend OK", "Socket opens.");
+        }
+
+        // CORS preflight (POST + JSON triggers it).
+        addStep(left, blocking ? "warn" : "ok", "4. browser sends OPTIONS preflight",
+          "<code>OPTIONS /posts</code> with headers <code>Origin: http://localhost:5173</code> + <code>Access-Control-Request-Method: POST</code>.");
+
+        if (!blocking) {
+          addStep(right, "ok", "5. Express receives OPTIONS", "<code>cors</code> middleware intercepts.");
+          if (state.cors) {
+            addStep(right, "ok", "6. allow-list check passes",
+              "Sends back <code>Access-Control-Allow-Origin: http://localhost:5173</code>.");
+            addStep(left, "ok", "7. preflight OK — browser proceeds", "Sends the real <code>POST /posts</code>.");
+            addStep(right, "ok", "8. POST hits the route", state.auth
+              ? "Authorization middleware reads the Bearer token, verifies, attaches <code>req.user</code>."
+              : "<code>requireAuth</code> middleware sees no token, returns <code>401</code>.");
+            if (!state.auth) {
+              blocking = "no-auth";
+              addStep(left, "bad", "9. response: 401 Unauthorized", "Server says: who are you?");
+            } else {
+              addStep(right, "ok", "9. handler runs", "Reads body, writes to Postgres, returns the new post as JSON.");
+              addStep(left, "ok", "10. parsed JSON arrives", "<code>res.json()</code> resolves with the new post.");
+            }
+          } else {
+            blocking = "cors";
+            addStep(right, "bad", "6. CORS allow-list rejects the origin",
+              "Response has no <code>Access-Control-Allow-Origin</code> header.");
+            addStep(left, "bad", "7. browser drops the response", "Console: <code>CORS error: blocked by browser</code>.");
+          }
+        }
+
+        const verdict = document.getElementById("verdict");
+        if (!blocking) {
+          verdict.className = "verdict ok";
+          verdict.textContent = "✓ Round-trip success. The frontend has the new post. All four contracts lined up.";
+        } else if (blocking === "no-server") {
+          verdict.className = "verdict bad";
+          verdict.textContent = "✗ Network error. Backend isn't reachable — either it's not running or the URL points at the wrong port.";
+        } else if (blocking === "cors") {
+          verdict.className = "verdict bad";
+          verdict.textContent = "✗ CORS blocked. Backend has to list this origin in its CORS allow-list before the browser will deliver the response.";
+        } else if (blocking === "no-auth") {
+          verdict.className = "verdict bad";
+          verdict.textContent = "✗ Authentication failed. Request reached the server but no token was attached — protected route refused.";
+        }
+      }
+
+      function addStep(parent, kind, head, body) {
+        const el = document.createElement("div");
+        el.className = "step " + kind;
+        el.innerHTML = `<div class="head">${head}</div><div>${body}</div>`;
+        parent.appendChild(el);
+      }
+
+      render();
+    </script>
+  </body>
+</html>

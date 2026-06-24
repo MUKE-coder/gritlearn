@@ -80,15 +80,15 @@ const STATIC_OPTIONS: Omit<DownloadOption, "available" | "size">[] = [
 // by the navbar version pill, the /download page (server-fetched
 // installer_url is preferred when the API is reachable), and any
 // future "What's new" banner.
-export const FALLBACK_VERSION = "0.4.13";
+export const FALLBACK_VERSION = "0.4.14";
 const FALLBACK_INSTALLER_URL =
   `https://github.com/MUKE-coder/gritlearn/releases/download/v${FALLBACK_VERSION}/JEditor-Setup-v${FALLBACK_VERSION}.exe`;
 
 export const fallbackRelease: ReleaseInfo = {
   version: FALLBACK_VERSION,
-  releasedAt: "2026-06-20T08:00:00Z",
+  releasedAt: "2026-06-20T10:00:00Z",
   releaseNotes:
-    "JEditor v0.4.13 — Snip syntax highlighting fixed. Snipped PNGs now carry real Monokai/Dracula/One-Dark/GitHub-Light token colours instead of monochrome text. Swapped Monaco's colorize (whose stylesheet-driven colours html-to-image couldn't see) for Shiki's pre-bundled full grammar set — every token ships with its own inline color style so the rasteriser captures it cleanly. Snip shells (5 ray.so-grade frame themes) unchanged.",
+    "JEditor v0.4.14 — 5 new lessons. Phase 4 (Backend) closes with 'Connecting a separate frontend to Express' (the two-process model + CORS + auth flow + dev-loop debugging) and a full Milestone — a Standalone Express API blueprint synthesising every Phase 4 concept. Phase 5 (Go) opens with 'Why Go and where it shines' (when to reach for it + when not to), 'Go setup, modules, and `go run`' (toolchain + go.mod + project layouts), and 'Variables, constants, and types' (the three declaration forms + zero values + early traps). Each lesson ships with an interactive example.",
   githubUrl: `https://github.com/MUKE-coder/gritlearn/releases/tag/v${FALLBACK_VERSION}`,
   installerUrl: FALLBACK_INSTALLER_URL,
   // Approximate — real value flows from the API on success.

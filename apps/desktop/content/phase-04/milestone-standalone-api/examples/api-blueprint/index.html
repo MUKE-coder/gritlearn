@@ -1,0 +1,367 @@
+<!--
+  Annotated blueprint of the milestone blog API. Click any file in the
+  directory tree to see (a) its contents, (b) the seams to neighbouring
+  files, and (c) which Phase 4 concept introduced it. The point of the
+  example is to make the directory layout feel concrete BEFORE the
+  student opens an empty editor.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Blog API — annotated blueprint</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 1180px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; }
+
+      .tree {
+        border: 1px solid #e4e4e7; border-radius: 10px;
+        background: #fafafa; padding: 0.7rem 0.5rem;
+        max-height: 540px; overflow: auto;
+      }
+      .tree button {
+        display: block; width: 100%;
+        background: transparent; border: 0; cursor: pointer;
+        padding: 0.32rem 0.6rem; text-align: left;
+        font-family: ui-monospace, monospace; font-size: 0.78rem;
+        color: #18181b; border-radius: 4px;
+      }
+      .tree button:hover { background: #f4f4f5; }
+      .tree button.active { background: #15803d; color: #fff; }
+      .tree .label { color: #71717a; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.4rem 0.6rem 0.2rem; }
+      .tree .ind1 { padding-left: 1.2rem; }
+      .tree .ind2 { padding-left: 2rem; }
+
+      .detail {
+        border: 1px solid #e4e4e7; border-radius: 10px;
+        background: #fff; min-height: 540px; padding: 0;
+        overflow: hidden;
+      }
+      .detail .head {
+        padding: 0.85rem 1.1rem;
+        background: #18181b; color: #ededee;
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .detail .head .src {
+        background: #5FE3B0; color: #052e1f; padding: 0.15rem 0.5rem;
+        border-radius: 4px; font-size: 0.68rem; letter-spacing: 0.06em;
+      }
+      .detail .pane { padding: 1rem 1.2rem; }
+      .detail h3 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin: 0 0 0.45rem; }
+      .detail pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.74rem;
+        line-height: 1.55; overflow-x: auto; margin: 0;
+      }
+      .detail .seam {
+        margin-top: 1rem; padding: 0.7rem 0.9rem;
+        background: #f0fdf4; border-left: 3px solid #16a34a;
+        border-radius: 0 6px 6px 0; font-size: 0.82rem;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .number  { color: #fbbf24; }
+      .comment { color: #71717a; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>Blog API blueprint — click a file</h1>
+    <p class="intro">Each file in the milestone has a job. Each job came from a Phase 4 lesson. Click a file to see its contents + the seams that connect it to the rest of the API.</p>
+
+    <div class="layout">
+      <div class="tree" id="tree"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <script>
+      const FILES = [
+        // path, ind, lesson, snippet (string with span colour markup)
+        { p: "prisma/schema.prisma", ind: 1, lesson: "Express + Prisma + Postgres",
+          seam: "<code>db.js</code> imports the generated client. <code>routes/posts.js</code> reads / writes through it. Migrations regenerate this on schema changes.",
+          code: `<span class="keyword">model</span> User {
+  id        String   @id @default(<span class="keyword">cuid</span>())
+  email     String   @unique
+  password  String                       <span class="comment">// bcrypt hash</span>
+  name      String
+  bio       String?
+  posts     Post[]
+  createdAt DateTime @default(<span class="keyword">now</span>())
+}
+
+<span class="keyword">model</span> Post {
+  id        String   @id @default(<span class="keyword">cuid</span>())
+  title     String
+  body      String
+  published Boolean  @default(<span class="keyword">false</span>)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: <span class="keyword">Cascade</span>)
+  createdAt DateTime @default(<span class="keyword">now</span>())
+
+  @@index([authorId, published])
+}`,
+        },
+
+        { p: "src/env.js", ind: 1, lesson: "Env config + Zod",
+          seam: "Imported by every file that needs a secret. Crashes the process on boot if anything's missing — fail loud, never at 3am.",
+          code: `<span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+
+<span class="keyword">const</span> Schema = z.object({
+  NODE_ENV: z.<span class="keyword">enum</span>([<span class="string">"development"</span>, <span class="string">"production"</span>, <span class="string">"test"</span>]).default(<span class="string">"development"</span>),
+  PORT: z.coerce.number().default(<span class="number">3000</span>),
+  DATABASE_URL: z.string().url(),
+  JWT_SECRET: z.string().min(<span class="number">32</span>),
+  FRONTEND_URL: z.string().default(<span class="string">"http://localhost:5173"</span>),
+});
+
+<span class="keyword">export const</span> env = Schema.parse(process.env);`,
+        },
+
+        { p: "src/db.js", ind: 1, lesson: "Express + Prisma + Postgres",
+          seam: "Singleton: imported anywhere we touch the DB. Reusing one PrismaClient stops the dev server leaking connections on hot-reload.",
+          code: `<span class="keyword">import</span> { PrismaClient } <span class="keyword">from</span> <span class="string">"@prisma/client"</span>;
+
+<span class="keyword">const</span> globalForPrisma = globalThis;
+<span class="keyword">export const</span> prisma = globalForPrisma.prisma ?? <span class="keyword">new</span> PrismaClient();
+<span class="keyword">if</span> (process.env.NODE_ENV !== <span class="string">"production"</span>) globalForPrisma.prisma = prisma;`,
+        },
+
+        { p: "src/server.js", ind: 1, lesson: "Middleware order + CORS",
+          seam: "The conductor. Order matters: helmet → cors → json → morgan → routes → 404 → error handler. Get one slot wrong and the API silently breaks.",
+          code: `<span class="keyword">import</span> express <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> cors <span class="keyword">from</span> <span class="string">"cors"</span>;
+<span class="keyword">import</span> { env } <span class="keyword">from</span> <span class="string">"./env.js"</span>;
+<span class="keyword">import</span> authRouter <span class="keyword">from</span> <span class="string">"./routes/auth.js"</span>;
+<span class="keyword">import</span> postsRouter <span class="keyword">from</span> <span class="string">"./routes/posts.js"</span>;
+
+<span class="keyword">const</span> app = express();
+app.<span class="keyword">use</span>(cors({ origin: env.FRONTEND_URL, credentials: <span class="keyword">true</span> }));
+app.<span class="keyword">use</span>(express.json({ limit: <span class="string">"1mb"</span> }));
+
+app.<span class="keyword">use</span>(<span class="string">"/auth"</span>, authRouter);
+app.<span class="keyword">use</span>(<span class="string">"/posts"</span>, postsRouter);
+
+app.<span class="keyword">use</span>((err, req, res, next) =&gt; {
+  res.status(err.status ?? <span class="number">500</span>).json({ error: err.message });
+});
+
+app.listen(env.PORT, () =&gt; console.<span class="keyword">log</span>(<span class="string">\`API on :\${env.PORT}\`</span>));`,
+        },
+
+        { p: "src/middleware/", ind: 1, isHeader: true },
+
+        { p: "src/middleware/auth.js", ind: 2, lesson: "JWT sessions",
+          seam: "Used by every protected route. Attaches <code>req.user</code> for downstream handlers + the ownership middleware.",
+          code: `<span class="keyword">import</span> jwt <span class="keyword">from</span> <span class="string">"jsonwebtoken"</span>;
+<span class="keyword">import</span> { env } <span class="keyword">from</span> <span class="string">"../env.js"</span>;
+
+<span class="keyword">export function</span> requireAuth(req, res, next) {
+  <span class="keyword">const</span> hdr = req.headers.authorization ?? <span class="string">""</span>;
+  <span class="keyword">if</span> (!hdr.startsWith(<span class="string">"Bearer "</span>))
+    <span class="keyword">return</span> res.status(<span class="number">401</span>).json({ error: <span class="string">"Missing token"</span> });
+  <span class="keyword">try</span> {
+    req.user = jwt.verify(hdr.slice(<span class="number">7</span>), env.JWT_SECRET);
+    next();
+  } <span class="keyword">catch</span> {
+    res.status(<span class="number">401</span>).json({ error: <span class="string">"Invalid token"</span> });
+  }
+}`,
+        },
+
+        { p: "src/middleware/owner.js", ind: 2, lesson: "Authorization",
+          seam: "Layered on top of <code>requireAuth</code>. Reads the resource, compares <code>resource.authorId</code> to <code>req.user.sub</code>. 404 hides the existence of resources not owned by the caller.",
+          code: `<span class="keyword">import</span> { prisma } <span class="keyword">from</span> <span class="string">"../db.js"</span>;
+
+<span class="keyword">export function</span> requireOwnerOfPost(req, res, next) {
+  prisma.post.findUnique({ where: { id: req.params.id } })
+    .then((post) =&gt; {
+      <span class="keyword">if</span> (!post)                       <span class="keyword">return</span> res.status(<span class="number">404</span>).end();
+      <span class="keyword">if</span> (post.authorId !== req.user.sub) <span class="keyword">return</span> res.status(<span class="number">404</span>).end();
+      req.post = post;
+      next();
+    })
+    .catch(next);
+}`,
+        },
+
+        { p: "src/middleware/validate.js", ind: 2, lesson: "Input validation",
+          seam: "Wraps any Zod schema. Replaces hand-rolled <code>if (!req.body.x)</code> chains everywhere.",
+          code: `<span class="keyword">export</span> validate(schema) =&gt; (req, res, next) =&gt; {
+  <span class="keyword">const</span> r = schema.safeParse(req.body);
+  <span class="keyword">if</span> (!r.success) {
+    <span class="keyword">return</span> res.status(<span class="number">422</span>).json({
+      error: <span class="string">"Validation failed"</span>,
+      issues: r.error.issues,
+    });
+  }
+  req.body = r.data; <span class="comment">// pass the parsed/transformed value forward</span>
+  next();
+};`,
+        },
+
+        { p: "src/middleware/rate-limit.js", ind: 2, lesson: "JWT sessions / brute-force resistance",
+          seam: "Mounted on <code>/auth/login</code> + <code>/auth/register</code>. Keys by IP. In prod you'd back this with Redis so it survives restarts.",
+          code: `<span class="keyword">import</span> rateLimit <span class="keyword">from</span> <span class="string">"express-rate-limit"</span>;
+
+<span class="keyword">export const</span> authLimiter = rateLimit({
+  windowMs: <span class="number">10</span> * <span class="number">60</span> * <span class="number">1000</span>,   <span class="comment">// 10 minutes</span>
+  max: <span class="number">5</span>,                       <span class="comment">// 5 attempts per IP per window</span>
+  standardHeaders: <span class="keyword">true</span>,
+  legacyHeaders: <span class="keyword">false</span>,
+  message: { error: <span class="string">"Too many attempts. Try again in 10 minutes."</span> },
+});`,
+        },
+
+        { p: "src/routes/", ind: 1, isHeader: true },
+
+        { p: "src/routes/auth.js", ind: 2, lesson: "REST endpoints + JWT",
+          seam: "Three endpoints, three patterns: public (register, login) and protected (me). Signs the JWT with env.JWT_SECRET.",
+          code: `<span class="keyword">import</span> { Router } <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> bcrypt <span class="keyword">from</span> <span class="string">"bcrypt"</span>;
+<span class="keyword">import</span> jwt <span class="keyword">from</span> <span class="string">"jsonwebtoken"</span>;
+<span class="keyword">import</span> { prisma } <span class="keyword">from</span> <span class="string">"../db.js"</span>;
+<span class="keyword">import</span> { env } <span class="keyword">from</span> <span class="string">"../env.js"</span>;
+<span class="keyword">import</span> { authLimiter } <span class="keyword">from</span> <span class="string">"../middleware/rate-limit.js"</span>;
+<span class="keyword">import</span> { requireAuth } <span class="keyword">from</span> <span class="string">"../middleware/auth.js"</span>;
+<span class="keyword">import</span> { validate } <span class="keyword">from</span> <span class="string">"../middleware/validate.js"</span>;
+<span class="keyword">import</span> { RegisterSchema, LoginSchema } <span class="keyword">from</span> <span class="string">"../schemas/auth.js"</span>;
+
+<span class="keyword">const</span> router = Router();
+
+router.post(<span class="string">"/register"</span>, authLimiter, validate(RegisterSchema), <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> hashed = <span class="keyword">await</span> bcrypt.hash(req.body.password, <span class="number">12</span>);
+  <span class="keyword">const</span> user = <span class="keyword">await</span> prisma.user.create({
+    data: { ...req.body, password: hashed },
+    select: { id: <span class="keyword">true</span>, email: <span class="keyword">true</span>, name: <span class="keyword">true</span> },  <span class="comment">// never return password</span>
+  });
+  <span class="keyword">const</span> token = jwt.sign({ sub: user.id }, env.JWT_SECRET, { expiresIn: <span class="string">"7d"</span> });
+  res.status(<span class="number">201</span>).json({ user, token });
+});
+
+router.get(<span class="string">"/me"</span>, requireAuth, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> user = <span class="keyword">await</span> prisma.user.findUnique({
+    where: { id: req.user.sub },
+    select: { id: <span class="keyword">true</span>, email: <span class="keyword">true</span>, name: <span class="keyword">true</span>, bio: <span class="keyword">true</span> },
+  });
+  res.json(user);
+});
+
+<span class="keyword">export default</span> router;`,
+        },
+
+        { p: "src/routes/posts.js", ind: 2, lesson: "REST endpoints + Authorization",
+          seam: "Mixed auth: list is public, create needs requireAuth, update + delete need requireAuth + requireOwnerOfPost.",
+          code: `<span class="keyword">import</span> { Router } <span class="keyword">from</span> <span class="string">"express"</span>;
+<span class="keyword">import</span> { prisma } <span class="keyword">from</span> <span class="string">"../db.js"</span>;
+<span class="keyword">import</span> { requireAuth } <span class="keyword">from</span> <span class="string">"../middleware/auth.js"</span>;
+<span class="keyword">import</span> { requireOwnerOfPost } <span class="keyword">from</span> <span class="string">"../middleware/owner.js"</span>;
+<span class="keyword">import</span> { validate } <span class="keyword">from</span> <span class="string">"../middleware/validate.js"</span>;
+<span class="keyword">import</span> { CreatePostSchema, UpdatePostSchema } <span class="keyword">from</span> <span class="string">"../schemas/post.js"</span>;
+
+<span class="keyword">const</span> router = Router();
+
+router.get(<span class="string">"/"</span>, <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> page = Number(req.query.page ?? <span class="number">1</span>);
+  <span class="keyword">const</span> limit = Math.min(<span class="number">100</span>, Number(req.query.limit ?? <span class="number">20</span>));
+  <span class="keyword">const</span> posts = <span class="keyword">await</span> prisma.post.findMany({
+    where: { published: <span class="keyword">true</span> },
+    take: limit, skip: (page - <span class="number">1</span>) * limit,
+    orderBy: { createdAt: <span class="string">"desc"</span> },
+  });
+  res.json({ page, limit, posts });
+});
+
+router.post(<span class="string">"/"</span>, requireAuth, validate(CreatePostSchema), <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> post = <span class="keyword">await</span> prisma.post.create({
+    data: { ...req.body, authorId: req.user.sub },
+  });
+  res.status(<span class="number">201</span>).json(post);
+});
+
+router.patch(<span class="string">"/:id"</span>, requireAuth, requireOwnerOfPost, validate(UpdatePostSchema), <span class="keyword">async</span> (req, res) =&gt; {
+  <span class="keyword">const</span> updated = <span class="keyword">await</span> prisma.post.update({
+    where: { id: req.params.id },
+    data: req.body,
+  });
+  res.json(updated);
+});
+
+<span class="keyword">export default</span> router;`,
+        },
+
+        { p: "src/schemas/", ind: 1, isHeader: true },
+
+        { p: "src/schemas/post.js", ind: 2, lesson: "Input validation",
+          seam: "Two schemas: Create requires title + body; Update is .partial() so PATCH can submit one field.",
+          code: `<span class="keyword">import</span> { z } <span class="keyword">from</span> <span class="string">"zod"</span>;
+
+<span class="keyword">export const</span> CreatePostSchema = z.object({
+  title:     z.string().min(<span class="number">1</span>).max(<span class="number">200</span>),
+  body:      z.string().min(<span class="number">1</span>),
+  published: z.boolean().optional().default(<span class="keyword">false</span>),
+});
+
+<span class="keyword">export const</span> UpdatePostSchema = CreatePostSchema.partial();`,
+        },
+
+        { p: ".env.example", ind: 1, lesson: "Env config",
+          seam: "Committed to git. The real <code>.env</code> stays out. New devs copy this, fill in their own values.",
+          code: `<span class="comment"># API runtime</span>
+PORT=3000
+NODE_ENV=development
+
+<span class="comment"># Postgres connection (Prisma reads this)</span>
+DATABASE_URL=<span class="string">"postgresql://user:pass@localhost:5432/blog_dev"</span>
+
+<span class="comment"># JWT — generate with: openssl rand -base64 48</span>
+JWT_SECRET=<span class="string">"replace_with_a_real_32+_char_secret"</span>
+
+<span class="comment"># Frontend origin (CORS allow-list)</span>
+FRONTEND_URL=<span class="string">"http://localhost:5173"</span>`,
+        },
+      ];
+
+      const tree    = document.getElementById("tree");
+      const detail  = document.getElementById("detail");
+
+      FILES.forEach((f, i) => {
+        if (f.isHeader) {
+          const h = document.createElement("div");
+          h.className = "label ind" + f.ind;
+          h.textContent = f.p;
+          tree.appendChild(h);
+          return;
+        }
+        const btn = document.createElement("button");
+        btn.className = "ind" + f.ind;
+        btn.textContent = f.p.split("/").pop();
+        btn.dataset.idx = i;
+        btn.addEventListener("click", () => select(i));
+        tree.appendChild(btn);
+      });
+
+      function select(idx) {
+        const f = FILES[idx];
+        document.querySelectorAll(".tree button").forEach((b) => b.classList.toggle("active", Number(b.dataset.idx) === idx));
+        detail.innerHTML = `
+          <div class="head">
+            <span>${f.p}</span>
+            <span class="src">FROM: ${f.lesson}</span>
+          </div>
+          <div class="pane">
+            <h3>Contents</h3>
+            <pre>${f.code}</pre>
+            <div class="seam"><strong>Seam:</strong> ${f.seam}</div>
+          </div>
+        `;
+      }
+
+      // Open server.js on load — it's the conductor; orients students best.
+      const idx = FILES.findIndex((f) => f.p === "src/server.js");
+      select(idx);
+    </script>
+  </body>
+</html>

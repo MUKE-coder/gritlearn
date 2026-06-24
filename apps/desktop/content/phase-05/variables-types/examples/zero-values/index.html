@@ -1,0 +1,159 @@
+<!--
+  Zero values table. Click any type to see its default value, the
+  declaration shape, and a one-line gotcha that bites if you don't
+  remember it.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Go zero values</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 920px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .grid { display: grid; grid-template-columns: 240px 1fr; gap: 1rem; border: 1px solid #e4e4e7; border-radius: 12px; overflow: hidden; }
+      .list { background: #fafafa; border-right: 1px solid #e4e4e7; padding: 0.6rem 0.5rem; max-height: 480px; overflow: auto; }
+      .list button {
+        display: block; width: 100%; background: transparent; border: 0; cursor: pointer;
+        padding: 0.35rem 0.55rem; text-align: left;
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        color: #18181b; border-radius: 4px;
+      }
+      .list button:hover { background: #f4f4f5; }
+      .list button.active { background: #15803d; color: #fff; }
+      .list .group { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #71717a; padding: 0.6rem 0.55rem 0.25rem; }
+
+      .detail { padding: 1rem 1.2rem; background: #fff; min-height: 380px; }
+      .detail h2 { margin: 0 0 0.4rem; font-size: 1rem; font-family: ui-monospace, monospace; }
+      .detail .zero {
+        display: inline-block; padding: 0.4rem 0.7rem; margin: 0.4rem 0;
+        background: #0a0a0d; color: #5FE3B0; border-radius: 6px;
+        font-family: ui-monospace, monospace; font-size: 0.88rem;
+      }
+      .detail .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #71717a; margin-top: 0.95rem; }
+      .detail pre {
+        background: #0a0a0d; color: #ededee; padding: 0.75rem 0.95rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem;
+        line-height: 1.55; overflow-x: auto; margin: 0.3rem 0 0;
+      }
+      .detail .gotcha {
+        margin-top: 0.95rem; padding: 0.65rem 0.85rem;
+        background: #fffbeb; border-left: 3px solid #f59e0b;
+        border-radius: 0 6px 6px 0; font-size: 0.82rem;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>Every Go type's zero value</h1>
+    <p class="intro">A variable you declare without an initial value gets its type's zero value. Hold this table in your head and you stop writing defensive nil checks.</p>
+
+    <div class="grid">
+      <div class="list" id="list"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <script>
+      const TYPES = [
+        { g: "scalar", t: "bool",        z: "false",
+          code: `<span class="keyword">var</span> ready <span class="keyword">bool</span>
+fmt.Println(ready) <span class="comment">// false</span>`,
+          gotcha: "A zero-value bool can't tell 'never set' from 'set to false'. If you need both, use *bool." },
+        { g: "scalar", t: "int / int64", z: "0",
+          code: `<span class="keyword">var</span> n <span class="keyword">int</span>
+fmt.Println(n) <span class="comment">// 0</span>`,
+          gotcha: "0 is a real value. A zero-value int can't represent 'no port configured' — use a pointer or a separate present flag." },
+        { g: "scalar", t: "float64",     z: "0",
+          code: `<span class="keyword">var</span> r <span class="keyword">float64</span>
+fmt.Println(r) <span class="comment">// 0</span>`,
+          gotcha: "Don't confuse zero-value 0 with NaN. NaN comes from operations like 0.0/0.0, not from declaration." },
+        { g: "scalar", t: "string",      z: `""`,
+          code: `<span class="keyword">var</span> name <span class="keyword">string</span>
+fmt.Println(len(name)) <span class="comment">// 0</span>
+fmt.Println(name == <span class="string">""</span>) <span class="comment">// true</span>`,
+          gotcha: "Empty string is the zero value — but it's also a meaningful 'I have an empty string.' Use a *string if you need 'not set' to mean something different." },
+
+        { g: "reference", t: "*T (pointer)", z: "nil",
+          code: `<span class="keyword">var</span> p *User
+fmt.Println(p) <span class="comment">// &lt;nil&gt;</span>
+<span class="comment">// p.Name → panic: nil pointer dereference</span>`,
+          gotcha: "Dereferencing a nil pointer panics. ALWAYS check for nil before accessing fields through a pointer." },
+        { g: "reference", t: "slice []T", z: "nil",
+          code: `<span class="keyword">var</span> s []<span class="keyword">int</span>
+fmt.Println(len(s)) <span class="comment">// 0</span>
+fmt.Println(s == <span class="keyword">nil</span>) <span class="comment">// true</span>
+<span class="keyword">for</span> _, v := <span class="keyword">range</span> s { } <span class="comment">// iterates 0 times — safe</span>
+s = <span class="keyword">append</span>(s, <span class="comment">1) // also safe — append handles nil</span>`,
+          gotcha: "A nil slice iterates and appends safely — it's almost as good as []int{}. The difference shows up in marshalling: nil → null, []int{} → []." },
+        { g: "reference", t: "map[K]V", z: "nil",
+          code: `<span class="keyword">var</span> m <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">int</span>
+fmt.Println(m[<span class="string">"x"</span>]) <span class="comment">// 0 — reading a nil map is OK</span>
+m[<span class="string">"x"</span>] = <span class="comment">1                // PANIC — writing to a nil map crashes</span>
+m = <span class="keyword">make</span>(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">int</span>)
+m[<span class="string">"x"</span>] = <span class="comment">1                // safe now</span>`,
+          gotcha: "Nil maps are read-safe but write-fatal. Always make() before you put into a map." },
+        { g: "reference", t: "interface", z: "nil",
+          code: `<span class="keyword">var</span> e <span class="keyword">error</span>
+fmt.Println(e == <span class="keyword">nil</span>) <span class="comment">// true</span>`,
+          gotcha: "An interface holding a nil typed pointer is NOT nil. var p *Err; var e error = p; e == nil → FALSE. Catches everyone once." },
+        { g: "reference", t: "channel chan T", z: "nil",
+          code: `<span class="keyword">var</span> ch <span class="keyword">chan</span> <span class="keyword">int</span>
+<span class="comment">// receive from a nil channel: blocks forever</span>
+<span class="comment">// send to a nil channel: blocks forever</span>
+<span class="comment">// close a nil channel: panics</span>
+ch = <span class="keyword">make</span>(<span class="keyword">chan</span> <span class="keyword">int</span>)`,
+          gotcha: "Nil channels block forever on both ends. Make them before using. They have a niche use in select{} fan-in patterns; that's it." },
+        { g: "composite", t: "struct", z: "all-fields-zero",
+          code: `<span class="keyword">type</span> User <span class="keyword">struct</span> {
+    Name <span class="keyword">string</span>
+    Age  <span class="keyword">int</span>
+}
+<span class="keyword">var</span> u User
+fmt.Println(u) <span class="comment">// { 0 }</span>`,
+          gotcha: "Each field gets ITS type's zero value. No constructor calls; no nil struct (struct values aren't nilable)." },
+        { g: "composite", t: "array [N]T", z: "all-elements-zero",
+          code: `<span class="keyword">var</span> a [<span class="comment">3</span>]<span class="keyword">int</span>
+fmt.Println(a) <span class="comment">// [0 0 0]</span>`,
+          gotcha: "Arrays have FIXED length. [3]int and [4]int are different types. You almost never use raw arrays; you use slices (see above)." },
+      ];
+
+      const list = document.getElementById("list");
+      const detail = document.getElementById("detail");
+
+      let lastGroup = "";
+      TYPES.forEach((t, i) => {
+        if (t.g !== lastGroup) {
+          const h = document.createElement("div");
+          h.className = "group";
+          h.textContent = t.g;
+          list.appendChild(h);
+          lastGroup = t.g;
+        }
+        const b = document.createElement("button");
+        b.textContent = t.t;
+        b.dataset.idx = i;
+        b.addEventListener("click", () => select(i));
+        list.appendChild(b);
+      });
+
+      function select(idx) {
+        const t = TYPES[idx];
+        list.querySelectorAll("button").forEach((b) => b.classList.toggle("active", Number(b.dataset.idx) === idx));
+        detail.innerHTML = `
+          <h2>${t.t}</h2>
+          <div class="label">Zero value</div>
+          <div class="zero">${t.z}</div>
+          <div class="label">In code</div>
+          <pre>${t.code}</pre>
+          <div class="gotcha"><strong>Gotcha:</strong> ${t.gotcha}</div>
+        `;
+      }
+
+      select(0);
+    </script>
+  </body>
+</html>

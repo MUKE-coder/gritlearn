@@ -1,0 +1,252 @@
+<!--
+  Toggle the three project layouts. Click "Single file" / "Medium" /
+  "cmd + internal". The annotated tree shows what each file holds + how
+  the seams work. Reading map for project bootstrap.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Go project layout — annotated</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 980px; margin: 2.5rem auto; padding: 0 1rem; line-height: 1.5; color: #18181b; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+      p.intro { color: #52525b; margin: 0 0 1.4rem; }
+
+      .picker { display: flex; gap: 0.4rem; margin: 1rem 0; flex-wrap: wrap; }
+      .picker button {
+        padding: 0.48rem 0.85rem; border: 1px solid #d4d4d8; border-radius: 6px;
+        background: #fff; cursor: pointer; font-size: 0.82rem;
+        font-family: ui-monospace, monospace;
+      }
+      .picker button.active { background: #15803d; color: #fff; border-color: #15803d; }
+
+      .layout {
+        display: grid; grid-template-columns: 300px 1fr; gap: 1rem;
+        border: 1px solid #e4e4e7; border-radius: 12px; overflow: hidden;
+      }
+      .tree {
+        background: #fafafa; border-right: 1px solid #e4e4e7; padding: 0.8rem 0.5rem;
+        max-height: 480px; overflow: auto;
+      }
+      .tree button {
+        display: block; width: 100%; background: transparent; border: 0; cursor: pointer;
+        padding: 0.3rem 0.55rem; text-align: left;
+        font-family: ui-monospace, monospace; font-size: 0.76rem;
+        color: #18181b; border-radius: 4px;
+      }
+      .tree button:hover { background: #f4f4f5; }
+      .tree button.active { background: #15803d; color: #fff; }
+      .tree .ind1 { padding-left: 1.4rem; }
+      .tree .ind2 { padding-left: 2.2rem; }
+
+      .detail { padding: 1rem 1.2rem; background: #fff; min-height: 380px; }
+      .detail h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+      .detail .why {
+        margin-top: 1rem; padding: 0.65rem 0.85rem;
+        background: #f0fdf4; border-left: 3px solid #16a34a;
+        border-radius: 0 6px 6px 0; font-size: 0.82rem;
+      }
+      .detail pre {
+        background: #0a0a0d; color: #ededee; padding: 0.85rem 1rem; border-radius: 6px;
+        font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.76rem;
+        line-height: 1.55; overflow-x: auto; margin: 0;
+      }
+      .keyword { color: #38bdf8; }
+      .string  { color: #7fff5b; }
+      .comment { color: #71717a; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h1>Three Go project layouts</h1>
+    <p class="intro">Use the smallest layout that fits. A single-file project graduates to medium once it sprawls past ~300 lines; medium graduates to cmd/internal when you have two binaries or a public stable API to host.</p>
+
+    <div class="picker" id="picker"></div>
+
+    <div class="layout">
+      <div class="tree" id="tree"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <script>
+      const LAYOUTS = {
+        small: {
+          label: "Single file",
+          files: [
+            { p: "go.mod", ind: 0,
+              why: "Always at the root. Names the module and pins the Go version.",
+              code: `module github.com/jbweb/blog-api
+
+go 1.24` },
+            { p: "go.sum", ind: 0,
+              why: "Lockfile — created by go on first dependency add. Commit it. Don't edit.",
+              code: `<span class="comment">(empty — no deps yet)</span>` },
+            { p: "main.go", ind: 0,
+              why: "package main + a func main() = an executable. Single file is fine for <300 LOC.",
+              code: `<span class="keyword">package</span> main
+
+<span class="keyword">import</span> <span class="string">"fmt"</span>
+
+<span class="keyword">func</span> main() {
+    fmt.Println(<span class="string">"hello, blog"</span>)
+}` },
+          ],
+        },
+
+        medium: {
+          label: "Medium (binary + a few packages)",
+          files: [
+            { p: "go.mod", ind: 0, why: "Same as small layout. The module path stays at the root.",
+              code: `module github.com/jbweb/blog-api
+
+go 1.24
+
+require github.com/google/uuid v1.6.0` },
+            { p: "main.go", ind: 0, why: "Imports the sibling packages by full path. Stays small — just wiring.",
+              code: `<span class="keyword">package</span> main
+
+<span class="keyword">import</span> (
+    <span class="string">"log"</span>
+    <span class="string">"net/http"</span>
+
+    <span class="string">"github.com/jbweb/blog-api/handlers"</span>
+)
+
+<span class="keyword">func</span> main() {
+    http.HandleFunc(<span class="string">"/posts"</span>, handlers.ListPosts)
+    log.Fatal(http.ListenAndServe(<span class="string">":8080"</span>, <span class="keyword">nil</span>))
+}` },
+            { p: "handlers/", ind: 0, isHeader: true },
+            { p: "handlers/auth.go",  ind: 1, why: "package handlers — auth-related HTTP handlers.",
+              code: `<span class="keyword">package</span> handlers
+
+<span class="keyword">import</span> <span class="string">"net/http"</span>
+
+<span class="keyword">func</span> Login(w http.ResponseWriter, r *http.Request) {
+    <span class="comment">// ...</span>
+}` },
+            { p: "handlers/posts.go", ind: 1, why: "package handlers — post-related HTTP handlers. Same package as auth.go.",
+              code: `<span class="keyword">package</span> handlers
+
+<span class="keyword">import</span> <span class="string">"net/http"</span>
+
+<span class="keyword">func</span> ListPosts(w http.ResponseWriter, r *http.Request) {
+    <span class="comment">// ...</span>
+}` },
+            { p: "models/", ind: 0, isHeader: true },
+            { p: "models/user.go",    ind: 1, why: "package models — domain types. Importable as github.com/jbweb/blog-api/models.",
+              code: `<span class="keyword">package</span> models
+
+<span class="keyword">type</span> User <span class="keyword">struct</span> {
+    ID    <span class="keyword">string</span>
+    Email <span class="keyword">string</span>
+    Name  <span class="keyword">string</span>
+}` },
+          ],
+        },
+
+        large: {
+          label: "cmd + internal",
+          files: [
+            { p: "go.mod", ind: 0, why: "Module root. Same shape as before.",
+              code: `module github.com/jbweb/blog-api
+
+go 1.24` },
+            { p: "cmd/", ind: 0, isHeader: true },
+            { p: "cmd/server/", ind: 1, isHeader: true },
+            { p: "cmd/server/main.go", ind: 2, why: "One binary, one folder under cmd/. Each subfolder becomes its own go-build target.",
+              code: `<span class="keyword">package</span> main
+
+<span class="keyword">import</span> (
+    <span class="string">"log"</span>
+
+    <span class="string">"github.com/jbweb/blog-api/internal/server"</span>
+)
+
+<span class="keyword">func</span> main() {
+    log.Fatal(server.Start())
+}` },
+            { p: "internal/", ind: 0, isHeader: true },
+            { p: "internal/server/", ind: 1, isHeader: true },
+            { p: "internal/server/server.go", ind: 2, why: "internal/ is special — Go's compiler forbids any module outside this one from importing it. Use it for code you DON'T want to be a public API.",
+              code: `<span class="keyword">package</span> server
+
+<span class="keyword">import</span> <span class="string">"net/http"</span>
+
+<span class="keyword">func</span> Start() <span class="keyword">error</span> {
+    <span class="keyword">return</span> http.ListenAndServe(<span class="string">":8080"</span>, <span class="keyword">nil</span>)
+}` },
+            { p: "internal/db/", ind: 1, isHeader: true },
+            { p: "internal/db/db.go", ind: 2, why: "DB connection setup, kept private to this module so nobody outside can wire to your DB by accident.",
+              code: `<span class="keyword">package</span> db
+
+<span class="keyword">import</span> <span class="string">"database/sql"</span>
+
+<span class="keyword">func</span> Open(dsn <span class="keyword">string</span>) (*sql.DB, <span class="keyword">error</span>) {
+    <span class="keyword">return</span> sql.Open(<span class="string">"postgres"</span>, dsn)
+}` },
+          ],
+        },
+      };
+
+      let activeLayout = "small";
+      let activeFile   = 0;
+
+      const picker = document.getElementById("picker");
+      Object.entries(LAYOUTS).forEach(([id, l], i) => {
+        const b = document.createElement("button");
+        b.textContent = l.label;
+        if (id === activeLayout) b.classList.add("active");
+        b.addEventListener("click", () => {
+          activeLayout = id;
+          activeFile = LAYOUTS[id].files.findIndex((f) => !f.isHeader);
+          render();
+        });
+        picker.appendChild(b);
+      });
+
+      const tree = document.getElementById("tree");
+      const detail = document.getElementById("detail");
+
+      function render() {
+        picker.querySelectorAll("button").forEach((b, i) => {
+          b.classList.toggle("active", Object.keys(LAYOUTS)[i] === activeLayout);
+        });
+
+        const files = LAYOUTS[activeLayout].files;
+        tree.innerHTML = "";
+        files.forEach((f, i) => {
+          if (f.isHeader) {
+            const h = document.createElement("div");
+            h.className = "ind" + f.ind;
+            h.style.color = "#71717a";
+            h.style.fontFamily = "ui-monospace, monospace";
+            h.style.fontSize = "0.72rem";
+            h.style.padding = "0.4rem 0.55rem 0.1rem";
+            h.textContent = f.p;
+            tree.appendChild(h);
+            return;
+          }
+          const b = document.createElement("button");
+          b.className = "ind" + f.ind;
+          b.textContent = f.p.split("/").pop() || f.p;
+          if (i === activeFile) b.classList.add("active");
+          b.addEventListener("click", () => {
+            activeFile = i;
+            render();
+          });
+          tree.appendChild(b);
+        });
+
+        const f = files[activeFile];
+        detail.innerHTML = `
+          <h2>${f.p}</h2>
+          <pre>${f.code}</pre>
+          <div class="why"><strong>Why this file:</strong> ${f.why}</div>
+        `;
+      }
+
+      render();
+    </script>
+  </body>
+</html>

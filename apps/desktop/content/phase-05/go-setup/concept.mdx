@@ -1,0 +1,219 @@
+## Go setup, modules, and `go run`
+
+Most languages need a tutorial just to start. Python wants you to learn `pip` and virtualenv. Node wants a `package.json` and `npm install`. Java wants Maven. Go's whole setup story is *install the toolchain, run `go run main.go`*. This lesson covers the toolchain, the **module** system that replaces `npm install`, and the loop you'll use a hundred times a day: write code → `go run` → read errors → fix → repeat.
+
+<Analogy>
+A Go installation is **a workshop with every tool already on the wall.** Hammer, screwdriver, saw, drill, level — they came with the building. You walk in, pick up the saw, cut wood. You don't go shopping first.
+
+A Node installation is **a workshop with an empty workbench and an Amazon account.** Every project, you order parts. `npm install` is the unboxing. Each new project starts with a delivery delay.
+
+The trade-off isn't subtle. The Go workshop is bigger and heavier — you can't fit it in a carry-on. But you never stop working to wait on a delivery. Day-to-day this means:
+
+- **A new Go project is one file.** `main.go` with a `package main` declaration. `go run main.go` works.
+- **Adding a dependency is one command.** `go get github.com/some/lib`. It appears in your `go.mod` automatically — no manual editing of a config file.
+- **The toolchain comes with everything else you'd `npm install` separately**: a formatter (`gofmt`), a linter (`go vet`), a test runner (`go test`), a docs server (`go doc`), a benchmark tool, a race detector. One command per job.
+
+Once you internalise that the toolchain *is* the workshop, day-to-day Go work feels light. The complexity in Go isn't in the setup — it's in the language. The setup is the easiest twenty minutes you'll spend.
+</Analogy>
+
+### Installing Go
+
+Three ways, pick whichever matches your platform:
+
+```bash
+# macOS via Homebrew
+brew install go
+
+# Windows via winget
+winget install GoLang.Go
+
+# Linux via apt
+sudo apt install golang
+# OR — official tarball if your distro is behind
+wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+```
+
+Verify:
+
+```bash
+$ go version
+go version go1.24.0 darwin/arm64
+```
+
+Anything 1.22+ is fine for this phase. The language is stable; the version bumps are small.
+
+### The module system in one paragraph
+
+A **module** is what Node calls a "package" or "project": a folder with code in it. Modules are identified by a path, which is usually a Git repo URL (`github.com/your/project`). Even a private local module has a module path — it doesn't have to actually exist on GitHub. Convention: use `github.com/your-name/project-name` so the path is unique forever, even if you move the code later.
+
+The module is declared in **`go.mod`** at the repo root:
+
+```
+module github.com/jbweb/blog-api
+
+go 1.24
+
+require (
+    github.com/gorilla/mux v1.8.1
+    golang.org/x/crypto v0.30.0
+)
+```
+
+That's it. Three pieces:
+
+- `module` — the path of THIS module.
+- `go` — the minimum language version it requires.
+- `require` — dependencies, with versions pinned to a specific tag or commit.
+
+The `require` block is managed by Go tools. You don't write it by hand; running `go get` or `go mod tidy` keeps it in sync with what your code actually imports.
+
+### Starting a fresh project
+
+```bash
+$ mkdir blog-api && cd blog-api
+$ go mod init github.com/jbweb/blog-api      # creates go.mod
+$ cat > main.go <<'EOF'
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("hello, blog")
+}
+EOF
+$ go run main.go
+hello, blog
+```
+
+Two files: `go.mod` and `main.go`. No `node_modules`. No `.gitignore` to write (Go's tooling-generated files are minimal). Push this much to GitHub and someone else can clone + `go run .` immediately.
+
+### `go run` vs `go build`
+
+Two commands you'll use constantly:
+
+```bash
+$ go run main.go        # compile + execute, no binary on disk
+$ go run .              # same, but for a multi-file package
+
+$ go build              # compile to ./blog-api (or .exe on Windows)
+$ ./blog-api            # then run it
+```
+
+`go run` is your dev loop — quick, no cleanup. `go build` is for shipping — produces the single static binary that's the whole reason you're using Go. In CI you build; in local dev you usually `run`.
+
+### Adding a dependency
+
+```bash
+$ go get github.com/google/uuid
+go: added github.com/google/uuid v1.6.0
+```
+
+`go.mod` and `go.sum` (the lockfile) update. Then in code:
+
+```go
+import "github.com/google/uuid"
+
+id := uuid.New().String()
+```
+
+That's the whole loop. Notice:
+
+- **The import path is the full Git path.** Not `import uuid from "uuid"`. The verbose path means there's no ambiguity ever.
+- **`go.sum` is the lockfile.** Commit it. Don't edit it.
+- **Removing a dependency**: delete the import line from your code, then run `go mod tidy`. It cleans up `go.mod` + `go.sum` for you.
+
+### The directory layout convention
+
+Go has loose but well-honoured conventions for project layout. Three patterns cover 90% of projects:
+
+**Small project (one binary, one folder):**
+
+```
+blog-api/
+├── go.mod
+├── go.sum
+└── main.go
+```
+
+**Medium project (binary + a few packages):**
+
+```
+blog-api/
+├── go.mod
+├── go.sum
+├── main.go             # the entry point — package main
+├── handlers/           # HTTP handlers — package handlers
+│   ├── auth.go
+│   └── posts.go
+└── models/             # data types — package models
+    └── user.go
+```
+
+**Larger project (cmd / internal layout):**
+
+```
+blog-api/
+├── go.mod
+├── go.sum
+├── cmd/                # one folder per binary
+│   └── server/
+│       └── main.go
+└── internal/           # private packages, can't be imported outside this module
+    ├── handlers/
+    ├── models/
+    └── db/
+```
+
+Use whichever fits. Don't overengineer. A 200-line program in three files is fine — moving to `cmd/server/` adds friction without value at that size.
+
+### The dev loop in practice
+
+Open two terminals. Left one for code, right one for run-and-check:
+
+```bash
+# left — write code in main.go (any editor)
+
+# right — your loop
+$ go run .
+... errors / output ...
+$ go run .
+$ go run .
+```
+
+This is it. There's no watch mode you need to set up. `go run` is so fast (compiles + executes in under a second for small programs) that watchers are unnecessary in dev.
+
+When the program gets larger — long enough that even `go run` is annoyingly slow — you switch to `air` or `reflex` for hot-reload. For now, you don't.
+
+### Three install errors and their fixes
+
+You'll hit one of these. Diagnoses ahead of time:
+
+1. **`go: command not found`.** Go isn't in your PATH. On Linux this is usually `/usr/local/go/bin/go`. Add to `~/.bashrc` or `~/.zshrc`: `export PATH=$PATH:/usr/local/go/bin`.
+
+2. **`go.mod file not found in current directory or any parent directory`.** You're running a Go command outside any module. Either `cd` into a module, or run `go mod init <module-path>` to create one.
+
+3. **`package github.com/foo/bar is not in std`.** You used a third-party import but never ran `go get` for it. Run `go mod tidy` — Go will detect the new import and fetch.
+
+<ExampleProject
+  src="module-layout"
+  title="Module + go.mod + go.sum — annotated layout"
+  description="Toggle through the three project layouts (single-file, medium, cmd/internal). The example shows what each file holds and what the seams look like — the kind of map you'll re-create in your head every new project."
+/>
+
+### What changed between you and Phase 4
+
+In Phase 4 you typed:
+```bash
+$ pnpm install
+$ pnpm dev
+```
+
+In Phase 5 you'll type:
+```bash
+$ go mod tidy
+$ go run .
+```
+
+Different commands, same intent. The cost-of-living dropped a step (no `node_modules` directory churning) and the productivity stayed roughly the same. The next lesson opens the language: variables, constants, types — what you actually put inside `main.go`.
